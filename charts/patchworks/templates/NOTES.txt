@@ -10,8 +10,14 @@ Gateway and Start are deployed and available within the cluster.
 {{- if .Values.ingress.enabled }}
 
 Ingress is enabled. Patchworks is reachable at:
-{{- range .Values.ingress.hosts }}
-  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
+{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
+{{- with .Values.ingress.hosts.dashboard }}  {{ $scheme }}://{{ . }}  (dashboard)
+{{- end }}
+{{- with .Values.ingress.hosts.gateway }}  {{ $scheme }}://{{ . }}  (core API)
+{{- end }}
+{{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (start API)
+{{- end }}
+{{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric)
 {{- end }}
 {{- else }}
 

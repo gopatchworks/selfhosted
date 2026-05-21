@@ -43,10 +43,14 @@ spec:
               containerPort: 80
           env:
             {{- $fullname := include "patchworks.fullname" . }}
-            {{- $coreUrl   := .Values.dashboard.coreUrl   | default (printf "http://%s-gateway.%s.svc.cluster.local"  $fullname (include "patchworks.gateway.namespace" .)) }}
-            {{- $startUrl  := .Values.dashboard.startUrl  | default (printf "http://%s-start.%s.svc.cluster.local"    $fullname (include "patchworks.start.namespace" .)) }}
-            {{- $fabricUrl := .Values.dashboard.fabricUrl | default (printf "http://%s-fabric.%s.svc.cluster.local"   $fullname (include "patchworks.fabric.namespace" .)) }}
-            {{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) }}
+            {{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
+            {{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
+            {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
+            {{- $ingressFabric  := .Values.ingress.hosts.fabric  | default "" }}
+            {{- $coreUrl   := .Values.dashboard.coreUrl   | default (ternary (printf "%s://%s" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
+            {{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $scheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
+            {{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s" $scheme $ingressFabric)  (printf "http://%s-fabric.%s.svc.cluster.local"  $fullname (include "patchworks.fabric.namespace" .))  (ne $ingressFabric "")) }}
+            {{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
             - name: CORE_URL
               value: {{ $coreUrl | quote }}
             - name: START_URL
