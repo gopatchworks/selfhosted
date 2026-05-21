@@ -1,0 +1,41 @@
+name: Lint Chart
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - "charts/**"
+      - ".github/workflows/lint.yaml"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Update dependencies
+        run: helm dependency update charts/patchworks
+
+      - name: Lint
+        run: helm lint charts/patchworks
+
+      - name: Template (standalone workers)
+        run: helm template test charts/patchworks > /dev/null
+
+      - name: Template (mono workers)
+        run: helm template test charts/patchworks --set workers.type=mono > /dev/null
+
+      - name: Template (microservice workers)
+        run: helm template test charts/patchworks --set workers.type=microservice > /dev/null
+
+      - name: Template (all optionals enabled)
+        run: |
+          helm template test charts/patchworks \
+            --set pusher.enabled=true \
+            --set kubefaas.enabled=true \
+            --set dashboard.enabled=true \
+            > /dev/null

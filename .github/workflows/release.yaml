@@ -1,0 +1,96 @@
+name: Release Chart
+
+# Triggered by pushing a tag matching the version in Chart.yaml.
+# Process:
+#   1. Update image tags in values.yaml and bump Chart.yaml version in a PR
+#   2. Merge to main
+#   3. git tag chart/v<version> && git push --tags
+#   4. This workflow packages and publishes the chart
+
+on:
+  push:
+    tags:
+      - "chart/v*"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: mikefarah/yq@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#chart/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Validate tag matches Chart.yaml
+        run: |
+          chart_version=$(yq '.version' charts/patchworks/Chart.yaml)
+          if [ "$chart_version" != "${{ steps.version.outputs.version }}" ]; then
+            echo "Chart.yaml version ($chart_version) does not match tag (${{ steps.version.outputs.version }})"
+            exit 1
+          fi
+
+      - name: Update dependencies
+        run: helm dependency update charts/patchworks
+
+      - name: Lint
+        run: helm lint charts/patchworks
+
+      - name: Package
+        run: helm package charts/patchworks --destination .
+
+      - name: Push to OCI registry
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | \
+            helm registry login ghcr.io \
+              --username "${{ github.actor }}" \
+              --password-stdin
+          helm push "patchworks-${{ steps.version.outputs.version }}.tgz" \
+            "oci://ghcr.io/${{ github.repository_owner }}/charts"
+
+      - name: Build release notes
+        id: notes
+        run: |
+          core=$(yq '.image.tag'                 charts/patchworks/values.yaml)
+          mono=$(yq '.workers.mono.image.tag'    charts/patchworks/values.yaml)
+          fabric=$(yq '.fabric.image.tag'        charts/patchworks/values.yaml)
+          dashboard=$(yq '.dashboard.image.tag'  charts/patchworks/values.yaml)
+
+          cat >> "$GITHUB_OUTPUT" <<EOF
+          body<<NOTES
+          ## Versions
+
+          | Component   | Tag |
+          |-------------|-----|
+          | core        | \`$core\` |
+          | monocore    | \`$mono\` |
+          | fabric      | \`$fabric\` |
+          | dashboard   | \`$dashboard\` |
+
+          ## Install
+
+          \`\`\`bash
+          helm install patchworks \\
+            oci://ghcr.io/${{ github.repository_owner }}/charts/patchworks \\
+            --version ${{ steps.version.outputs.version }}
+          \`\`\`
+          NOTES
+          EOF
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "Chart v${{ steps.version.outputs.version }}" \
+            --notes "${{ steps.notes.outputs.body }}" \
+            "patchworks-${{ steps.version.outputs.version }}.tgz"
