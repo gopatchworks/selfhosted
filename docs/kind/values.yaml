@@ -1,0 +1,14 @@
+# values.yaml for a local kind cluster.
+# app.key and app.url are set on the command line — see the getting-started guide.
+
+app:
+  env: local
+  debug: "true"
+
+# Reduce Elasticsearch heap for laptop/desktop memory budgets.
+elasticsearch:
+  javaOpts: "-Xms256m -Xmx256m"
+
+# One supervisord process per worker is plenty for local development.
+workers:
+  processes: 2

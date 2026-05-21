@@ -1,0 +1,22 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: patchworks
+nodes:
+  - role: control-plane
+    # Label required by ingress-nginx's DaemonSet node selector.
+    # Safe to include even if you aren't using ingress.
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    # Forward HTTP/HTTPS from the kind node to the host so an ingress
+    # controller is reachable at http://localhost and https://localhost.
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP

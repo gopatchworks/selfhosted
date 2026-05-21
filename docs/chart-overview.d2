@@ -1,163 +1,59 @@
 vars: {
   d2-config: {
     layout-engine: elk
+    # Terminal theme code
+    theme-id: 300
   }
 }
 
-direction: down
+direction: right
 
 title: "Patchworks Helm Chart — Component Overview" {
   shape: text
   near: top-center
-  style: {
-    font-size: 24
-    bold: true
-  }
+  style.font-size: 20
 }
-
-# ── Entry point ──────────────────────────────────────────────────────────────
-
-internet: Internet {
-  shape: cloud
-}
-
-ingress: "Ingress\n(optional)" {
-  shape: rectangle
-  style: {
-    fill: "#f5f5f5"
-    stroke-dash: 4
-  }
-}
-
-internet -> ingress
-
-# ── Application layer ────────────────────────────────────────────────────────
 
 application: Application {
-  style: {
-    fill: "#f0f4ff"
-    stroke: "#5470c6"
-    stroke-width: 2
-  }
+  style.fill: "#EDF2FF"
 
-  web: "Core Web\nPHP Laravel — always deployed" {
-    shape: rectangle
-    style.fill: "#dce3ff"
-  }
+  web: "Core Web\nPHP Laravel" { shape: rectangle }
 
   workers: Workers {
-    style.fill: "#eef1ff"
-    standalone: "standalone\nPHP via supervisord\n(hub + optional per-company)" {
-      style.fill: "#dce3ff"
-    }
-    microservice: "microservice\nPHP via supervisord × N services\n(hub + optional per-company per service)" {
-      style.fill: "#dce3ff"
-    }
-    mono: "mono\nMonocore Go worker\n(hub + optional per-company)" {
-      style.fill: "#dce3ff"
-    }
+    standalone:   "standalone\nPHP via supervisord" { shape: rectangle }
+    microservice: "microservice\nPHP × N services"  { shape: rectangle }
+    mono:         "mono\nMonocore Go"               { shape: rectangle }
   }
 
-  migrations: "Migrations Job\npre-install / pre-upgrade hook" {
-    shape: rectangle
-    style: {
-      fill: "#fff8dc"
-      stroke: "#c8a000"
-    }
-  }
+  migrations: "Migrations Job\npre-install / pre-upgrade" { shape: rectangle }
 }
-
-ingress -> application.web: HTTP/HTTPS
-
-# ── Infrastructure ────────────────────────────────────────────────────────────
 
 infra: "Infrastructure (in-cluster or external)" {
-  style: {
-    fill: "#f5fff5"
-    stroke: "#4aa54a"
-    stroke-width: 2
-  }
+  style.fill: "#F0FFF4"
 
-  mysql: "MySQL 8.0\nmysql.enabled / mysql.external.*" {
-    shape: cylinder
-    style.fill: "#fff3e0"
-  }
-
-  redis: "Redis / Valkey\nredis.enabled / redis.external.*" {
-    shape: cylinder
-    style.fill: "#fde8e8"
-  }
-
-  rabbitmq: "RabbitMQ 3\nrabbitmq.enabled / rabbitmq.external.*" {
-    shape: queue
-    style.fill: "#fce4ec"
-  }
-
-  elasticsearch: "Elasticsearch 8\nelasticsearch.enabled / elasticsearch.external.*" {
-    shape: cylinder
-    style.fill: "#e8f5e9"
-  }
-
-  s3: "MinIO / S3\ns3.enabled / s3.external.*" {
-    shape: cylinder
-    style.fill: "#e3f2fd"
-  }
+  mysql:         "MySQL 8.0\n(DB_*)"                     { shape: cylinder }
+  redis:         "Redis / Valkey\n(REDIS_*)"              { shape: cylinder }
+  rabbitmq:      "RabbitMQ 3\n(RABBITMQ_URL)"             { shape: queue    }
+  elasticsearch: "Elasticsearch 8\n(ELASTICSEARCH_HOST)"  { shape: cylinder }
+  s3:            "MinIO / S3\n(AWS_*)"                    { shape: cylinder }
 }
 
-# ── Optional integrations ─────────────────────────────────────────────────────
-
 optional: "Optional Integrations" {
-  style: {
-    fill: "#fdf5ff"
-    stroke: "#9c4dcc"
-    stroke-width: 2
-    stroke-dash: 4
-  }
+  style.fill: "#FDF4FF"
+  style.stroke-dash: 4
 
   kubefaas: "KubeFaaS\nkubefaas.enabled" {
-    style.fill: "#f3e8ff"
-
-    controller: "Controller\nmanages function lifecycle\nClusterRole scoped" {
-      shape: rectangle
-    }
-    builder: "Builder\nbuilds function images\n(Docker-in-Docker + mTLS)" {
-      shape: rectangle
-    }
-    kfredis: "Redis\ndedicated — separate from app Redis" {
-      shape: cylinder
-      style.fill: "#e8d5ff"
-    }
-    functions: "Function Namespaces\nN × (Namespace + ServiceAccount)\noptional NetworkPolicy" {
+    controller: Controller { shape: rectangle }
+    builder:    "Builder\n(dind + mTLS)"   { shape: rectangle }
+    kfredis:    "Redis (dedicated)"        { shape: cylinder }
+    functions:  "Function Namespaces\n(N × Namespace + ServiceAccount)" {
       shape: rectangle
       style.stroke-dash: 4
     }
-
     controller -> kfredis
-    builder -> kfredis
+    builder    -> kfredis
     controller -> functions: manages
   }
 
-  soketi: "Soketi\nWebSocket broadcasting\npusher.enabled (Helm dependency)" {
-    shape: rectangle
-    style.fill: "#e8f4fe"
-  }
+  soketi: "Soketi\n(PUSHER_*)" { shape: rectangle }
 }
-
-# ── Application → infrastructure connections ──────────────────────────────────
-
-application.web -> infra.mysql: DB_*
-application.web -> infra.redis: REDIS_*
-application.web -> infra.rabbitmq: RABBITMQ_URL
-application.web -> infra.elasticsearch: ELASTICSEARCH_HOST
-application.web -> infra.s3: AWS_*
-application.web -> optional.kubefaas.controller: KUBEFAAS_FUNCTIONS_*
-application.web -> optional.soketi: PUSHER_*
-
-application.workers -> infra.mysql
-application.workers -> infra.redis
-application.workers -> infra.rabbitmq
-application.workers -> infra.elasticsearch
-application.workers -> infra.s3
-application.workers -> optional.kubefaas.controller
-
-application.migrations -> infra.mysql: migrate --force

@@ -11,9 +11,38 @@ Chart source lives in `charts/patchworks/`. All paths below are relative to the 
 Two D2 diagrams live in `docs/`. Re-render both after any change that affects them:
 
 ```bash
-d2 docs/chart-overview.d2   docs/chart-overview.svg
-d2 docs/workers-diagram.d2  docs/workers-diagram.svg
+make -C docs all       # rebuild everything
+make -C docs overview  # chart-overview.svg only
+make -C docs workers   # workers-diagram.svg only
 ```
+
+### Root `README.md` — getting started guide + diagrams
+
+The root README contains the getting started guide, both embedded diagrams, and the link to the chart configuration reference. **Update whenever:**
+
+| Change | What to update |
+|---|---|
+| New prerequisite tool required | Add to the Prerequisites table |
+| Helm values API changes affecting the install command | Update `--set` flags in the Getting Started section |
+| New mandatory init step (e.g. new chart dependency) | Add a numbered step |
+| `docs/kind/values.yaml` changes | Update the file and any prose references in README |
+| Startup order changes (new wait dependency) | Update the "Watch the rollout" expected pod list |
+
+`docs/kind/cluster.yaml` and `docs/kind/values.yaml` are companion files — keep them in sync with the README prose.
+
+### `charts/patchworks/README.md` — configuration reference
+
+All `values.yaml` keys, their defaults, and example configurations. **Update whenever:**
+
+| Change | What to update |
+|---|---|
+| New top-level values key added | Add a row to the relevant table |
+| Key renamed or removed | Update or remove the row |
+| New infrastructure component added | Add a new section |
+| `existingSecret` field names change | Update the Existing secrets section |
+| New example configuration worth documenting | Add under Example configurations |
+
+---
 
 ### `docs/chart-overview.d2` — full system overview
 
