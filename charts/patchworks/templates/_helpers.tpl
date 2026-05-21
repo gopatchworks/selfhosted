@@ -91,6 +91,11 @@ Usage: include "patchworks.componentNamespace" (dict "ns" .Values.web.namespace 
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.migrations.namespace "root" .) -}}
 {{- end }}
 
+{{- define "patchworks.seeds.namespace" -}}
+{{- $ns := .Values.seeds.namespace | default .Values.migrations.namespace -}}
+{{- include "patchworks.componentNamespace" (dict "ns" $ns "root" .) -}}
+{{- end }}
+
 {{- define "patchworks.mysql.namespace" -}}
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.mysql.namespace "root" .) -}}
 {{- end }}
@@ -779,6 +784,18 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 - name: DB_USERNAME
   value: {{ include "patchworks.mysql.username" . | quote }}
 {{ include "patchworks.env.dbPassword" . }}
+- name: LANDLORD_DB_CONNECTION
+  value: mysql
+- name: LANDLORD_DB_HOST
+  value: {{ include "patchworks.mysql.host" . | quote }}
+- name: LANDLORD_DB_PORT
+  value: {{ include "patchworks.mysql.port" . | quote }}
+- name: LANDLORD_DB_DATABASE
+  value: {{ include "patchworks.mysql.database" . | quote }}
+- name: LANDLORD_DB_USERNAME
+  value: {{ include "patchworks.mysql.username" . | quote }}
+{{- $landlordDbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $landlordDbSecret.name "key" $landlordDbSecret.passwordKey)) }}
 - name: REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
 - name: REDIS_PORT
@@ -805,6 +822,42 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.s3.region" . | quote }}
 - name: AWS_BUCKET
   value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: TENANT_DB_CONNECTION
+  value: tenant
+- name: TENANT_DB_HOST
+  value: {{ include "patchworks.mysql.host" . | quote }}
+- name: TENANT_DB_PORT
+  value: {{ include "patchworks.mysql.port" . | quote }}
+- name: TENANT_DB_USERNAME
+  value: {{ include "patchworks.mysql.username" . | quote }}
+{{- $tenantDbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
+- name: TENANT_REDIS_HOST
+  value: {{ include "patchworks.redis.host" . | quote }}
+{{- if .Values.s3.enabled }}
+- name: TENANT_CACHE_AWS_ENDPOINT_URL
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT
+  value: "true"
+{{- else }}
+- name: TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT
+  value: "false"
+{{- end }}
+{{- if .Values.s3.enabled }}
+{{- $s3AccessSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootUserKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- else }}
+{{- $s3AccessSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- end }}
+- name: TENANT_CACHE_AWS_BUCKET
+  value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: TENANT_CACHE_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 - name: BROADCAST_CONNECTION
   value: pusher
