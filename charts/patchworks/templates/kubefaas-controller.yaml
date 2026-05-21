@@ -15,7 +15,7 @@ metadata:
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
 {{- $authUsernameKey := include "patchworks.kubefaas.authUsernameKey" . }}
 {{- $authPasswordKey := include "patchworks.kubefaas.authPasswordKey" . }}
-{{- if and (not $kf.auth.existingSecret.name) $kf.auth.username $kf.auth.password }}
+{{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
 ---
 apiVersion: v1
 kind: Secret
@@ -107,7 +107,7 @@ data:
   REDIS_HOST: {{ $redisHost | quote }}
   REDIS_PORT: {{ $redisPort | quote }}
   REDIS_DATABASE: "0"
-  AUTH_ENABLED: "true"
+  AUTH_ENABLED: {{ $kf.auth.enabled | toString | quote }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -161,7 +161,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            {{- if or $kf.auth.existingSecret.name (and $kf.auth.username $kf.auth.password) }}
+            {{- if $kf.auth.enabled }}
             - name: AUTH_USERNAME
               valueFrom:
                 secretKeyRef:

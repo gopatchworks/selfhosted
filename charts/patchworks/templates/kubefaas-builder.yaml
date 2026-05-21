@@ -219,7 +219,8 @@ data:
   REDIS_HOST: {{ $redisHost | quote }}
   REDIS_PORT: {{ $redisPort | quote }}
   REDIS_DATABASE: "0"
-  AUTH_ENABLED: "true"
+  AUTH_ENABLED: {{ $kf.auth.enabled | toString | quote }}
+  BASE_IMAGES_REGISTRY: {{ $kf.builder.baseImagesRegistry | quote }}
   {{- if $kf.builder.cacheBucket }}
   CACHE_S3_BUCKET: {{ $kf.builder.cacheBucket | quote }}
   AWS_REGION: {{ include "patchworks.s3.region" $root | quote }}
@@ -336,7 +337,7 @@ spec:
             - configMapRef:
                 name: {{ $fullname }}-kubefaas-builder-env
           env:
-            {{- if or $kf.auth.existingSecret.name (and $kf.auth.username $kf.auth.password) }}
+            {{- if $kf.auth.enabled }}
             - name: AUTH_USERNAME
               valueFrom:
                 secretKeyRef:

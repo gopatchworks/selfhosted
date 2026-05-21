@@ -477,6 +477,8 @@ kubefaas:
       tag: ""
       pullPolicy: ""
     replicaCount: 1
+    # Registry name (from registries.yaml) used for base image operations.
+    baseImagesRegistry: kubefaas-templates
     # S3 bucket used to cache compiled function images between builds.
     cacheBucket: kubefaas-cache
     # TLS configuration for the Docker-in-Docker sidecar.
@@ -511,6 +513,7 @@ kubefaas:
 
   # Credentials shared between controller, builder, and monocore workers.
   auth:
+    enabled: false
     username: ""
     password: ""
     existingSecret:
