@@ -757,6 +757,9 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if not (has .Values.workers.type $valid) -}}
 {{- fail (printf "workers.type must be one of: standalone, mono, microservice. Got: %q" .Values.workers.type) -}}
 {{- end -}}
+{{- if and (empty .Values.app.existingSecret.name) (not .Values.app.key) -}}
+{{- fail "app.key is required. Generate one with: echo \"base64:$(openssl rand -base64 32)\"" -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
