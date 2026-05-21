@@ -94,7 +94,7 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: mysql
 spec:
-  type: ClusterIP
+  type: {{ .Values.mysql.service.type }}
   selector:
     {{- include "patchworks.selectorLabels" (dict "component" "mysql" "Release" .Release) | nindent 4 }}
   ports:

@@ -79,7 +79,7 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: redis
 spec:
-  type: ClusterIP
+  type: {{ .Values.redis.service.type }}
   selector:
     {{- include "patchworks.selectorLabels" (dict "component" "redis" "Release" .Release) | nindent 4 }}
   ports:

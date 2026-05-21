@@ -100,7 +100,7 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: elasticsearch
 spec:
-  type: ClusterIP
+  type: {{ .Values.elasticsearch.service.type }}
   selector:
     {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 4 }}
   ports:

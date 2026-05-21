@@ -459,6 +459,8 @@ rabbitmq:
     size: 5Gi
     storageClass: ""
     spec: {}
+  managementService:
+    type: ClusterIP
   resources: {}
 
 # ── KubeFaaS ──────────────────────────────────────────────────────────────────
@@ -670,6 +672,8 @@ mysql:
     size: 10Gi
     storageClass: ""
     spec: {}
+  service:
+    type: ClusterIP
   resources: {}
 
 # ── Redis ──────────────────────────────────────────────────────────────────────
@@ -704,6 +708,8 @@ redis:
     size: 1Gi
     storageClass: ""
     spec: {}
+  service:
+    type: ClusterIP
   resources: {}
 
 # ── Elasticsearch ──────────────────────────────────────────────────────────────
@@ -734,6 +740,8 @@ elasticsearch:
     spec: {}
   # Java heap size — keep to ~50% of the memory limit.
   javaOpts: "-Xms512m -Xmx512m"
+  service:
+    type: ClusterIP
   resources:
     requests:
       memory: 1Gi
