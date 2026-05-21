@@ -39,6 +39,8 @@ spec:
         - name: gateway
           image: {{ include "patchworks.appImage" (dict "svc" $svc "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" .) }}
+          command: ["/usr/local/bin/php"]
+          args: ["artisan", "octane:start", "--server=roadrunner", "--host=0.0.0.0", "--rpc-port=6001", "--port=80"]
           ports:
             - name: http
               containerPort: 80
