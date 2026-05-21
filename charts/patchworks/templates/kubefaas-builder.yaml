@@ -197,6 +197,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: kubefaas-builder
+{{- with $root.Values.image.pullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ConfigMap

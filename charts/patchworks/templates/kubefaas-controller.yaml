@@ -3,6 +3,13 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.kubefaas.namespace" . }}
 {{- $kf := .Values.kubefaas }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
 {{- $redisHost := include "patchworks.kubefaas.redisHost" . }}
 {{- $redisPort := include "patchworks.kubefaas.redisPort" . }}
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
@@ -32,6 +39,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: kubefaas-controller
+{{- with $root.Values.image.pullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

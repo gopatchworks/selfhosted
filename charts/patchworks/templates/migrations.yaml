@@ -23,6 +23,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "core-migrations" "Release" .Release) | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       restartPolicy: {{ .Values.migrations.restartPolicy }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:

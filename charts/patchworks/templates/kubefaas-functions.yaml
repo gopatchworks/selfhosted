@@ -28,6 +28,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: kubefaas-function
+{{- with $root.Values.image.pullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 
 {{/* One Namespace + ServiceAccount (+ optional NetworkPolicy) per function execution slot. */}}
 {{- range $i := until (int $kf.functions.namespaceCount) }}
@@ -48,6 +52,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
     app.kubernetes.io/component: kubefaas-function
+{{- with $root.Values.image.pullSecrets }}
+imagePullSecrets:
+  {{- toYaml . | nindent 2 }}
+{{- end }}
 {{- if $kf.functions.networkPolicy.enabled }}
 ---
 apiVersion: networking.k8s.io/v1

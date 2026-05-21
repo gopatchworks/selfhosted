@@ -22,6 +22,17 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
+Name of the app ServiceAccount.
+*/}}
+{{- define "patchworks.serviceAccountName" -}}
+{{- if .Values.serviceAccount.name }}
+{{- .Values.serviceAccount.name }}
+{{- else }}
+{{- include "patchworks.fullname" . }}
+{{- end }}
+{{- end }}
+
+{{/*
 Common labels applied to every resource.
 */}}
 {{- define "patchworks.labels" -}}

@@ -12,6 +12,17 @@ image:
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
 
+# ── Service account ────────────────────────────────────────────────────────────
+# Shared ServiceAccount used by all app pods (gateway, start, fabric, workers,
+# dashboard, migrations). imagePullSecrets from image.pullSecrets are attached.
+serviceAccount:
+  # Set to false to skip creation and use an existing account instead.
+  create: true
+  # Override the name. Defaults to the release fullname when empty.
+  name: ""
+  # Annotations to add to the ServiceAccount (e.g. for IRSA/Workload Identity).
+  annotations: {}
+
 # ── Application shared config ──────────────────────────────────────────────────
 # Injected into all Patchworks application pods (web, workers, migrations).
 app:
