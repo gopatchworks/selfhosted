@@ -1,39 +1,45 @@
 {{- if .Values.ingress.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ing := .Values.ingress }}
+{{- $services := list
+  (dict "host" $ing.hosts.gateway  "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .))
+  (dict "host" $ing.hosts.start    "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .))
+  (dict "host" $ing.hosts.fabric   "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .))
+  (dict "host" $ing.hosts.dashboard "svcName" (printf "%s-dashboard" $fullname) "ns" (include "patchworks.dashboard.namespace" .))
+}}
+{{- range $services }}
+{{- if .host }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ include "patchworks.fullname" . }}-gateway
-  namespace: {{ include "patchworks.gateway.namespace" . }}
+  name: {{ .svcName }}
+  namespace: {{ .ns }}
   labels:
-    {{- include "patchworks.labels" . | nindent 4 }}
-    app.kubernetes.io/component: gateway
-  {{- with .Values.ingress.annotations }}
+    {{- include "patchworks.labels" $ | nindent 4 }}
+  {{- with $ing.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.ingress.className }}
-  ingressClassName: {{ .Values.ingress.className }}
+  {{- if $ing.className }}
+  ingressClassName: {{ $ing.className }}
   {{- end }}
-  {{- if .Values.ingress.tls }}
+  {{- with $ing.tls }}
   tls:
-    {{- toYaml .Values.ingress.tls | nindent 4 }}
+    {{- toYaml . | nindent 4 }}
   {{- end }}
   rules:
-    {{- range .Values.ingress.hosts }}
     - host: {{ .host | quote }}
       http:
         paths:
-          {{- range .paths }}
-          - path: {{ .path }}
-            pathType: {{ .pathType }}
+          - path: /
+            pathType: Prefix
             backend:
               service:
-                name: {{ include "patchworks.fullname" . }}-gateway
-  namespace: {{ include "patchworks.gateway.namespace" . }}
+                name: {{ .svcName }}
                 port:
                   name: http
-          {{- end }}
-    {{- end }}
+{{- end }}
+{{- end }}
 {{- end }}

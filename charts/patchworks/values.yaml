@@ -613,12 +613,13 @@ ingress:
   enabled: false
   className: ""
   annotations: {}
-  hosts:
-    - host: patchworks.local
-      paths:
-        - path: /
-          pathType: Prefix
   tls: []
+  # Hostname for each service. Leave empty to skip that service's ingress rule.
+  hosts:
+    gateway: ""
+    start: ""
+    fabric: ""
+    dashboard: ""
 
 # ── MySQL ──────────────────────────────────────────────────────────────────────
 mysql:
