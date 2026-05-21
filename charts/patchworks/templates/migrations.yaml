@@ -1,8 +1,9 @@
 {{- if .Values.migrations.enabled }}
 ---
-# Job — runs database migrations before the application starts.
-# Executed as a pre-install / pre-upgrade hook so migrations complete before
-# Core Web and Core Workers pods are created or updated.
+# Job — runs database migrations after all chart resources are deployed.
+# Executed as a post-install / post-upgrade hook so in-cluster infrastructure
+# (MySQL) is available before migrations run. App pods may briefly restart
+# while waiting for the schema; Kubernetes restarts handle this automatically.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -12,7 +13,7 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: core-migrations
   annotations:
-    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook: post-install,post-upgrade
     helm.sh/hook-weight: "0"
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
