@@ -143,6 +143,40 @@ migrations:
   affinity: {}
   tolerations: []
 
+# ── Seeds ──────────────────────────────────────────────────────────────────────
+# One-shot Jobs that seed reference data on first install.
+# Run as post-install hooks only (not post-upgrade) with a higher weight than
+# migrations so they execute after the schema is ready.
+# Seeders are idempotent (upsert-based), so re-enabling and upgrading is safe.
+seeds:
+  namespace: ""  # overrides global namespace; defaults to migrations namespace
+  restartPolicy: OnFailure
+  backoffLimit: 3
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+
+  # Core (PHP/Laravel) seeder — seeds landlord + tenant reference data.
+  core:
+    enabled: false
+    image:
+      registry: ""
+      tag: ""
+      pullPolicy: ""
+    command: "php artisan db:seed --force"
+    resources: {}
+
+  # Fabric seeder — seeds fabric-specific reference data.
+  fabric:
+    enabled: false
+    image:
+      registry: ""
+      repository: fabric
+      tag: ""
+      pullPolicy: ""
+    command: "php artisan db:seed --force"
+    resources: {}
+
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
   namespace: ""  # overrides global namespace for worker resources

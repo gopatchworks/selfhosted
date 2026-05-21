@@ -1,0 +1,140 @@
+{{- if .Values.seeds.core.enabled }}
+---
+# Job — seeds core (landlord + tenant) reference data on first install.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "patchworks.fullname" . }}-core-seeds
+  namespace: {{ include "patchworks.seeds.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core-seeds
+  annotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.seeds.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "core-seeds" "Release" .Release) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
+      restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until nc -z {{ include "patchworks.mysql.host" . }} {{ include "patchworks.mysql.port" . }}; do sleep 2; done
+              echo "MySQL ready."
+      containers:
+        {{- $coreSeedSvc := merge (deepCopy .Values.seeds.core) (dict "image" .Values.image) }}
+        - name: core-seeds
+          image: {{ include "patchworks.appImage" (dict "svc" $coreSeedSvc "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $coreSeedSvc "root" .) }}
+          command: ["/bin/sh", "-c", {{ .Values.seeds.core.command | quote }}]
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.app.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.seeds.core.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.seeds.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.seeds.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.seeds.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- if .Values.seeds.fabric.enabled }}
+---
+# Job — seeds fabric reference data on first install.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "patchworks.fullname" . }}-fabric-seeds
+  namespace: {{ include "patchworks.seeds.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric-seeds
+  annotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "1"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: {{ .Values.seeds.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "fabric-seeds" "Release" .Release) | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
+      restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-mysql
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until nc -z {{ include "patchworks.mysql.host" . }} {{ include "patchworks.mysql.port" . }}; do sleep 2; done
+              echo "MySQL ready."
+      containers:
+        {{- $fabricSeedSvc := merge (deepCopy .Values.seeds.fabric) .Values.fabric }}
+        - name: fabric-seeds
+          image: {{ include "patchworks.appImage" (dict "svc" $fabricSeedSvc "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $fabricSeedSvc "root" .) }}
+          command: ["/bin/sh", "-c", {{ .Values.seeds.fabric.command | quote }}]
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.app.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.seeds.fabric.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.seeds.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.seeds.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.seeds.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
