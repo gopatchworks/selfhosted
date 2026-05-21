@@ -130,32 +130,36 @@ helm upgrade patchworks ./charts/patchworks \
 
 ## Add an ingress controller (optional)
 
-If you prefer a hostname to `port-forward`:
+If you prefer hostnames to `port-forward`, install Contour and enable ingress:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+./docs/kind/setup-contour.sh
+```
 
-kubectl wait --namespace ingress-nginx \
-  --for=condition=ready pod \
-  --selector=app.kubernetes.io/component=controller \
-  --timeout=90s
+Add the hostnames to `/etc/hosts`:
 
-echo "127.0.0.1 patchworks.local" | sudo tee -a /etc/hosts
+```bash
+echo "127.0.0.1 patchworks.local core.local start.local fabric.local" | sudo tee -a /etc/hosts
+```
 
+Then upgrade the release with ingress enabled:
+
+```bash
 helm upgrade patchworks ./charts/patchworks \
-  --set app.key="$APP_KEY" \
-  --set app.url="http://patchworks.local" \
-  --set ingress.enabled=true \
-  --set ingress.className=nginx \
-  --set "ingress.hosts[0].host=patchworks.local" \
-  --set "ingress.hosts[0].paths[0].path=/" \
-  --set "ingress.hosts[0].paths[0].pathType=Prefix" \
   -f docs/kind/values.yaml \
+  --set app.key="$APP_KEY" \
+  --set ingress.enabled=true \
+  --set ingress.className=contour \
+  --set ingress.hosts.gateway=core.local \
+  --set ingress.hosts.start=start.local \
+  --set ingress.hosts.fabric=fabric.local \
+  --set ingress.hosts.dashboard=patchworks.local \
+  --namespace patchworks \
   --timeout 5m \
   --wait
 ```
 
-The app is then available at [http://patchworks.local](http://patchworks.local).
+The dashboard is then available at [http://patchworks.local](http://patchworks.local).
 
 ---
 
