@@ -1,0 +1,102 @@
+{{- if .Values.kubefaas.enabled }}
+{{- $root := . }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.kubefaas.namespace" . }}
+{{- $kf := .Values.kubefaas }}
+---
+# Default function resource profile — consumed by the controller when scheduling functions.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: profile-default
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubefaas.io/profile: "true"
+    app.kubefaas.io/profile-name: default
+data:
+  resources: |
+    {{ $kf.functions.profile.resources | nindent 4 | trim }}
+  enableServiceLinks: "false"
+---
+# kubefaas-function ServiceAccount in the control-plane namespace (used as the profile default).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubefaas-function
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-function
+
+{{/* One Namespace + ServiceAccount (+ optional NetworkPolicy) per function execution slot. */}}
+{{- range $i := until (int $kf.functions.namespaceCount) }}
+{{- $fnNs := printf "%s-%02d" $kf.functions.namespacePrefix (add1 $i) }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $fnNs }}
+  labels:
+    app.kubefaas.io/functions: "enabled"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubefaas-function
+  namespace: {{ $fnNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-function
+{{- if $kf.functions.networkPolicy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubefaas
+  namespace: {{ $fnNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubefaas.io/component: function
+spec:
+  podSelector:
+    matchLabels:
+      app.kubefaas.io/component: function
+      app.kubefaas.io/function: "true"
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns }}
+        - podSelector:
+            matchLabels:
+              app.kubefaas.io/component: kubefaas-controller
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.169.254/32
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $ns }}
+{{- end }}
+{{- end }}
+{{- end }}

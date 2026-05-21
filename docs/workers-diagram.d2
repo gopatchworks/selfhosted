@@ -1,0 +1,151 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: right
+
+title: Patchworks Worker Modes {
+  shape: text
+  near: top-center
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+# ── type: standalone ────────────────────────────────────────────────────────
+
+standalone: "type: standalone" {
+  style: {
+    fill: "#f0f4ff"
+    stroke: "#5470c6"
+    stroke-width: 2
+    font-size: 16
+    bold: true
+  }
+
+  desc: "One queue worker via supervisord.\nProcesses driven by workers.processes (numprocs)." {
+    shape: text
+  }
+
+  hub: Hub {
+    style.fill: "#dce3ff"
+    cm: "{name}-workers-supervisord\nqueue: workers.queue.name" {
+      shape: document
+      style.fill: "#c5d3ff"
+    }
+    dep: "Deployment\n{name}-workers" { shape: rectangle }
+    cm -> dep: mounts
+  }
+
+  company: "Per-Company (optional)" {
+    style.fill: "#eef1ff"
+    style.stroke-dash: 4
+    cm: "{name}-workers-{co}-supervisord\nqueue: company.queue" {
+      shape: document
+      style.fill: "#c5d3ff"
+    }
+    dep: "Deployment\n{name}-workers-{co}" { shape: rectangle }
+    cm -> dep: mounts
+  }
+
+  hub -> company: "× workers.companies[]"
+}
+
+# ── type: microservice ───────────────────────────────────────────────────────
+
+microservice: "type: microservice" {
+  style: {
+    fill: "#fff4f0"
+    stroke: "#c65454"
+    stroke-width: 2
+    font-size: 16
+    bold: true
+  }
+
+  desc: "One queue worker per service key.\nEach service can override processes, replicas, namespace.\n_default provides fallbacks for all service fields." {
+    shape: text
+  }
+
+  service: "Per Service (workers.microservices[])" {
+    style: {
+      fill: "#ffe8e8"
+      stroke-dash: 4
+    }
+
+    hub: Hub {
+      style.fill: "#ffd5d5"
+      cm: "{name}-workers-{svc}-supervisord\nqueue: domain" {
+        shape: document
+        style.fill: "#ffc0c0"
+      }
+      dep: "Deployment\n{name}-workers-{svc}\nAPP_NAME, APP_DOMAIN set" { shape: rectangle }
+      cm -> dep: mounts
+    }
+
+    company: "Per-Company (optional)" {
+      style.fill: "#fff0f0"
+      style.stroke-dash: 4
+      cm: "{name}-workers-{svc}-{co}-supervisord\nqueue: company.queue" {
+        shape: document
+        style.fill: "#ffc0c0"
+      }
+      dep: "Deployment\n{name}-workers-{svc}-{co}" { shape: rectangle }
+      cm -> dep: mounts
+    }
+
+    hub -> company: "× workers.companies[]"
+  }
+}
+
+# ── type: mono ───────────────────────────────────────────────────────────────
+
+mono: "type: mono" {
+  style: {
+    fill: "#f0fff4"
+    stroke: "#4aa54a"
+    stroke-width: 2
+    font-size: 16
+    bold: true
+  }
+
+  desc: "Monocore Go worker. Topology asserted at startup.\nRabbitMQ queues/bindings are automated via topology.yaml." {
+    shape: text
+  }
+
+  shared: "Shared (hub namespace)" {
+    style.fill: "#d5f5dc"
+    topology: "{name}-workers-topology\ntopology.yaml" { shape: document }
+    store: "{name}-workers-store\nstore.yaml" { shape: document }
+  }
+
+  hub: Hub {
+    style.fill: "#c8f0d0"
+    config: "{name}-workers-config\nconfig.yaml (queue, processes, otel)" {
+      shape: document
+      style.fill: "#a8e8b8"
+    }
+    dep: "Deployment\n{name}-workers" { shape: rectangle }
+    config -> dep: mounts
+  }
+
+  company: "Per-Company (optional)" {
+    style.fill: "#e8fded"
+    style.stroke-dash: 4
+    config: "{name}-workers-{co}-config\nconfig.yaml" {
+      shape: document
+      style.fill: "#a8e8b8"
+    }
+    dep: "Deployment\n{name}-workers-{co}" { shape: rectangle }
+    config -> dep: mounts
+  }
+
+  shared.topology -> hub.dep: mounts
+  shared.store -> hub.dep: mounts
+  shared.topology -> company.dep: mounts (copied if cross-ns)
+  shared.store -> company.dep: mounts (copied if cross-ns)
+
+  hub -> company: "× workers.companies[]\n(requires companyFlows.enabled: true)"
+}

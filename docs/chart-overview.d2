@@ -1,0 +1,163 @@
+vars: {
+  d2-config: {
+    layout-engine: elk
+  }
+}
+
+direction: down
+
+title: "Patchworks Helm Chart — Component Overview" {
+  shape: text
+  near: top-center
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+# ── Entry point ──────────────────────────────────────────────────────────────
+
+internet: Internet {
+  shape: cloud
+}
+
+ingress: "Ingress\n(optional)" {
+  shape: rectangle
+  style: {
+    fill: "#f5f5f5"
+    stroke-dash: 4
+  }
+}
+
+internet -> ingress
+
+# ── Application layer ────────────────────────────────────────────────────────
+
+application: Application {
+  style: {
+    fill: "#f0f4ff"
+    stroke: "#5470c6"
+    stroke-width: 2
+  }
+
+  web: "Core Web\nPHP Laravel — always deployed" {
+    shape: rectangle
+    style.fill: "#dce3ff"
+  }
+
+  workers: Workers {
+    style.fill: "#eef1ff"
+    standalone: "standalone\nPHP via supervisord\n(hub + optional per-company)" {
+      style.fill: "#dce3ff"
+    }
+    microservice: "microservice\nPHP via supervisord × N services\n(hub + optional per-company per service)" {
+      style.fill: "#dce3ff"
+    }
+    mono: "mono\nMonocore Go worker\n(hub + optional per-company)" {
+      style.fill: "#dce3ff"
+    }
+  }
+
+  migrations: "Migrations Job\npre-install / pre-upgrade hook" {
+    shape: rectangle
+    style: {
+      fill: "#fff8dc"
+      stroke: "#c8a000"
+    }
+  }
+}
+
+ingress -> application.web: HTTP/HTTPS
+
+# ── Infrastructure ────────────────────────────────────────────────────────────
+
+infra: "Infrastructure (in-cluster or external)" {
+  style: {
+    fill: "#f5fff5"
+    stroke: "#4aa54a"
+    stroke-width: 2
+  }
+
+  mysql: "MySQL 8.0\nmysql.enabled / mysql.external.*" {
+    shape: cylinder
+    style.fill: "#fff3e0"
+  }
+
+  redis: "Redis / Valkey\nredis.enabled / redis.external.*" {
+    shape: cylinder
+    style.fill: "#fde8e8"
+  }
+
+  rabbitmq: "RabbitMQ 3\nrabbitmq.enabled / rabbitmq.external.*" {
+    shape: queue
+    style.fill: "#fce4ec"
+  }
+
+  elasticsearch: "Elasticsearch 8\nelasticsearch.enabled / elasticsearch.external.*" {
+    shape: cylinder
+    style.fill: "#e8f5e9"
+  }
+
+  s3: "MinIO / S3\ns3.enabled / s3.external.*" {
+    shape: cylinder
+    style.fill: "#e3f2fd"
+  }
+}
+
+# ── Optional integrations ─────────────────────────────────────────────────────
+
+optional: "Optional Integrations" {
+  style: {
+    fill: "#fdf5ff"
+    stroke: "#9c4dcc"
+    stroke-width: 2
+    stroke-dash: 4
+  }
+
+  kubefaas: "KubeFaaS\nkubefaas.enabled" {
+    style.fill: "#f3e8ff"
+
+    controller: "Controller\nmanages function lifecycle\nClusterRole scoped" {
+      shape: rectangle
+    }
+    builder: "Builder\nbuilds function images\n(Docker-in-Docker + mTLS)" {
+      shape: rectangle
+    }
+    kfredis: "Redis\ndedicated — separate from app Redis" {
+      shape: cylinder
+      style.fill: "#e8d5ff"
+    }
+    functions: "Function Namespaces\nN × (Namespace + ServiceAccount)\noptional NetworkPolicy" {
+      shape: rectangle
+      style.stroke-dash: 4
+    }
+
+    controller -> kfredis
+    builder -> kfredis
+    controller -> functions: manages
+  }
+
+  soketi: "Soketi\nWebSocket broadcasting\npusher.enabled (Helm dependency)" {
+    shape: rectangle
+    style.fill: "#e8f4fe"
+  }
+}
+
+# ── Application → infrastructure connections ──────────────────────────────────
+
+application.web -> infra.mysql: DB_*
+application.web -> infra.redis: REDIS_*
+application.web -> infra.rabbitmq: RABBITMQ_URL
+application.web -> infra.elasticsearch: ELASTICSEARCH_HOST
+application.web -> infra.s3: AWS_*
+application.web -> optional.kubefaas.controller: KUBEFAAS_FUNCTIONS_*
+application.web -> optional.soketi: PUSHER_*
+
+application.workers -> infra.mysql
+application.workers -> infra.redis
+application.workers -> infra.rabbitmq
+application.workers -> infra.elasticsearch
+application.workers -> infra.s3
+application.workers -> optional.kubefaas.controller
+
+application.migrations -> infra.mysql: migrate --force

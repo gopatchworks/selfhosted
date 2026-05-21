@@ -1,0 +1,113 @@
+{{- if .Values.elasticsearch.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.elasticsearch.namespace" . }}
+{{- $p := .Values.elasticsearch.persistence }}
+{{- if not $p.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-elasticsearch
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: elasticsearch
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-elasticsearch
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: elasticsearch
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 8 }}
+    spec:
+      initContainers:
+        # Elasticsearch requires vm.max_map_count >= 262144. This init container
+        # sets it on the host node (requires privileged access). If your nodes
+        # are pre-configured, you can remove this init container.
+        - name: sysctl
+          image: busybox:1.37
+          securityContext:
+            privileged: true
+          command: ["sysctl", "-w", "vm.max_map_count=262144"]
+      containers:
+        - name: elasticsearch
+          image: "{{ .Values.elasticsearch.image.repository }}:{{ .Values.elasticsearch.image.tag }}"
+          imagePullPolicy: {{ .Values.elasticsearch.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9200
+            - name: transport
+              containerPort: 9300
+          env:
+            - name: discovery.type
+              value: single-node
+            - name: ES_JAVA_OPTS
+              value: {{ .Values.elasticsearch.javaOpts | quote }}
+            # Disable security for single-node self-hosted deployments.
+            # Enable and configure xpack security when exposing to untrusted networks.
+            - name: xpack.security.enabled
+              value: "false"
+          livenessProbe:
+            httpGet:
+              path: /_cluster/health
+              port: http
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /_cluster/health?wait_for_status=yellow&timeout=5s
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /usr/share/elasticsearch/data
+          {{- with .Values.elasticsearch.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default (printf "%s-elasticsearch" $fullname) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-elasticsearch
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: elasticsearch
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: 9200
+      targetPort: http
+    - name: transport
+      port: 9300
+      targetPort: transport
+{{- end }}
