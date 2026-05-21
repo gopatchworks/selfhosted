@@ -120,10 +120,11 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
-      {{- with $podAnnotations }}
       annotations:
+        checksum/config: {{ $root.Values.workers | toJson | sha256sum }}
+        {{- with $podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
       {{- with $root.Values.image.pullSecrets }}

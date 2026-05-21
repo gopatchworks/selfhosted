@@ -511,7 +511,7 @@ kubefaas:
 
   # Credentials shared between controller, builder, and monocore workers.
   auth:
-    username: kubefaas
+    username: ""
     password: ""
     existingSecret:
       name: ""

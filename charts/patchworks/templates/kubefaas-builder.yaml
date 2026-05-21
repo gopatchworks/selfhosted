@@ -242,6 +242,8 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-builder" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ $kf | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $fullname }}-kubefaas-builder
       {{- with $root.Values.image.pullSecrets }}
@@ -329,6 +331,7 @@ spec:
             - configMapRef:
                 name: {{ $fullname }}-kubefaas-builder-env
           env:
+            {{- if or $kf.auth.existingSecret.name (and $kf.auth.username $kf.auth.password) }}
             - name: AUTH_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -339,6 +342,7 @@ spec:
                 secretKeyRef:
                   name: {{ $authSecretName }}
                   key: {{ $authPasswordKey }}
+            {{- end }}
           volumeMounts:
             - name: registries
               mountPath: /app/config

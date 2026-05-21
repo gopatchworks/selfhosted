@@ -15,7 +15,7 @@ metadata:
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
 {{- $authUsernameKey := include "patchworks.kubefaas.authUsernameKey" . }}
 {{- $authPasswordKey := include "patchworks.kubefaas.authPasswordKey" . }}
-{{- if not $kf.auth.existingSecret.name }}
+{{- if and (not $kf.auth.existingSecret.name) $kf.auth.username $kf.auth.password }}
 ---
 apiVersion: v1
 kind: Secret
@@ -127,6 +127,8 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-controller" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ $kf | toJson | sha256sum }}
     spec:
       serviceAccountName: {{ $fullname }}-kubefaas-controller
       {{- with $root.Values.image.pullSecrets }}
@@ -159,6 +161,7 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            {{- if or $kf.auth.existingSecret.name (and $kf.auth.username $kf.auth.password) }}
             - name: AUTH_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -169,6 +172,7 @@ spec:
                 secretKeyRef:
                   name: {{ $authSecretName }}
                   key: {{ $authPasswordKey }}
+            {{- end }}
           {{- with $kf.controller.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
