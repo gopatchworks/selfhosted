@@ -1,0 +1,106 @@
+{{- $svc := merge (deepCopy .Values.web.start) .Values.web -}}
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "patchworks.fullname" . }}-start
+  namespace: {{ include "patchworks.start.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: start
+  {{- with $svc.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ $svc.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 8 }}
+      {{- with $svc.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "patchworks.waitForDeps" . | nindent 8 }}
+      containers:
+        - name: start
+          image: {{ include "patchworks.appImage" (dict "svc" $svc "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" .) }}
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            - name: RABBITMQ_QUEUE
+              value: {{ $svc.queue | quote }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $svc.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- with $svc.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $svc.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $svc.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $svc.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "patchworks.fullname" . }}-start
+  namespace: {{ include "patchworks.start.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: start
+spec:
+  type: {{ $svc.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ $svc.service.port }}
+      targetPort: http

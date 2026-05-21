@@ -32,7 +32,7 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 
 {{/*
 Selector labels for a given component.
-Usage: include "patchworks.selectorLabels" (dict "component" "core-web" "Release" .Release)
+Usage: include "patchworks.selectorLabels" (dict "component" "gateway" "Release" .Release)
 */}}
 {{- define "patchworks.selectorLabels" -}}
 app.kubernetes.io/name: {{ .component }}
@@ -52,6 +52,24 @@ Usage: include "patchworks.componentNamespace" (dict "ns" .Values.web.namespace 
 
 {{- define "patchworks.web.namespace" -}}
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.web.namespace "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.gateway.namespace" -}}
+{{- $ns := .Values.web.gateway.namespace | default .Values.web.namespace -}}
+{{- include "patchworks.componentNamespace" (dict "ns" $ns "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.start.namespace" -}}
+{{- $ns := .Values.web.start.namespace | default .Values.web.namespace -}}
+{{- include "patchworks.componentNamespace" (dict "ns" $ns "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.fabric.namespace" -}}
+{{- include "patchworks.componentNamespace" (dict "ns" .Values.fabric.namespace "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.dashboard.namespace" -}}
+{{- include "patchworks.componentNamespace" (dict "ns" .Values.dashboard.namespace "root" .) -}}
 {{- end }}
 
 {{- define "patchworks.workers.namespace" -}}
@@ -198,8 +216,9 @@ Usage:
 */}}
 {{- define "patchworks.appImage" -}}
 {{- $registry := .svc.image.registry | default .root.Values.image.registry -}}
+{{- $repository := .svc.image.repository | default .root.Values.image.repository -}}
 {{- $tag := .svc.image.tag | default .root.Values.image.tag -}}
-{{- printf "%s/%s:%s" $registry .svc.image.repository $tag -}}
+{{- printf "%s/%s:%s" $registry $repository $tag -}}
 {{- end }}
 
 {{/*

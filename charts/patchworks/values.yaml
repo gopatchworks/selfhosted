@@ -4,6 +4,9 @@
 # their own fully-qualified image blocks and are unaffected by this section.
 image:
   registry: ghcr.io/patchworks
+  # Default image name for PHP app components (web, workers, migrations).
+  # Monocore, fabric, and dashboard override this with their own repository.
+  repository: core
   tag: latest
   pullPolicy: IfNotPresent
   # List of image pull secret names to attach to all app pods.
@@ -34,14 +37,69 @@ app:
 namespace: ""
 
 # ── Core Web ───────────────────────────────────────────────────────────────────
+# Shared defaults for the two HTTP-facing Laravel deployments (gateway + start).
+# Any field under web.gateway.* or web.start.* overrides the corresponding
+# web.* default for that sub-component only.
 web:
-  namespace: ""  # overrides global namespace for web resources
-  # Per-service image overrides; empty values fall back to global image.* above.
+  namespace: ""
   image:
-    repository: core-web
-    registry: ""    # overrides global image.registry when set
-    tag: ""         # overrides global image.tag when set
-    pullPolicy: ""  # overrides global image.pullPolicy when set
+    registry: ""
+    tag: ""
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Gateway — primary API / MCP-facing service.
+  gateway:
+    queue: gateway
+
+  # Start — webhook, callback, and start-trigger service.
+  start:
+    queue: start
+
+# ── Fabric ─────────────────────────────────────────────────────────────────────
+# PHP-FPM application fronted by an Nginx sidecar. Required component.
+fabric:
+  namespace: ""
+  image:
+    repository: fabric
+    registry: ""
+    tag: ""
+    pullPolicy: ""
+  # Shell command run as an init container before the app starts.
+  init:
+    command: "php artisan optimize && php artisan migrate --force && php artisan db:seed --class=PermissionSeeder --force"
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 80
+  resources: {}
+  extraEnv: []
+  extraEnvFrom: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Dashboard ──────────────────────────────────────────────────────────────────
+# Optional dashboard UI deployment.
+dashboard:
+  enabled: false
+  namespace: ""
+  image:
+    repository: dashboard
+    registry: ""
+    tag: ""
+    pullPolicy: ""
   replicaCount: 1
   service:
     type: ClusterIP
@@ -58,15 +116,21 @@ web:
 # Runs as a Helm pre-install/pre-upgrade hook Job to apply database migrations
 # before the application pods start.
 migrations:
+  enabled: true
   namespace: ""  # overrides global namespace for migration jobs
   image:
-    repository: core-web
     registry: ""
     tag: ""
     pullPolicy: ""
+  # Shell command to run. Supports chaining, e.g. "php artisan migrate --force && php artisan db:seed"
+  command: "php artisan migrate --force"
+  restartPolicy: OnFailure
   # backoffLimit controls how many times the Job retries on failure.
   backoffLimit: 3
   resources: {}
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
 
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
@@ -77,10 +141,10 @@ workers:
   #   microservice — PHP queue worker per service via supervisord
   type: standalone
 
-  # Image used for type: standalone (uses global image.* defaults).
+  # Image overrides for type: standalone / microservice (PHP workers).
+  # Falls back to global image.* — same image as web by default.
   # For type: mono, configure workers.mono.image instead.
   image:
-    repository: core-web
     registry: ""
     tag: ""
     pullPolicy: ""
@@ -232,6 +296,8 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    # Monocore is a separate Go binary on its own release cycle.
+    # Set tag independently from the PHP app image.tag.
     image:
       repository: monocore
       registry: ""

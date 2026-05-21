@@ -1,3 +1,4 @@
+{{- if .Values.migrations.enabled }}
 ---
 # Job — runs database migrations before the application starts.
 # Executed as a pre-install / pre-upgrade hook so migrations complete before
@@ -21,7 +22,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "core-migrations" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: {{ .Values.migrations.restartPolicy }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -40,7 +41,7 @@ spec:
         - name: core-migrations
           image: {{ include "patchworks.appImage" (dict "svc" .Values.migrations "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.migrations "root" .) }}
-          command: ["php", "artisan", "migrate", "--force"]
+          command: ["/bin/sh", "-c", {{ .Values.migrations.command | quote }}]
           env:
             {{- include "patchworks.appEnv" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
@@ -54,3 +55,16 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      {{- with .Values.migrations.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

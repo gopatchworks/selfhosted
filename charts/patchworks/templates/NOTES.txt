@@ -6,19 +6,19 @@ Namespace: {{ .Release.Namespace }}
 
 ── Application ──────────────────────────────────────────────────────────────
 
-Core Web is deployed and available within the cluster.
+Gateway and Start are deployed and available within the cluster.
 {{- if .Values.ingress.enabled }}
 
-Ingress is enabled. Patchworks Core is reachable at:
+Ingress is enabled. Patchworks is reachable at:
 {{- range .Values.ingress.hosts }}
   http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}
 {{- end }}
 {{- else }}
 
-Ingress is disabled. To reach Core Web from your local machine, run:
+Ingress is disabled. To reach Gateway from your local machine, run:
 
   kubectl port-forward -n {{ .Release.Namespace }} \
-    svc/{{ include "patchworks.fullname" . }}-core-web \
+    svc/{{ include "patchworks.fullname" . }}-gateway \
     8080:{{ .Values.web.service.port }}
 
 Then open http://localhost:8080

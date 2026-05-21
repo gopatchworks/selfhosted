@@ -1,0 +1,151 @@
+---
+# ConfigMap — default Nginx config proxying to PHP-FPM on localhost:9000.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "patchworks.fullname" . }}-fabric-nginx
+  namespace: {{ include "patchworks.fabric.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric
+data:
+  site.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /var/www/html/public;
+        index index.php index.html;
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        location ~ \.php$ {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+            include fastcgi_params;
+        }
+
+        location ~ /\.(?!well-known).* {
+            deny all;
+        }
+    }
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "patchworks.fullname" . }}-fabric
+  namespace: {{ include "patchworks.fabric.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric
+  {{- with .Values.fabric.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ .Values.fabric.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 8 }}
+      {{- with .Values.fabric.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: {{ include "patchworks.fullname" . }}-fabric-nginx
+            items:
+              - key: site.conf
+                path: site.conf
+      initContainers:
+        - name: fabric-init
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
+          command: ["/bin/sh", "-c", {{ .Values.fabric.init.command | quote }}]
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.fabric.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      containers:
+        - name: fabric
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
+          ports:
+            - name: fpm
+              containerPort: 9000
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with .Values.fabric.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.fabric.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        - name: fabric-nginx
+          image: nginx:stable-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d
+      {{- with .Values.fabric.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.fabric.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.fabric.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "patchworks.fullname" . }}-fabric
+  namespace: {{ include "patchworks.fabric.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric
+spec:
+  type: {{ .Values.fabric.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.fabric.service.port }}
+      targetPort: http
