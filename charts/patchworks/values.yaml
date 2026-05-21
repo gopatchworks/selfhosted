@@ -116,6 +116,19 @@ dashboard:
     type: ClusterIP
     port: 80
   resources: {}
+  # Service URLs injected at container startup via entrypoint sed substitution.
+  # coreUrl, startUrl, fabricUrl, and mcpUrl default to in-cluster service
+  # addresses when left empty. Set them explicitly for external/ingress access.
+  coreUrl: ""
+  startUrl: ""
+  fabricUrl: ""
+  mcpUrl: ""
+  # External/optional config — all must be non-empty (entrypoint enforces this).
+  inboundUrl: ""
+  ga4Tag: "none"
+  zendeskUrl: "none"
+  forceRegistrationRequest: "false"
+
   extraEnv: []
   extraEnvFrom: []
   podAnnotations: {}

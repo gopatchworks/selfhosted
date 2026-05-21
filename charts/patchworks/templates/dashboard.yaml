@@ -42,6 +42,27 @@ spec:
             - name: http
               containerPort: 80
           env:
+            {{- $fullname := include "patchworks.fullname" . }}
+            {{- $coreUrl   := .Values.dashboard.coreUrl   | default (printf "http://%s-gateway.%s.svc.cluster.local"  $fullname (include "patchworks.gateway.namespace" .)) }}
+            {{- $startUrl  := .Values.dashboard.startUrl  | default (printf "http://%s-start.%s.svc.cluster.local"    $fullname (include "patchworks.start.namespace" .)) }}
+            {{- $fabricUrl := .Values.dashboard.fabricUrl | default (printf "http://%s-fabric.%s.svc.cluster.local"   $fullname (include "patchworks.fabric.namespace" .)) }}
+            {{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) }}
+            - name: CORE_URL
+              value: {{ $coreUrl | quote }}
+            - name: START_URL
+              value: {{ $startUrl | quote }}
+            - name: FABRIC_URL
+              value: {{ $fabricUrl | quote }}
+            - name: MCP_URL
+              value: {{ $mcpUrl | quote }}
+            - name: INBOUND_URL
+              value: {{ .Values.dashboard.inboundUrl | quote }}
+            - name: GA4_TAG
+              value: {{ .Values.dashboard.ga4Tag | quote }}
+            - name: ZENDESK_URL
+              value: {{ .Values.dashboard.zendeskUrl | quote }}
+            - name: FORCE_REGISTRATION_REQUEST
+              value: {{ .Values.dashboard.forceRegistrationRequest | quote }}
             {{- include "patchworks.appEnv" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
