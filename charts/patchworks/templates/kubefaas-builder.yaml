@@ -222,6 +222,11 @@ data:
   AUTH_ENABLED: "true"
   {{- if $kf.builder.cacheBucket }}
   CACHE_S3_BUCKET: {{ $kf.builder.cacheBucket | quote }}
+  AWS_REGION: {{ include "patchworks.s3.region" $root | quote }}
+  {{- if $root.Values.s3.enabled }}
+  AWS_S3_ENDPOINT: {{ include "patchworks.s3.endpoint" $root | quote }}
+  AWS_S3_PATH_STYLE: "true"
+  {{- end }}
   {{- end }}
 ---
 apiVersion: apps/v1
@@ -342,6 +347,10 @@ spec:
                 secretKeyRef:
                   name: {{ $authSecretName }}
                   key: {{ $authPasswordKey }}
+            {{- end }}
+            {{- if $kf.builder.cacheBucket }}
+            {{- include "patchworks.env.s3AccessKey" $root | nindent 12 | replace "AWS_ACCESS_KEY_ID" "AWS_ACCESS_KEY" }}
+            {{- include "patchworks.env.s3SecretKey" $root | nindent 12 | replace "AWS_SECRET_ACCESS_KEY" "AWS_SECRET_KEY" }}
             {{- end }}
           volumeMounts:
             - name: registries

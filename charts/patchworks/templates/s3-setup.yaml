@@ -43,6 +43,10 @@ spec:
               mc alias set local {{ include "patchworks.s3.endpoint" . }} "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD"
               mc mb --ignore-existing local/{{ .Values.s3.bucket }}
               echo "Bucket {{ .Values.s3.bucket }} ready."
+              {{- if and .Values.kubefaas.enabled .Values.kubefaas.builder.cacheBucket }}
+              mc mb --ignore-existing local/{{ .Values.kubefaas.builder.cacheBucket }}
+              echo "Bucket {{ .Values.kubefaas.builder.cacheBucket }} ready."
+              {{- end }}
           env:
             {{- $es := .Values.s3.auth.existingSecret }}
             {{- include "patchworks.secretEnv" (dict "name" "MINIO_ROOT_USER" "value" .Values.s3.auth.rootUser "secret" (dict "name" $es.name "key" $es.rootUserKey)) | nindent 12 }}

@@ -478,7 +478,7 @@ kubefaas:
       pullPolicy: ""
     replicaCount: 1
     # S3 bucket used to cache compiled function images between builds.
-    cacheBucket: ""
+    cacheBucket: kubefaas-cache
     # TLS configuration for the Docker-in-Docker sidecar.
     # mode: helm          — Helm generates self-signed certs; CA is preserved across upgrades via lookup.
     # mode: certManager   — cert-manager issues and rotates certs; requires cert-manager CRDs in the cluster.
