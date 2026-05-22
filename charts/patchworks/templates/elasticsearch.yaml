@@ -36,6 +36,12 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 8 }}
     spec:
+      # Elasticsearch runs as UID 1000. Setting fsGroup ensures the mounted PVC
+      # is chowned to that group by Kubernetes before the container starts —
+      # required on cloud block storage (e.g. DigitalOcean) that provisions
+      # volumes with root ownership.
+      securityContext:
+        fsGroup: 1000
       initContainers:
         # Elasticsearch requires vm.max_map_count >= 262144. This init container
         # sets it on the host node (requires privileged access). If your nodes
