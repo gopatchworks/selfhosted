@@ -2,10 +2,9 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ing := .Values.ingress }}
 {{- $services := list
-  (dict "host" $ing.hosts.gateway  "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .))
-  (dict "host" $ing.hosts.start    "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .))
-  (dict "host" $ing.hosts.fabric   "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .))
-  (dict "host" $ing.hosts.dashboard "svcName" (printf "%s-dashboard" $fullname) "ns" (include "patchworks.dashboard.namespace" .))
+  (dict "host" $ing.hosts.gateway "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .))
+  (dict "host" $ing.hosts.start   "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .))
+  (dict "host" $ing.hosts.fabric  "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .))
 }}
 {{- range $services }}
 {{- if .host }}
@@ -41,5 +40,90 @@ spec:
                 port:
                   name: http
 {{- end }}
+{{- end }}
+{{- if $ing.hosts.dashboard }}
+{{- $dashNs := include "patchworks.dashboard.namespace" . }}
+---
+# Path-rewriting Ingress — strips /fabric, /core-main, /core-start prefixes
+# before forwarding to their respective services.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-dashboard-routes
+  namespace: {{ $dashNs }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+  annotations:
+    {{- with $ing.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- with $ing.rewriteAnnotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if $ing.className }}
+  ingressClassName: {{ $ing.className }}
+  {{- end }}
+  {{- with $ing.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $ing.hosts.dashboard | quote }}
+      http:
+        paths:
+          - path: /fabric
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-fabric
+                port:
+                  name: http
+          - path: /core-main
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-gateway
+                port:
+                  name: http
+          - path: /core-start
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-start
+                port:
+                  name: http
+---
+# Dashboard Ingress — serves the dashboard at /.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ $fullname }}-dashboard
+  namespace: {{ $dashNs }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+  {{- with $ing.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if $ing.className }}
+  ingressClassName: {{ $ing.className }}
+  {{- end }}
+  {{- with $ing.tls }}
+  tls:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    - host: {{ $ing.hosts.dashboard | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $fullname }}-dashboard
+                port:
+                  name: http
 {{- end }}
 {{- end }}

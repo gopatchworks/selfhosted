@@ -82,6 +82,8 @@ spec:
                 name: {{ include "patchworks.fullname" . }}-fabric-config
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-fabric-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
             {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -105,6 +107,8 @@ spec:
                 name: {{ include "patchworks.fullname" . }}-fabric-config
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-fabric-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
             {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

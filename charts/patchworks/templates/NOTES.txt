@@ -11,13 +11,22 @@ Gateway and Start are deployed and available within the cluster.
 
 Ingress is enabled. Patchworks is reachable at:
 {{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
-{{- with .Values.ingress.hosts.dashboard }}  {{ $scheme }}://{{ . }}  (dashboard)
+{{- with .Values.ingress.hosts.dashboard }}  {{ $scheme }}://{{ . }}           (dashboard)
+  {{ $scheme }}://{{ . }}/fabric      (fabric)
+  {{ $scheme }}://{{ . }}/core-main   (core gateway)
+  {{ $scheme }}://{{ . }}/core-start  (core start)
 {{- end }}
-{{- with .Values.ingress.hosts.gateway }}  {{ $scheme }}://{{ . }}  (core API)
+{{- with .Values.ingress.hosts.gateway }}  {{ $scheme }}://{{ . }}  (core gateway — dedicated host)
 {{- end }}
-{{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (start API)
+{{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (core start — dedicated host)
 {{- end }}
-{{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric)
+{{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric — dedicated host)
+{{- end }}
+{{- if .Values.ingress.hosts.dashboard }}
+
+  !! ingress.rewriteAnnotations is required for /fabric, /core-main and
+  !! /core-start prefix stripping to work. The default is set for Contour.
+  !! For other controllers see the Ingress section of the chart README.
 {{- end }}
 {{- else }}
 

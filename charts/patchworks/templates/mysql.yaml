@@ -2,6 +2,20 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.mysql.namespace" . }}
 {{- $p := .Values.mysql.persistence }}
+---
+# Init script: elevate the app user to superuser after MySQL creates it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-mysql-init
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+data:
+  grant-superuser.sql: |
+    GRANT ALL PRIVILEGES ON *.* TO '{{ .Values.mysql.auth.username }}'@'%' WITH GRANT OPTION;
+    FLUSH PRIVILEGES;
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -76,6 +90,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
           {{- with .Values.mysql.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -84,6 +100,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ $p.existingClaim | default (printf "%s-mysql" $fullname) }}
+        - name: init
+          configMap:
+            name: {{ $fullname }}-mysql-init
 ---
 apiVersion: v1
 kind: Service

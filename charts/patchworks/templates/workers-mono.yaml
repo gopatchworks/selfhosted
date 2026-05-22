@@ -180,8 +180,9 @@ spec:
               readOnly: true
           env:
             {{- include "patchworks.env.dbPassword" $root | nindent 12 }}
+            {{- include "patchworks.env.fabricDbPassword" $root | nindent 12 }}
             - name: DB_FABRIC_DSN
-              value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/fabric?parseTime=true"
+              value: "{{ include "patchworks.fabric.mysql.username" $root }}:$(FABRIC_DB_PASSWORD)@tcp({{ include "patchworks.fabric.mysql.host" $root }}:{{ include "patchworks.fabric.mysql.port" $root }})/{{ include "patchworks.fabric.mysql.database" $root }}?parseTime=true"
             - name: DB_LANDLORD_DSN
               value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/{{ include "patchworks.mysql.database" $root }}?parseTime=true"
             - name: AWS_ENDPOINT_URL

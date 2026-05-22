@@ -47,6 +47,8 @@ spec:
                 name: {{ include "patchworks.fullname" . }}-config
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
             {{- with .Values.app.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -121,6 +123,8 @@ spec:
                 name: {{ include "patchworks.fullname" . }}-config
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
             {{- with .Values.app.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

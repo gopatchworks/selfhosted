@@ -10,6 +10,7 @@ Full `values.yaml` reference for the Patchworks chart.
 
 - [Images](#images)
 - [Application](#application)
+- [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
 - [Workers](#workers)
 - [Migrations](#migrations)
@@ -62,6 +63,61 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
 | `app.extraEnv` | `[]` | Additional env vars injected into all app pods |
 | `app.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for all app pods |
+
+---
+
+## Passport OAuth keys
+
+Both Core and Fabric use [Laravel Passport](https://laravel.com/docs/passport) for OAuth token signing and verification. They share a single RSA key pair:
+
+- **`PASSPORT_PRIVATE_KEY`** — used by Fabric to sign JWT tokens.
+- **`PASSPORT_PUBLIC_KEY`** — used by both Core and Fabric to verify them.
+
+### Auto-generation (default)
+
+On `helm install`, a `pre-install` hook Job runs `openssl genrsa` inside an `alpine` container, creates the key pair, and stores it in a Kubernetes Secret called `<release-name>-passport-keys`. The Secret is annotated with `helm.sh/resource-policy: keep` so it is **never deleted** by Helm — not on `helm upgrade`, not on `helm uninstall`. The Job is idempotent: on subsequent upgrades it checks whether the Secret already exists and exits immediately if so.
+
+No configuration is required for the default behaviour.
+
+### Bringing your own keys
+
+If you want to supply pre-generated keys (recommended for production), generate an RSA key pair and create the Secret before installing the chart:
+
+```bash
+# Generate a 4096-bit RSA private key and derive the public key
+openssl genrsa -out passport.key 4096
+openssl rsa -in passport.key -pubout -out passport.pub
+
+# Create the Secret in the release namespace
+kubectl create secret generic my-passport-keys \
+  --from-file=PASSPORT_PRIVATE_KEY=passport.key \
+  --from-file=PASSPORT_PUBLIC_KEY=passport.pub
+
+# Remove the local key files
+rm passport.key passport.pub
+```
+
+Then reference it in your values:
+
+```yaml
+passport:
+  existingSecret:
+    name: my-passport-keys
+    privateKeyKey: PASSPORT_PRIVATE_KEY   # default, change if your keys differ
+    publicKeyKey: PASSPORT_PUBLIC_KEY     # default, change if your keys differ
+```
+
+When `passport.existingSecret.name` is set the auto-generation Job, ServiceAccount, and RBAC are not created.
+
+### Multi-namespace deployments
+
+The generated Secret lives in the Helm release namespace (where Core runs). Fabric pods load it from that namespace. If you override `fabric.namespace` to place Fabric in a different namespace, copy the Secret there manually or use `passport.existingSecret` to point at a copy you manage.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `passport.existingSecret.name` | `""` | Existing Secret name. Leave empty to auto-generate |
+| `passport.existingSecret.privateKeyKey` | `PASSPORT_PRIVATE_KEY` | Key within the Secret for the private key |
+| `passport.existingSecret.publicKeyKey` | `PASSPORT_PUBLIC_KEY` | Key within the Secret for the public key |
 
 ---
 
@@ -153,11 +209,69 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `ingress.enabled` | `false` | Create an Ingress for Core Web |
+| `ingress.enabled` | `false` | Create Ingress resources |
 | `ingress.className` | `""` | `ingressClassName` |
-| `ingress.annotations` | `{}` | Ingress annotations |
-| `ingress.hosts` | `[]` | Host and path rules |
-| `ingress.tls` | `[]` | TLS configuration |
+| `ingress.annotations` | `{}` | Annotations applied to every Ingress resource |
+| `ingress.tls` | `[]` | TLS configuration applied to every Ingress resource |
+| `ingress.hosts.gateway` | `""` | Hostname for the Core gateway service (`/`) |
+| `ingress.hosts.start` | `""` | Hostname for the Core start service (`/`) |
+| `ingress.hosts.fabric` | `""` | Hostname for the Fabric service (`/`) |
+| `ingress.hosts.dashboard` | `""` | Hostname for the dashboard and path-based routes (see below) |
+| `ingress.rewriteAnnotations` | see below | Annotations added only to the path-rewriting Ingress |
+
+### Path-based routing and prefix stripping
+
+When `ingress.hosts.dashboard` is set, two Ingress resources are created on that host:
+
+- **`patchworks-dashboard`** — routes `/` to the dashboard service (no rewrite).
+- **`patchworks-dashboard-routes`** — routes `/fabric`, `/core-main`, and `/core-start` to their respective services with the prefix stripped before forwarding.
+
+> ⚠️ **`ingress.rewriteAnnotations` is required** for prefix stripping to work. The default is configured for Contour. If you use a different ingress controller you must override this value — see the examples below.
+
+#### Contour (default)
+
+No changes needed. The default `rewriteAnnotations` uses the standard annotation that Contour recognises for prefix rewriting:
+
+```yaml
+ingress:
+  rewriteAnnotations:
+    ingress.kubernetes.io/rewrite-target: /
+```
+
+#### nginx-ingress
+
+nginx requires a regex capture group in the path and a different annotation. Set `rewriteAnnotations` and override the path patterns via `annotations`:
+
+```yaml
+ingress:
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+  rewriteAnnotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+```
+
+> **Note:** nginx also requires the path patterns to include a capture group (e.g. `/fabric(/|$)(.*)`). Because Kubernetes Ingress path patterns are not configurable per-path in Helm without a full template override, nginx users may prefer to set `ingress.enabled=false` and manage Ingress resources manually or via a separate chart.
+
+#### Traefik
+
+Use a `StripPrefix` middleware and reference it via an annotation:
+
+```yaml
+# First create the middleware in the same namespace:
+# kubectl create -f - <<EOF
+# apiVersion: traefik.io/v1alpha1
+# kind: Middleware
+# metadata:
+#   name: patchworks-strip-prefix
+# spec:
+#   stripPrefix:
+#     prefixes: ["/fabric", "/core-main", "/core-start"]
+# EOF
+
+ingress:
+  rewriteAnnotations:
+    traefik.ingress.kubernetes.io/router.middlewares: "<namespace>-patchworks-strip-prefix@kubernetescrd"
+```
 
 ---
 

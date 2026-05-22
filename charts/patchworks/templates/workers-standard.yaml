@@ -150,6 +150,8 @@ spec:
                 name: {{ include "patchworks.fullname" $root }}-config
             - secretRef:
                 name: {{ include "patchworks.fullname" $root }}-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" $root }}
             {{- with $envFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

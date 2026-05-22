@@ -22,6 +22,19 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
+Name of the Secret containing PASSPORT_PRIVATE_KEY / PASSPORT_PUBLIC_KEY.
+Shared between Core and Fabric. Returns the existingSecret name if configured,
+otherwise the auto-generated secret name.
+*/}}
+{{- define "patchworks.passportSecretName" -}}
+{{- if .Values.passport.existingSecret.name }}
+{{- .Values.passport.existingSecret.name }}
+{{- else }}
+{{- printf "%s-passport-keys" (include "patchworks.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
 Name of the app ServiceAccount.
 */}}
 {{- define "patchworks.serviceAccountName" -}}
@@ -553,6 +566,13 @@ Usage (call at the right indent level via nindent):
 {{- include "patchworks.secretEnv" (dict "name" "DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" $s) -}}
 {{- end }}
 
+{{/* FABRIC_DB_PASSWORD — sourced from the fabric MySQL existingSecret or inline password. */}}
+{{- define "patchworks.env.fabricDbPassword" -}}
+{{- $es := fromJson (include "patchworks.fabric.mysql.existingSecret" .) -}}
+{{- $s := dict "name" $es.name "key" $es.passwordKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "FABRIC_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" $s) -}}
+{{- end }}
+
 {{/* AWS_ACCESS_KEY_ID — selects MinIO root user or external access key secret automatically. */}}
 {{- define "patchworks.env.s3AccessKey" -}}
 {{- if .Values.s3.enabled -}}
@@ -888,6 +908,11 @@ TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
 TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
 TENANT_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
 TENANT_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
+FABRIC_DB_CONNECTION: "fabric"
+FABRIC_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+FABRIC_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
+FABRIC_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
+FABRIC_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
 {{- if .Values.s3.enabled }}
 TENANT_CACHE_AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
 TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
@@ -1088,6 +1113,10 @@ DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
 LANDLORD_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
 TENANT_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
 {{- end }}
+{{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{- if not $fabricDbSecret.name }}
+FABRIC_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
+{{- end }}
 {{- if and (not .Values.redis.enabled) (not .Values.redis.external.existingSecret.name) (include "patchworks.redis.password" .) }}
 REDIS_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
 {{- end }}
@@ -1173,6 +1202,14 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ $dbSecret.name }}
       key: {{ $dbSecret.passwordKey }}
+{{- end }}
+{{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{- if $fabricDbSecret.name }}
+- name: FABRIC_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $fabricDbSecret.name }}
+      key: {{ $fabricDbSecret.passwordKey }}
 {{- end }}
 {{- if .Values.redis.external.existingSecret.name }}
 - name: REDIS_PASSWORD

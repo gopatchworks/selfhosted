@@ -3,6 +3,20 @@
 {{- $ns := include "patchworks.fabric.namespace" . }}
 {{- $mysql := .Values.fabric.mysql }}
 {{- $p := $mysql.persistence }}
+---
+# Init script: elevate the fabric app user to superuser after MySQL creates it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-fabric-mysql-init
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric-mysql
+data:
+  grant-superuser.sql: |
+    GRANT ALL PRIVILEGES ON *.* TO '{{ $mysql.auth.username }}'@'%' WITH GRANT OPTION;
+    FLUSH PRIVILEGES;
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -75,6 +89,8 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/mysql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
           {{- with $mysql.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -83,6 +99,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ $p.existingClaim | default (printf "%s-fabric-mysql" $fullname) }}
+        - name: init
+          configMap:
+            name: {{ $fullname }}-fabric-mysql-init
 ---
 apiVersion: v1
 kind: Service

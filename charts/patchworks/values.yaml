@@ -41,6 +41,18 @@ app:
   # Extra envFrom (secretRef / configMapRef) injected into every app pod.
   extraEnvFrom: []
 
+# ── Passport OAuth keys ────────────────────────────────────────────────────────
+# Laravel Passport RSA key pair shared between Core and Fabric.
+# An RSA-4096 key pair is auto-generated on first install and stored in a
+# dedicated Secret annotated with helm.sh/resource-policy: keep so it survives
+# upgrades and uninstalls.
+# Set existingSecret.name to bring your own key pair instead.
+passport:
+  existingSecret:
+    name: ""
+    privateKeyKey: PASSPORT_PRIVATE_KEY
+    publicKeyKey: PASSPORT_PUBLIC_KEY
+
 # ── Namespace override ─────────────────────────────────────────────────────────
 # Optional global override. When set, all resources are deployed to this
 # namespace unless a per-component namespace is specified. Defaults to the Helm
@@ -707,11 +719,20 @@ ingress:
   annotations: {}
   tls: []
   # Hostname for each service. Leave empty to skip that service's ingress rule.
+  # The dashboard host also serves /fabric, /core-main, and /core-start with
+  # prefix stripping on a separate Ingress resource.
   hosts:
     gateway: ""
     start: ""
     fabric: ""
     dashboard: ""
+  # Annotations added to the path-rewriting Ingress (fabric/core-main/core-start).
+  # The default strips the path prefix and is compatible with Contour.
+  # For nginx-ingress use:
+  #   nginx.ingress.kubernetes.io/rewrite-target: /$2
+  # and change pathType to ImplementationSpecific with regex paths e.g. /fabric(/|$)(.*)
+  rewriteAnnotations:
+    ingress.kubernetes.io/rewrite-target: /
 
 # ── MySQL ──────────────────────────────────────────────────────────────────────
 mysql:
@@ -722,7 +743,7 @@ mysql:
   external:
     host: ""
     port: 3306
-    database: patchworks
+    database: core
     username: patchworks
     password: ""
     # Use an existing Secret for the MySQL password when using an external instance.
@@ -735,7 +756,7 @@ mysql:
     pullPolicy: IfNotPresent
   auth:
     rootPassword: root
-    database: patchworks
+    database: core
     username: patchworks
     password: patchworks
     # Use an existing Secret instead of the inline rootPassword/password values above.

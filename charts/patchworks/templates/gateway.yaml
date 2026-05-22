@@ -50,6 +50,8 @@ spec:
                 name: {{ include "patchworks.fullname" . }}-config
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-secret
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
             {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

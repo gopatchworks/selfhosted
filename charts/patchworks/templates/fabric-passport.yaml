@@ -1,0 +1,156 @@
+{{/*
+Generates a Laravel Passport RSA-4096 key pair on first install and stores it in a
+dedicated Secret (helm.sh/resource-policy: keep) that persists across upgrades and
+uninstalls. The Secret lives in the release namespace so both Core and Fabric can
+load it.
+
+If passport.existingSecret.name is set the generation Job and RBAC are skipped
+entirely — the user is responsible for ensuring the Secret contains
+PASSPORT_PRIVATE_KEY and PASSPORT_PUBLIC_KEY.
+
+Note: if fabric.namespace differs from the release namespace, mount the Secret into
+the fabric namespace manually or set passport.existingSecret to point at a copy.
+*/}}
+{{- $fullname   := include "patchworks.fullname" . }}
+{{- $ns         := .Release.Namespace }}
+{{- $saName     := printf "%s-passport-keygen" $fullname }}
+{{- $secretName := include "patchworks.passportSecretName" . }}
+{{- if not .Values.passport.existingSecret.name }}
+---
+# ServiceAccount used by the key-generation Job.
+# Must be a hook at lower weight than the Job so it exists before the pod starts.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: passport-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+---
+# Role: allow get/create on the passport-keys Secret.
+# (resourceNames restriction cannot be used on create, so create is open within namespace.)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: passport-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $secretName | quote }}]
+    verbs: ["get", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: passport-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $saName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $saName }}
+    namespace: {{ $ns }}
+---
+# Job: generate RSA-4096 key pair and store in a Secret on first install.
+# On upgrade the Job exits immediately if the Secret already exists.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-passport-keygen
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: passport-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "passport-keygen" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ $saName }}
+      containers:
+        - name: keygen
+          image: alpine:3
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              apk add --no-cache curl openssl >/dev/null 2>&1
+
+              API="https://kubernetes.default.svc"
+              TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
+              CA="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+              NS="{{ $ns }}"
+              SECRET="{{ $secretName }}"
+
+              # Skip generation if the Secret already exists (idempotent on upgrades).
+              STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+                --cacert "$CA" -H "Authorization: Bearer $TOKEN" \
+                "$API/api/v1/namespaces/$NS/secrets/$SECRET")
+
+              if [ "$STATUS" = "200" ]; then
+                echo "Passport keys secret already exists — skipping generation."
+                exit 0
+              fi
+
+              echo "Generating RSA-4096 key pair for Laravel Passport..."
+              openssl genrsa -out /tmp/private.key 4096
+              openssl rsa -in /tmp/private.key -pubout -out /tmp/public.key
+
+              PRIVATE_B64=$(base64 < /tmp/private.key | tr -d '\n')
+              PUBLIC_B64=$(base64 < /tmp/public.key | tr -d '\n')
+
+              echo "Creating Secret ${SECRET} in namespace ${NS}..."
+              curl -sf --cacert "$CA" \
+                -H "Authorization: Bearer $TOKEN" \
+                -H "Content-Type: application/json" \
+                -X POST \
+                "$API/api/v1/namespaces/$NS/secrets" \
+                -d "{
+                  \"apiVersion\": \"v1\",
+                  \"kind\": \"Secret\",
+                  \"metadata\": {
+                    \"name\": \"$SECRET\",
+                    \"namespace\": \"$NS\",
+                    \"annotations\": {\"helm.sh/resource-policy\": \"keep\"}
+                  },
+                  \"data\": {
+                    \"PASSPORT_PRIVATE_KEY\": \"$PRIVATE_B64\",
+                    \"PASSPORT_PUBLIC_KEY\": \"$PUBLIC_B64\"
+                  }
+                }"
+
+              echo "Passport keys generated and stored successfully."
+{{- end }}
