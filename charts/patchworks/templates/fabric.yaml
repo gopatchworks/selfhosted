@@ -77,7 +77,7 @@ spec:
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
           command: ["/bin/sh", "-c", {{ .Values.fabric.init.command | quote }}]
           env:
-            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- include "patchworks.fabricEnv" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -96,7 +96,7 @@ spec:
             - name: fpm
               containerPort: 9000
           env:
-            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- include "patchworks.fabricEnv" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

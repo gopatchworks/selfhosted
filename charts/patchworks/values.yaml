@@ -93,6 +93,83 @@ fabric:
   service:
     type: ClusterIP
     port: 80
+  # ── Fabric MySQL ──────────────────────────────────────────────────────────
+  # Fabric uses its own database, isolated from the core application.
+  #
+  # Three modes (evaluated in order):
+  #   1. fabric.mysql.enabled: true  — deploy a dedicated MySQL instance.
+  #   2. fabric.mysql.external.host  — connect to an existing MySQL instance.
+  #   3. (default) shared            — use the main MySQL with a separate
+  #                                    database (fabric.mysql.database).
+  #
+  # If the main mysql is disabled and neither of the above is configured,
+  # the chart will fail with a validation error.
+  mysql:
+    enabled: false
+    # Database name used when sharing the main MySQL instance (mode 3).
+    database: fabric
+    external:
+      host: ""
+      port: 3306
+      database: fabric
+      username: fabric
+      password: ""
+      existingSecret:
+        name: ""
+        passwordKey: password
+    # Settings below are only used when fabric.mysql.enabled: true.
+    image:
+      repository: mysql
+      tag: "8.0"
+      pullPolicy: IfNotPresent
+    auth:
+      rootPassword: root
+      database: fabric
+      username: fabric
+      password: fabric
+      existingSecret:
+        name: ""
+        rootPasswordKey: root-password
+        passwordKey: password
+    persistence:
+      existingClaim: ""
+      accessModes: [ReadWriteOnce]
+      size: 10Gi
+      storageClass: ""
+      spec: {}
+    service:
+      type: ClusterIP
+    resources: {}
+  # ── Fabric Redis ──────────────────────────────────────────────────────────
+  # Fabric can use its own Redis instance, isolated from the core application.
+  #
+  # Three modes (evaluated in order):
+  #   1. fabric.redis.enabled: true  — deploy a dedicated Redis instance.
+  #   2. fabric.redis.external.host  — connect to an existing Redis instance.
+  #   3. (default) shared            — use the main Redis instance.
+  redis:
+    enabled: false
+    external:
+      host: ""
+      port: 6379
+      password: ""
+      existingSecret:
+        name: ""
+        passwordKey: password
+    # Settings below are only used when fabric.redis.enabled: true.
+    image:
+      repository: valkey/valkey
+      tag: 8-alpine
+      pullPolicy: IfNotPresent
+    persistence:
+      existingClaim: ""
+      accessModes: [ReadWriteOnce]
+      size: 1Gi
+      storageClass: ""
+      spec: {}
+    service:
+      type: ClusterIP
+    resources: {}
   resources: {}
   extraEnv: []
   extraEnvFrom: []

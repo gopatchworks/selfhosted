@@ -1,0 +1,103 @@
+{{- if .Values.fabric.mysql.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.fabric.namespace" . }}
+{{- $mysql := .Values.fabric.mysql }}
+{{- $p := $mysql.persistence }}
+{{- if not $p.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-fabric-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric-mysql
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-fabric-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric-mysql
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "fabric-mysql" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "fabric-mysql" "Release" .Release) | nindent 8 }}
+    spec:
+      containers:
+        - name: mysql
+          image: "{{ $mysql.image.repository }}:{{ $mysql.image.tag }}"
+          imagePullPolicy: {{ $mysql.image.pullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            {{- $es := $mysql.auth.existingSecret }}
+            {{- include "patchworks.secretEnv" (dict "name" "MYSQL_ROOT_PASSWORD" "value" $mysql.auth.rootPassword "secret" (dict "name" $es.name "key" $es.rootPasswordKey)) | nindent 12 }}
+            - name: MYSQL_DATABASE
+              value: {{ $mysql.auth.database | quote }}
+            - name: MYSQL_USER
+              value: {{ $mysql.auth.username | quote }}
+            {{- include "patchworks.secretEnv" (dict "name" "MYSQL_PASSWORD" "value" $mysql.auth.password "secret" (dict "name" $es.name "key" $es.passwordKey)) | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h localhost -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h localhost -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+          {{- with $mysql.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default (printf "%s-fabric-mysql" $fullname) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-fabric-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric-mysql
+spec:
+  type: {{ $mysql.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "fabric-mysql" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+{{- end }}

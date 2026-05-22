@@ -271,6 +271,95 @@ Falls back to global image.pullPolicy.
 {{- if .Values.mysql.enabled -}}{{ .Values.mysql.auth.password }}{{- else -}}{{ .Values.mysql.external.password }}{{- end -}}
 {{- end }}
 
+{{/* ── Fabric MySQL helpers ────────────────────────────────────────────────────── */}}
+{{/*
+Resolve Fabric's MySQL connection details with three fallback modes:
+  1. fabric.mysql.enabled  → dedicated in-cluster MySQL for Fabric
+  2. fabric.mysql.external.host set → external MySQL for Fabric
+  3. (default) shared mode → main MySQL, separate database
+*/}}
+
+{{- define "patchworks.fabric.mysql.host" -}}
+{{- if .Values.fabric.mysql.enabled -}}
+{{- printf "%s-fabric-mysql.%s.svc.cluster.local" (include "patchworks.fullname" .) (include "patchworks.fabric.namespace" .) -}}
+{{- else if .Values.fabric.mysql.external.host -}}
+{{- .Values.fabric.mysql.external.host -}}
+{{- else -}}
+{{- include "patchworks.mysql.host" . -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.mysql.port" -}}
+{{- if .Values.fabric.mysql.enabled -}}3306
+{{- else if .Values.fabric.mysql.external.host -}}{{ .Values.fabric.mysql.external.port }}
+{{- else -}}{{ include "patchworks.mysql.port" . }}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.mysql.database" -}}
+{{- if .Values.fabric.mysql.enabled -}}{{ .Values.fabric.mysql.auth.database }}
+{{- else if .Values.fabric.mysql.external.host -}}{{ .Values.fabric.mysql.external.database }}
+{{- else -}}{{ .Values.fabric.mysql.database }}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.mysql.username" -}}
+{{- if .Values.fabric.mysql.enabled -}}{{ .Values.fabric.mysql.auth.username }}
+{{- else if .Values.fabric.mysql.external.host -}}{{ .Values.fabric.mysql.external.username }}
+{{- else -}}{{ include "patchworks.mysql.username" . }}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.mysql.password" -}}
+{{- if .Values.fabric.mysql.enabled -}}{{ .Values.fabric.mysql.auth.password }}
+{{- else if .Values.fabric.mysql.external.host -}}{{ .Values.fabric.mysql.external.password }}
+{{- else -}}{{ include "patchworks.mysql.password" . }}
+{{- end -}}
+{{- end }}
+
+{{/* Resolve the existingSecret dict for Fabric's MySQL password. */}}
+{{- define "patchworks.fabric.mysql.existingSecret" -}}
+{{- if .Values.fabric.mysql.enabled -}}
+{{- .Values.fabric.mysql.auth.existingSecret | toJson -}}
+{{- else if .Values.fabric.mysql.external.host -}}
+{{- .Values.fabric.mysql.external.existingSecret | toJson -}}
+{{- else -}}
+{{- (ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled) | toJson -}}
+{{- end -}}
+{{- end }}
+
+{{/* ── Fabric Redis helpers ────────────────────────────────────────────────────── */}}
+{{/*
+Resolve Fabric's Redis connection details with three fallback modes:
+  1. fabric.redis.enabled  → dedicated in-cluster Redis for Fabric
+  2. fabric.redis.external.host set → external Redis for Fabric
+  3. (default) shared mode → main Redis instance
+*/}}
+
+{{- define "patchworks.fabric.redis.host" -}}
+{{- if .Values.fabric.redis.enabled -}}
+{{- printf "%s-fabric-redis.%s.svc.cluster.local" (include "patchworks.fullname" .) (include "patchworks.fabric.namespace" .) -}}
+{{- else if .Values.fabric.redis.external.host -}}
+{{- .Values.fabric.redis.external.host -}}
+{{- else -}}
+{{- include "patchworks.redis.host" . -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.redis.port" -}}
+{{- if .Values.fabric.redis.enabled -}}6379
+{{- else if .Values.fabric.redis.external.host -}}{{ .Values.fabric.redis.external.port }}
+{{- else -}}{{ include "patchworks.redis.port" . }}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.fabric.redis.password" -}}
+{{- if .Values.fabric.redis.enabled -}}
+{{- else if .Values.fabric.redis.external.host -}}{{ .Values.fabric.redis.external.password }}
+{{- else -}}{{ include "patchworks.redis.password" . }}
+{{- end -}}
+{{- end }}
+
 {{/* ── Redis helpers ───────────────────────────────────────────────────────────── */}}
 
 {{- define "patchworks.redis.host" -}}
@@ -760,6 +849,9 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if and (empty .Values.app.existingSecret.name) (not .Values.app.key) -}}
 {{- fail "app.key is required. Generate one with: echo \"base64:$(openssl rand -base64 32)\"" -}}
 {{- end -}}
+{{- if and (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
+{{- fail "Fabric has no MySQL source. Enable mysql, enable fabric.mysql, or set fabric.mysql.external.host." -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -837,6 +929,127 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
 - name: TENANT_REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
+{{- if .Values.s3.enabled }}
+- name: TENANT_CACHE_AWS_ENDPOINT_URL
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT
+  value: "true"
+{{- else }}
+- name: TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT
+  value: "false"
+{{- end }}
+{{- if .Values.s3.enabled }}
+{{- $s3AccessSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootUserKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- else }}
+{{- $s3AccessSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- end }}
+- name: TENANT_CACHE_AWS_BUCKET
+  value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: TENANT_CACHE_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+- name: BROADCAST_CONNECTION
+  value: pusher
+{{ include "patchworks.env.pusherAppId" . }}
+{{ include "patchworks.env.pusherAppKey" . }}
+{{ include "patchworks.env.pusherAppSecret" . }}
+{{ include "patchworks.env.pusherAppCluster" . }}
+{{- with include "patchworks.pusher.host" . }}
+- name: PUSHER_HOST
+  value: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.scheme" . }}
+- name: PUSHER_SCHEME
+  value: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.port" . }}
+- name: PUSHER_PORT
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Env vars for the Fabric deployment. Identical to patchworks.appEnv except
+all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
+(dedicated, external, or the shared MySQL with a separate database).
+*/}}
+{{- define "patchworks.fabricEnv" -}}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+- name: APP_ENV
+  value: {{ .Values.app.env | quote }}
+- name: APP_DEBUG
+  value: {{ .Values.app.debug | quote }}
+- name: APP_URL
+  value: {{ .Values.app.url | quote }}
+- name: DB_CONNECTION
+  value: mysql
+- name: DB_HOST
+  value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+- name: DB_PORT
+  value: {{ include "patchworks.fabric.mysql.port" . | quote }}
+- name: DB_DATABASE
+  value: {{ include "patchworks.fabric.mysql.database" . | quote }}
+- name: DB_USERNAME
+  value: {{ include "patchworks.fabric.mysql.username" . | quote }}
+{{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+- name: LANDLORD_DB_CONNECTION
+  value: mysql
+- name: LANDLORD_DB_HOST
+  value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+- name: LANDLORD_DB_PORT
+  value: {{ include "patchworks.fabric.mysql.port" . | quote }}
+- name: LANDLORD_DB_DATABASE
+  value: {{ include "patchworks.fabric.mysql.database" . | quote }}
+- name: LANDLORD_DB_USERNAME
+  value: {{ include "patchworks.fabric.mysql.username" . | quote }}
+{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+- name: REDIS_HOST
+  value: {{ include "patchworks.fabric.redis.host" . | quote }}
+- name: REDIS_PORT
+  value: {{ include "patchworks.fabric.redis.port" . | quote }}
+{{- $fabricRedisExistingSecretName := ternary .Values.fabric.redis.external.existingSecret.name .Values.redis.external.existingSecret.name (ne .Values.fabric.redis.external.host "") }}
+{{- $fabricRedisExistingSecretKey := ternary .Values.fabric.redis.external.existingSecret.passwordKey .Values.redis.external.existingSecret.passwordKey (ne .Values.fabric.redis.external.host "") }}
+{{- if or (include "patchworks.fabric.redis.password" .) $fabricRedisExistingSecretName }}
+{{- $s := dict "name" $fabricRedisExistingSecretName "key" $fabricRedisExistingSecretKey }}
+{{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.fabric.redis.password" .) "secret" $s) }}
+{{- end }}
+{{ include "patchworks.env.rabbitmqPassword" . }}
+{{ include "patchworks.env.rabbitmqUrl" . }}
+- name: ELASTICSEARCH_HOST
+  value: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+- name: ELASTICSEARCH_USER
+  value: {{ .Values.elasticsearch.external.username | quote }}
+{{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{- end }}
+- name: AWS_ENDPOINT_URL
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
+{{ include "patchworks.env.s3AccessKey" . }}
+{{ include "patchworks.env.s3SecretKey" . }}
+- name: AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+- name: AWS_BUCKET
+  value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: TENANT_DB_CONNECTION
+  value: tenant
+- name: TENANT_DB_HOST
+  value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+- name: TENANT_DB_PORT
+  value: {{ include "patchworks.fabric.mysql.port" . | quote }}
+- name: TENANT_DB_USERNAME
+  value: {{ include "patchworks.fabric.mysql.username" . | quote }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+- name: TENANT_REDIS_HOST
+  value: {{ include "patchworks.fabric.redis.host" . | quote }}
 {{- if .Values.s3.enabled }}
 - name: TENANT_CACHE_AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
