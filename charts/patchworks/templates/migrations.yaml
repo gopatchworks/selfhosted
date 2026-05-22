@@ -31,13 +31,13 @@ spec:
       {{- end }}
       initContainers:
         - name: wait-for-mysql
-          image: busybox:1.37
+          image: mysql:8.0
           command:
             - sh
             - -c
             - |
               echo "Waiting for MySQL..."
-              until nc -z {{ include "patchworks.mysql.host" . }} {{ include "patchworks.mysql.port" . }}; do sleep 2; done
+              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
               echo "MySQL ready."
       containers:
         - name: core-migrations

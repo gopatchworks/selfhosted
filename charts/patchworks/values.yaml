@@ -258,17 +258,10 @@ seeds:
   affinity: {}
   tolerations: []
 
-  # Core (PHP/Laravel) seeder — seeds landlord + tenant reference data.
-  core:
-    enabled: false
-    image:
-      registry: ""
-      tag: ""
-      pullPolicy: ""
-    command: "php artisan db:seed --force"
-    resources: {}
-
-  # Fabric seeder — seeds fabric-specific reference data.
+  # Fabric seeder — runs on post-install only (not upgrade).
+  # Runs: migrate → app:install (reference data + passport clients) →
+  #       app:create-tenant (creates initial company + admin user).
+  # Must complete before core seeds run (hook weight 1 vs 2).
   fabric:
     enabled: false
     image:
@@ -276,7 +269,33 @@ seeds:
       repository: fabric
       tag: ""
       pullPolicy: ""
-    command: "php artisan db:seed --force"
+    resources: {}
+
+  # Initial tenant created by app:create-tenant during fabric seeding.
+  # All fields are required when seeds.fabric.enabled is true.
+  # Tier must be one of: Trial, App Store, Standard, Professional, Custom,
+  # Partner Sandbox, Veeqo
+  tenant:
+    companyName: ""
+    tier: "Trial"
+    adminName: ""
+    adminEmail: ""
+    adminPassword: ""
+    # Supply the admin password from an existing Secret instead of the
+    # inline value above.
+    existingSecret:
+      name: ""
+      passwordKey: adminPassword
+
+  # Core seeder — runs on post-install only (not upgrade).
+  # Runs: migrate → migrate:tenants --seed.
+  # Runs after fabric seeds (hook weight 2).
+  core:
+    enabled: false
+    image:
+      registry: ""
+      tag: ""
+      pullPolicy: ""
     resources: {}
 
 # ── Workers ───────────────────────────────────────────────────────────────────
