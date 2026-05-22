@@ -10,27 +10,7 @@ metadata:
     app.kubernetes.io/component: fabric
 data:
   site.conf: |
-    server {
-        listen 80;
-        server_name _;
-        root /var/www/html/public;
-        index index.php index.html;
-
-        location / {
-            try_files $uri $uri/ /index.php?$query_string;
-        }
-
-        location ~ \.php$ {
-            fastcgi_pass 127.0.0.1:9000;
-            fastcgi_index index.php;
-            fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
-            include fastcgi_params;
-        }
-
-        location ~ /\.(?!well-known).* {
-            deny all;
-        }
-    }
+    {{- .Files.Get "files/fabric-nginx.conf" | nindent 4 }}
 ---
 # Deployment
 apiVersion: apps/v1
@@ -56,6 +36,7 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 8 }}
       annotations:
         checksum/config: {{ include "patchworks.fabricConfigData" . | sha256sum }}
+        checksum/nginx: {{ .Files.Get "files/fabric-nginx.conf" | sha256sum }}
         {{- with .Values.fabric.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
