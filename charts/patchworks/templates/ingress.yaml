@@ -16,10 +16,7 @@ metadata:
   namespace: {{ .ns }}
   labels:
     {{- include "patchworks.labels" $ | nindent 4 }}
-  {{- with $ing.annotations }}
-  annotations:
-    {{- toYaml . | nindent 4 }}
-  {{- end }}
+  {{- include "patchworks.ingress.serviceAnnotations" $ | nindent 2 }}
 spec:
   {{- if $ing.className }}
   ingressClassName: {{ $ing.className }}
@@ -74,11 +71,20 @@ spec:
     {{- end }}
     {{- end }}
   routes:
+    {{- $timeoutPolicy := dict }}
+    {{- if $ing.timeout }}
+    {{- $_ := set $timeoutPolicy "response" (printf "%vs" $ing.timeout) }}
+    {{- $_ =  set $timeoutPolicy "idle"     (printf "%vs" $ing.timeout) }}
+    {{- end }}
     - conditions:
         - prefix: /fabric
       pathRewritePolicy:
         replacePrefix:
           - replacement: /
+      {{- with $timeoutPolicy }}
+      timeoutPolicy:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       services:
         - name: {{ $fullname }}-fabric
           port: 80
@@ -87,6 +93,10 @@ spec:
       pathRewritePolicy:
         replacePrefix:
           - replacement: /
+      {{- with $timeoutPolicy }}
+      timeoutPolicy:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       services:
         - name: {{ $fullname }}-gateway
           port: 80
@@ -95,11 +105,19 @@ spec:
       pathRewritePolicy:
         replacePrefix:
           - replacement: /
+      {{- with $timeoutPolicy }}
+      timeoutPolicy:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       services:
         - name: {{ $fullname }}-start
           port: 80
     - conditions:
         - prefix: /
+      {{- with $timeoutPolicy }}
+      timeoutPolicy:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       services:
         - name: {{ $fullname }}-dashboard
           port: 80
@@ -121,6 +139,13 @@ metadata:
     {{- end }}
     {{- with $ing.rewriteAnnotations }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if and (eq $ing.provider "nginx") $ing.timeout }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ toString $ing.timeout | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ toString $ing.timeout | quote }}
+    {{- end }}
+    {{- if and (eq $ing.provider "nginx") $ing.maxBodySize }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
     {{- end }}
 spec:
   {{- if $ing.className }}
@@ -164,10 +189,17 @@ metadata:
   namespace: {{ $dashNs }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
-  {{- with $ing.annotations }}
   annotations:
+    {{- with $ing.annotations }}
     {{- toYaml . | nindent 4 }}
-  {{- end }}
+    {{- end }}
+    {{- if and (eq $ing.provider "nginx") $ing.timeout }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ toString $ing.timeout | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ toString $ing.timeout | quote }}
+    {{- end }}
+    {{- if and (eq $ing.provider "nginx") $ing.maxBodySize }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
+    {{- end }}
 spec:
   {{- if $ing.className }}
   ingressClassName: {{ $ing.className }}

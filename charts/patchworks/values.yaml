@@ -733,6 +733,17 @@ ingress:
     start: ""
     fabric: ""
     dashboard: ""
+  # Upstream response timeout (in seconds) applied to all routes.
+  # The chart formats this for the chosen provider:
+  #   contour → appended with "s" in timeoutPolicy.response and the
+  #             projectcontour.io/response-timeout annotation.
+  #   nginx   → used as-is for proxy-read-timeout / proxy-send-timeout.
+  # Leave empty to use the controller default (typically 60 s).
+  timeout: ""
+  # Maximum request body size.
+  # For nginx: sets nginx.ingress.kubernetes.io/proxy-body-size (default: 1m).
+  # For Contour: not configurable at the HTTPProxy / Ingress level; ignored.
+  maxBodySize: ""
   # Annotations added to the path-rewriting Ingress (nginx / other providers only).
   # Ignored when ingress.provider is contour.
   # For nginx-ingress:
