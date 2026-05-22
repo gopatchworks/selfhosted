@@ -933,6 +933,13 @@ PUSHER_SCHEME: {{ . | quote }}
 PUSHER_PORT: {{ . | quote }}
 {{- end }}
 {{- end }}
+{{- with include "patchworks.kubefaas.host" . }}
+KUBEFAAS_FUNCTIONS_HOST: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.kubefaas.builderHost" . }}
+KUBEFAAS_FUNCTION_BUILDER_HOST: {{ . | quote }}
+{{- end }}
+KUBEFAAS_FUNCTION_REGISTRY: {{ .Values.kubefaas.registry.name | quote }}
 {{- end }}
 
 {{/*
@@ -1142,6 +1149,10 @@ PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
 PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
 {{- end }}
 {{- end }}
+{{- if and (or .Values.kubefaas.enabled .Values.kubefaas.host) (not .Values.kubefaas.auth.existingSecret.name) }}
+KUBEFAAS_FUNCTIONS_USERNAME: {{ .Values.kubefaas.auth.username | quote }}
+KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
+{{- end }}
 {{- end }}
 
 {{/*
@@ -1293,6 +1304,18 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ .Values.pusher.existingSecret.name }}
       key: {{ .Values.pusher.existingSecret.appClusterKey }}
+{{- end }}
+{{- if .Values.kubefaas.auth.existingSecret.name }}
+- name: KUBEFAAS_FUNCTIONS_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.kubefaas.auth.existingSecret.name }}
+      key: {{ .Values.kubefaas.auth.existingSecret.usernameKey }}
+- name: KUBEFAAS_FUNCTIONS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.kubefaas.auth.existingSecret.name }}
+      key: {{ .Values.kubefaas.auth.existingSecret.passwordKey }}
 {{- end }}
 {{- end }}
 
@@ -1714,4 +1737,29 @@ before starting application pods.
       echo "Waiting for S3..."
       until nc -z {{ include "patchworks.s3.host" . }} 9000; do sleep 2; done
       echo "All dependencies ready."
+{{- end }}
+
+{{/*
+Annotation map for dedicated per-service Ingresses (gateway, start, fabric).
+Merges ingress.annotations with provider-specific timeout / body-size annotations.
+Renders an "annotations:" YAML block (with 2-space indent) or nothing if empty.
+*/}}
+{{- define "patchworks.ingress.serviceAnnotations" -}}
+{{- $ing := .Values.ingress -}}
+{{- $anns := deepCopy ($ing.annotations | default dict) -}}
+{{- if $ing.timeout -}}
+  {{- if eq $ing.provider "contour" -}}
+    {{- $_ := set $anns "projectcontour.io/response-timeout" (printf "%vs" $ing.timeout) -}}
+  {{- else if eq $ing.provider "nginx" -}}
+    {{- $_ := set $anns "nginx.ingress.kubernetes.io/proxy-read-timeout" (toString $ing.timeout) -}}
+    {{- $_ =  set $anns "nginx.ingress.kubernetes.io/proxy-send-timeout" (toString $ing.timeout) -}}
+  {{- end -}}
+{{- end -}}
+{{- if and (eq $ing.provider "nginx") $ing.maxBodySize -}}
+  {{- $_ := set $anns "nginx.ingress.kubernetes.io/proxy-body-size" $ing.maxBodySize -}}
+{{- end -}}
+{{- if $anns -}}
+annotations:
+  {{- toYaml $anns | nindent 2 }}
+{{- end -}}
 {{- end }}
