@@ -22,10 +22,11 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 8 }}
-      {{- with $svc.podAnnotations }}
       annotations:
+        checksum/config: {{ include "patchworks.appConfigData" . | sha256sum }}
+        {{- with $svc.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -43,8 +44,16 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" . }}-secret
+            {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
             - name: RABBITMQ_QUEUE
               value: {{ $svc.queue | quote }}
             {{- with .Values.app.extraEnv }}
@@ -53,10 +62,6 @@ spec:
             {{- with $svc.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           livenessProbe:
             httpGet:
               path: /health

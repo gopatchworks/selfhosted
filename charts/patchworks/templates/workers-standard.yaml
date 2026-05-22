@@ -121,7 +121,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ $root.Values.workers | toJson | sha256sum }}
+        checksum/config: {{ include "patchworks.appConfigData" $root | sha256sum }}
         {{- with $podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -141,8 +141,20 @@ spec:
             - supervisord
             - -c
             - /etc/supervisor/conf.d/supervisord.conf
+          {{- $envFrom := concat $root.Values.app.extraEnvFrom $root.Values.workers.extraEnvFrom $svc.extraEnvFrom }}
+          {{- if not $isHub }}
+          {{- $envFrom = concat $envFrom ($company.extraEnvFrom | default (list)) }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" $root }}-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" $root }}-secret
+            {{- with $envFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- include "patchworks.appEnv" $root | nindent 12 }}
+            {{- include "patchworks.appSecretEnvRefs" $root | nindent 12 }}
             {{- if $svc.name }}
             - name: APP_NAME
               value: {{ $svc.name | quote }}
@@ -165,14 +177,6 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
             {{- end }}
-          {{- $envFrom := concat $root.Values.app.extraEnvFrom $root.Values.workers.extraEnvFrom $svc.extraEnvFrom }}
-          {{- if not $isHub }}
-          {{- $envFrom = concat $envFrom ($company.extraEnvFrom | default (list)) }}
-          {{- end }}
-          {{- with $envFrom }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           volumeMounts:
             - name: supervisord-conf
               mountPath: /etc/supervisor/conf.d/supervisord.conf

@@ -22,10 +22,11 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "dashboard" "Release" .Release) | nindent 8 }}
-      {{- with .Values.dashboard.podAnnotations }}
       annotations:
+        checksum/config: {{ printf "%s%s" (include "patchworks.appConfigData" .) (include "patchworks.dashboardConfigData" .) | sha256sum }}
+        {{- with .Values.dashboard.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -41,43 +42,24 @@ spec:
           ports:
             - name: http
               containerPort: 80
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-config
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-dashboard-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" . }}-secret
+            {{- with (concat .Values.app.extraEnvFrom .Values.dashboard.extraEnvFrom) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- $fullname := include "patchworks.fullname" . }}
-            {{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
-            {{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
-            {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
-            {{- $ingressFabric  := .Values.ingress.hosts.fabric  | default "" }}
-            {{- $coreUrl   := .Values.dashboard.coreUrl   | default (ternary (printf "%s://%s" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
-            {{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $scheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
-            {{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s" $scheme $ingressFabric)  (printf "http://%s-fabric.%s.svc.cluster.local"  $fullname (include "patchworks.fabric.namespace" .))  (ne $ingressFabric "")) }}
-            {{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
-            - name: CORE_URL
-              value: {{ $coreUrl | quote }}
-            - name: START_URL
-              value: {{ $startUrl | quote }}
-            - name: FABRIC_URL
-              value: {{ $fabricUrl | quote }}
-            - name: MCP_URL
-              value: {{ $mcpUrl | quote }}
-            - name: INBOUND_URL
-              value: {{ .Values.dashboard.inboundUrl | quote }}
-            - name: GA4_TAG
-              value: {{ .Values.dashboard.ga4Tag | quote }}
-            - name: ZENDESK_URL
-              value: {{ .Values.dashboard.zendeskUrl | quote }}
-            - name: FORCE_REGISTRATION_REQUEST
-              value: {{ .Values.dashboard.forceRegistrationRequest | quote }}
-            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
             {{- with .Values.dashboard.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with (concat .Values.app.extraEnvFrom .Values.dashboard.extraEnvFrom) }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           livenessProbe:
             httpGet:
               path: /healthz

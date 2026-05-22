@@ -44,15 +44,19 @@ spec:
           image: {{ include "patchworks.appImage" (dict "svc" .Values.migrations "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.migrations "root" .) }}
           command: ["/bin/sh", "-c", {{ .Values.migrations.command | quote }}]
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" . }}-secret
+            {{- with .Values.app.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- include "patchworks.appEnv" . | nindent 12 }}
+            {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with .Values.app.extraEnvFrom }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           {{- with .Values.migrations.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

@@ -855,6 +855,554 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- end -}}
 
 {{/*
+Non-sensitive app env vars as a YAML map for ConfigMap data:.
+*/}}
+{{- define "patchworks.appConfigData" -}}
+APP_ENV: {{ .Values.app.env | quote }}
+APP_DEBUG: {{ .Values.app.debug | quote }}
+APP_URL: {{ .Values.app.url | quote }}
+DB_CONNECTION: "mysql"
+DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
+DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
+DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
+DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
+LANDLORD_DB_CONNECTION: "mysql"
+LANDLORD_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
+LANDLORD_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
+LANDLORD_DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
+LANDLORD_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
+REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
+REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
+ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+ELASTICSEARCH_USER: {{ .Values.elasticsearch.external.username | quote }}
+{{- end }}
+AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_DB_CONNECTION: "tenant"
+TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
+TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
+TENANT_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
+TENANT_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
+{{- if .Values.s3.enabled }}
+TENANT_CACHE_AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
+{{- else }}
+TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
+{{- end }}
+TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+BROADCAST_CONNECTION: "pusher"
+{{- with include "patchworks.pusher.host" . }}
+PUSHER_HOST: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.scheme" . }}
+PUSHER_SCHEME: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.port" . }}
+PUSHER_PORT: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Sensitive app env vars as a YAML list for pod spec env:.
+Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in pod env).
+*/}}
+{{- define "patchworks.appSecretEnv" -}}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{ include "patchworks.env.dbPassword" . }}
+{{- $landlordDbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $landlordDbSecret.name "key" $landlordDbSecret.passwordKey)) }}
+{{- $tenantDbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
+{{- if or (include "patchworks.redis.password" .) .Values.redis.external.existingSecret.name }}
+{{- $s := dict "name" .Values.redis.external.existingSecret.name "key" .Values.redis.external.existingSecret.passwordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+{{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{- end }}
+{{ include "patchworks.env.s3AccessKey" . }}
+{{ include "patchworks.env.s3SecretKey" . }}
+{{- if .Values.s3.enabled }}
+{{- $s3AccessSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootUserKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- else }}
+{{- $s3AccessSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- end }}
+{{ include "patchworks.env.rabbitmqPassword" . }}
+{{ include "patchworks.env.rabbitmqUrl" . }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{ include "patchworks.env.pusherAppId" . }}
+{{ include "patchworks.env.pusherAppKey" . }}
+{{ include "patchworks.env.pusherAppSecret" . }}
+{{ include "patchworks.env.pusherAppCluster" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Non-sensitive Fabric env vars as a YAML map for ConfigMap data:.
+Like appConfigData but uses fabric MySQL/Redis helpers.
+*/}}
+{{- define "patchworks.fabricConfigData" -}}
+APP_ENV: {{ .Values.app.env | quote }}
+APP_DEBUG: {{ .Values.app.debug | quote }}
+APP_URL: {{ .Values.app.url | quote }}
+DB_CONNECTION: "mysql"
+DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
+DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
+DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
+LANDLORD_DB_CONNECTION: "mysql"
+LANDLORD_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+LANDLORD_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
+LANDLORD_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
+LANDLORD_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
+REDIS_HOST: {{ include "patchworks.fabric.redis.host" . | quote }}
+REDIS_PORT: {{ include "patchworks.fabric.redis.port" . | quote }}
+ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+ELASTICSEARCH_USER: {{ .Values.elasticsearch.external.username | quote }}
+{{- end }}
+AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_DB_CONNECTION: "tenant"
+TENANT_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+TENANT_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
+TENANT_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
+TENANT_REDIS_HOST: {{ include "patchworks.fabric.redis.host" . | quote }}
+{{- if .Values.s3.enabled }}
+TENANT_CACHE_AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
+{{- else }}
+TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
+{{- end }}
+TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+BROADCAST_CONNECTION: "pusher"
+{{- with include "patchworks.pusher.host" . }}
+PUSHER_HOST: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.scheme" . }}
+PUSHER_SCHEME: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.port" . }}
+PUSHER_PORT: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Sensitive Fabric env vars as a YAML list for pod spec env:.
+Like appSecretEnv but uses fabric MySQL/Redis password helpers.
+*/}}
+{{- define "patchworks.fabricSecretEnv" -}}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
+{{- $fabricRedisExistingSecretName := ternary .Values.fabric.redis.external.existingSecret.name .Values.redis.external.existingSecret.name (ne .Values.fabric.redis.external.host "") }}
+{{- $fabricRedisExistingSecretKey := ternary .Values.fabric.redis.external.existingSecret.passwordKey .Values.redis.external.existingSecret.passwordKey (ne .Values.fabric.redis.external.host "") }}
+{{- if or (include "patchworks.fabric.redis.password" .) $fabricRedisExistingSecretName }}
+{{- $s := dict "name" $fabricRedisExistingSecretName "key" $fabricRedisExistingSecretKey }}
+{{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.fabric.redis.password" .) "secret" $s) }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+{{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{- end }}
+{{ include "patchworks.env.s3AccessKey" . }}
+{{ include "patchworks.env.s3SecretKey" . }}
+{{- if .Values.s3.enabled }}
+{{- $s3AccessSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootUserKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.auth.existingSecret.name "key" .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- else }}
+{{- $s3AccessSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{- $s3SecretSecret := dict "name" .Values.s3.external.existingSecret.name "key" .Values.s3.external.existingSecret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{- end }}
+{{ include "patchworks.env.rabbitmqPassword" . }}
+{{ include "patchworks.env.rabbitmqUrl" . }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{ include "patchworks.env.pusherAppId" . }}
+{{ include "patchworks.env.pusherAppKey" . }}
+{{ include "patchworks.env.pusherAppSecret" . }}
+{{ include "patchworks.env.pusherAppCluster" . }}
+{{- end }}
+{{- end }}
+
+{{/*
+Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
+*/}}
+{{- define "patchworks.dashboardConfigData" -}}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
+{{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
+{{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
+{{- $ingressFabric  := .Values.ingress.hosts.fabric  | default "" }}
+{{- $coreUrl   := .Values.dashboard.coreUrl   | default (ternary (printf "%s://%s" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
+{{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $scheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
+{{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s" $scheme $ingressFabric)  (printf "http://%s-fabric.%s.svc.cluster.local"  $fullname (include "patchworks.fabric.namespace" .))  (ne $ingressFabric "")) }}
+{{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
+CORE_URL: {{ $coreUrl | quote }}
+START_URL: {{ $startUrl | quote }}
+FABRIC_URL: {{ $fabricUrl | quote }}
+MCP_URL: {{ $mcpUrl | quote }}
+INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
+GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
+ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
+FORCE_REGISTRATION_REQUEST: {{ .Values.dashboard.forceRegistrationRequest | quote }}
+{{- end }}
+
+{{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}
+
+{{/*
+stringData content for the managed patchworks-secret.
+Each key is only included when NOT backed by an existingSecret.
+*/}}
+{{- define "patchworks.appSecretData" -}}
+{{- if not .Values.app.existingSecret.name }}
+APP_KEY: {{ .Values.app.key | quote }}
+{{- end }}
+{{- $dbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{- if not $dbSecret.name }}
+DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
+LANDLORD_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
+TENANT_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
+{{- end }}
+{{- if and (not .Values.redis.enabled) (not .Values.redis.external.existingSecret.name) (include "patchworks.redis.password" .) }}
+REDIS_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTICSEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
+{{- end }}
+{{- $s3ExSecret := ternary .Values.s3.auth.existingSecret .Values.s3.external.existingSecret .Values.s3.enabled }}
+{{- if not $s3ExSecret.name }}
+AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+TENANT_CACHE_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+{{- end }}
+{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) }}
+{{- if not $rmqSecret.name }}
+RABBITMQ_PASSWORD: {{ include "patchworks.rabbitmq.password" . | quote }}
+{{- end }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{- if not .Values.pusher.existingSecret.name }}
+PUSHER_APP_ID: {{ .Values.pusher.appId | quote }}
+PUSHER_APP_KEY: {{ .Values.pusher.appKey | quote }}
+PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
+PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+env list items for managed app Secret: RABBITMQ_PASSWORD (always as secretKeyRef),
+RABBITMQ_URL (always), and existingSecret overrides.
+*/}}
+{{- define "patchworks.appSecretEnvRefs" -}}
+{{- $fullname := include "patchworks.fullname" . -}}
+{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
+- name: RABBITMQ_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ if $rmqSecret.name }}{{ $rmqSecret.name }}{{ else }}{{ $fullname }}-secret{{ end }}
+      key: {{ if $rmqSecret.name }}{{ $rmqSecret.key }}{{ else }}RABBITMQ_PASSWORD{{ end }}
+{{ include "patchworks.env.rabbitmqUrl" . }}
+{{- if .Values.app.existingSecret.name }}
+- name: APP_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.existingSecret.name }}
+      key: {{ .Values.app.existingSecret.key }}
+{{- end }}
+{{- $dbSecret := ternary .Values.mysql.auth.existingSecret .Values.mysql.external.existingSecret .Values.mysql.enabled }}
+{{- if $dbSecret.name }}
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+- name: LANDLORD_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+- name: TENANT_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+{{- end }}
+{{- if .Values.redis.external.existingSecret.name }}
+- name: REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.redis.external.existingSecret.name }}
+      key: {{ .Values.redis.external.existingSecret.passwordKey }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username .Values.elasticsearch.external.existingSecret.name }}
+- name: ELASTICSEARCH_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.elasticsearch.external.existingSecret.name }}
+      key: {{ .Values.elasticsearch.external.existingSecret.passwordKey }}
+{{- end }}
+{{- if .Values.s3.enabled }}
+{{- if .Values.s3.auth.existingSecret.name }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootUserKey }}
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootPasswordKey }}
+- name: TENANT_CACHE_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootUserKey }}
+- name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{- end }}
+{{- else }}
+{{- if .Values.s3.external.existingSecret.name }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.accessKeyKey }}
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.secretKeyKey }}
+- name: TENANT_CACHE_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.accessKeyKey }}
+- name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.secretKeyKey }}
+{{- end }}
+{{- end }}
+{{- if and (include "patchworks.pusher.isConfigured" .) .Values.pusher.existingSecret.name }}
+- name: PUSHER_APP_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appIdKey }}
+- name: PUSHER_APP_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appKeyKey }}
+- name: PUSHER_APP_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appSecretKey }}
+- name: PUSHER_APP_CLUSTER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appClusterKey }}
+{{- end }}
+{{- end }}
+
+{{/*
+stringData content for the managed patchworks-fabric-secret.
+Same as appSecretData but uses Fabric MySQL/Redis password helpers.
+*/}}
+{{- define "patchworks.fabricSecretData" -}}
+{{- if not .Values.app.existingSecret.name }}
+APP_KEY: {{ .Values.app.key | quote }}
+{{- end }}
+{{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{- if not $dbSecret.name }}
+DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
+LANDLORD_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
+TENANT_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
+{{- end }}
+{{- $fabricRedisExistingSecretName := ternary .Values.fabric.redis.external.existingSecret.name .Values.redis.external.existingSecret.name (ne .Values.fabric.redis.external.host "") }}
+{{- if and (not $fabricRedisExistingSecretName) (include "patchworks.fabric.redis.password" .) }}
+REDIS_PASSWORD: {{ include "patchworks.fabric.redis.password" . | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTICSEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
+{{- end }}
+{{- $s3ExSecret := ternary .Values.s3.auth.existingSecret .Values.s3.external.existingSecret .Values.s3.enabled }}
+{{- if not $s3ExSecret.name }}
+AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+TENANT_CACHE_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+{{- end }}
+{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) }}
+{{- if not $rmqSecret.name }}
+RABBITMQ_PASSWORD: {{ include "patchworks.rabbitmq.password" . | quote }}
+{{- end }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{- if not .Values.pusher.existingSecret.name }}
+PUSHER_APP_ID: {{ .Values.pusher.appId | quote }}
+PUSHER_APP_KEY: {{ .Values.pusher.appKey | quote }}
+PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
+PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+env list items for managed fabric Secret: RABBITMQ_PASSWORD (always as secretKeyRef),
+RABBITMQ_URL (always), and existingSecret overrides.
+Same as appSecretEnvRefs but uses Fabric MySQL/Redis existingSecret refs.
+*/}}
+{{- define "patchworks.fabricSecretEnvRefs" -}}
+{{- $fullname := include "patchworks.fullname" . -}}
+{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
+- name: RABBITMQ_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ if $rmqSecret.name }}{{ $rmqSecret.name }}{{ else }}{{ $fullname }}-fabric-secret{{ end }}
+      key: {{ if $rmqSecret.name }}{{ $rmqSecret.key }}{{ else }}RABBITMQ_PASSWORD{{ end }}
+{{ include "patchworks.env.rabbitmqUrl" . }}
+{{- if .Values.app.existingSecret.name }}
+- name: APP_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.existingSecret.name }}
+      key: {{ .Values.app.existingSecret.key }}
+{{- end }}
+{{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
+{{- if $dbSecret.name }}
+- name: DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+- name: LANDLORD_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+- name: TENANT_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $dbSecret.name }}
+      key: {{ $dbSecret.passwordKey }}
+{{- end }}
+{{- $fabricRedisExistingSecret := ternary .Values.fabric.redis.external.existingSecret .Values.redis.external.existingSecret (ne .Values.fabric.redis.external.host "") }}
+{{- if $fabricRedisExistingSecret.name }}
+- name: REDIS_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $fabricRedisExistingSecret.name }}
+      key: {{ $fabricRedisExistingSecret.passwordKey }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username .Values.elasticsearch.external.existingSecret.name }}
+- name: ELASTICSEARCH_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.elasticsearch.external.existingSecret.name }}
+      key: {{ .Values.elasticsearch.external.existingSecret.passwordKey }}
+{{- end }}
+{{- if .Values.s3.enabled }}
+{{- if .Values.s3.auth.existingSecret.name }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootUserKey }}
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootPasswordKey }}
+- name: TENANT_CACHE_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootUserKey }}
+- name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.auth.existingSecret.name }}
+      key: {{ .Values.s3.auth.existingSecret.rootPasswordKey }}
+{{- end }}
+{{- else }}
+{{- if .Values.s3.external.existingSecret.name }}
+- name: AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.accessKeyKey }}
+- name: AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.secretKeyKey }}
+- name: TENANT_CACHE_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.accessKeyKey }}
+- name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.s3.external.existingSecret.name }}
+      key: {{ .Values.s3.external.existingSecret.secretKeyKey }}
+{{- end }}
+{{- end }}
+{{- if and (include "patchworks.pusher.isConfigured" .) .Values.pusher.existingSecret.name }}
+- name: PUSHER_APP_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appIdKey }}
+- name: PUSHER_APP_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appKeyKey }}
+- name: PUSHER_APP_SECRET
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appSecretKey }}
+- name: PUSHER_APP_CLUSTER
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.pusher.existingSecret.name }}
+      key: {{ .Values.pusher.existingSecret.appClusterKey }}
+{{- end }}
+{{- end }}
+
+{{/*
 Common env vars injected into every Patchworks app pod (web, workers,
 migrations). Infrastructure connection details are derived from the
 in-cluster service names or external.* overrides. Secret fields use

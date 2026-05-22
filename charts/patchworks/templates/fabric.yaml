@@ -54,10 +54,11 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 8 }}
-      {{- with .Values.fabric.podAnnotations }}
       annotations:
+        checksum/config: {{ include "patchworks.fabricConfigData" . | sha256sum }}
+        {{- with .Values.fabric.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -76,18 +77,22 @@ spec:
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
           command: ["/bin/sh", "-c", {{ .Values.fabric.init.command | quote }}]
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-fabric-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" . }}-fabric-secret
+            {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- include "patchworks.fabricEnv" . | nindent 12 }}
+            {{- include "patchworks.fabricSecretEnvRefs" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
             {{- with .Values.fabric.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
       containers:
         - name: fabric
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
@@ -95,18 +100,22 @@ spec:
           ports:
             - name: fpm
               containerPort: 9000
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" . }}-fabric-config
+            - secretRef:
+                name: {{ include "patchworks.fullname" . }}-fabric-secret
+            {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           env:
-            {{- include "patchworks.fabricEnv" . | nindent 12 }}
+            {{- include "patchworks.fabricSecretEnvRefs" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
             {{- with .Values.fabric.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
-          {{- with (concat .Values.app.extraEnvFrom .Values.fabric.extraEnvFrom) }}
-          envFrom:
-            {{- toYaml . | nindent 12 }}
-          {{- end }}
           {{- with .Values.fabric.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
