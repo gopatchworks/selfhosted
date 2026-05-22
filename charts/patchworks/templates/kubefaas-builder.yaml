@@ -375,8 +375,8 @@ spec:
             - name: docker-tls
               containerPort: 2376
           readinessProbe:
-            tcpSocket:
-              port: 2376
+            exec:
+              command: [docker, info]
             initialDelaySeconds: 15
             periodSeconds: 5
             timeoutSeconds: 5
