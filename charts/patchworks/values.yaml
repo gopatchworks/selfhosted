@@ -715,24 +715,30 @@ pusher:
 # ── Ingress ────────────────────────────────────────────────────────────────────
 ingress:
   enabled: false
+  # Ingress controller type. Controls how path prefix stripping is implemented
+  # for /fabric, /core-main, and /core-start on the dashboard host.
+  #   contour  — renders a Contour HTTPProxy (projectcontour.io/v1) which supports
+  #              native prefix rewriting via pathRewritePolicy. (default)
+  #   nginx    — renders a standard Ingress with rewriteAnnotations.
+  #   other    — renders a standard Ingress with rewriteAnnotations.
+  provider: contour
   className: ""
   annotations: {}
   tls: []
   # Hostname for each service. Leave empty to skip that service's ingress rule.
   # The dashboard host also serves /fabric, /core-main, and /core-start with
-  # prefix stripping on a separate Ingress resource.
+  # prefix stripping. The mechanism depends on ingress.provider.
   hosts:
     gateway: ""
     start: ""
     fabric: ""
     dashboard: ""
-  # Annotations added to the path-rewriting Ingress (fabric/core-main/core-start).
-  # The default strips the path prefix and is compatible with Contour.
-  # For nginx-ingress use:
+  # Annotations added to the path-rewriting Ingress (nginx / other providers only).
+  # Ignored when ingress.provider is contour.
+  # For nginx-ingress:
   #   nginx.ingress.kubernetes.io/rewrite-target: /$2
-  # and change pathType to ImplementationSpecific with regex paths e.g. /fabric(/|$)(.*)
-  rewriteAnnotations:
-    ingress.kubernetes.io/rewrite-target: /
+  # (also set pathType to ImplementationSpecific and use regex paths e.g. /fabric(/|$)(.*))
+  rewriteAnnotations: {}
 
 # ── MySQL ──────────────────────────────────────────────────────────────────────
 mysql:

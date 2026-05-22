@@ -43,9 +43,71 @@ spec:
 {{- end }}
 {{- if $ing.hosts.dashboard }}
 {{- $dashNs := include "patchworks.dashboard.namespace" . }}
+{{- if eq $ing.provider "contour" }}
+---
+# Contour HTTPProxy — native prefix rewriting for /fabric, /core-main, /core-start
+# and catch-all to dashboard. Requires the Contour CRD (projectcontour.io/v1).
+apiVersion: projectcontour.io/v1
+kind: HTTPProxy
+metadata:
+  name: {{ $fullname }}-dashboard
+  namespace: {{ $dashNs }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+  {{- with $ing.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  virtualhost:
+    fqdn: {{ $ing.hosts.dashboard | quote }}
+    {{- if $ing.tls }}
+    {{- $tlsSecret := "" }}
+    {{- range $ing.tls }}
+    {{- if and (not $tlsSecret) (has $ing.hosts.dashboard .hosts) }}
+    {{- $tlsSecret = .secretName }}
+    {{- end }}
+    {{- end }}
+    {{- if $tlsSecret }}
+    tls:
+      secretName: {{ $tlsSecret | quote }}
+    {{- end }}
+    {{- end }}
+  routes:
+    - conditions:
+        - prefix: /fabric
+      pathRewritePolicy:
+        replacePrefix:
+          - replacement: /
+      services:
+        - name: {{ $fullname }}-fabric
+          port: 80
+    - conditions:
+        - prefix: /core-main
+      pathRewritePolicy:
+        replacePrefix:
+          - replacement: /
+      services:
+        - name: {{ $fullname }}-gateway
+          port: 80
+    - conditions:
+        - prefix: /core-start
+      pathRewritePolicy:
+        replacePrefix:
+          - replacement: /
+      services:
+        - name: {{ $fullname }}-start
+          port: 80
+    - conditions:
+        - prefix: /
+      services:
+        - name: {{ $fullname }}-dashboard
+          port: 80
+{{- else }}
 ---
 # Path-rewriting Ingress — strips /fabric, /core-main, /core-start prefixes
 # before forwarding to their respective services.
+# See ingress.rewriteAnnotations in values.yaml for controller-specific config.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -125,5 +187,6 @@ spec:
                 name: {{ $fullname }}-dashboard
                 port:
                   name: http
+{{- end }}
 {{- end }}
 {{- end }}
