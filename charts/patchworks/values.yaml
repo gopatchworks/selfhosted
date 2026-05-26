@@ -743,7 +743,19 @@ ingress:
   provider: contour
   className: ""
   annotations: {}
-  tls: []
+  # TLS secret names per service. When set, a TLS entry is added to that
+  # service's Ingress (or HTTPProxy) using the hostname from ingress.hosts.*.
+  # cert-manager will provision the cert automatically when the
+  # cert-manager.io/cluster-issuer annotation is present in ingress.annotations.
+  tls:
+    gateway:
+      secretName: ""
+    start:
+      secretName: ""
+    fabric:
+      secretName: ""
+    dashboard:
+      secretName: ""
   # Hostname for each service. Leave empty to skip that service's ingress rule.
   # The dashboard host also serves /fabric, /core-main, and /core-start with
   # prefix stripping. The mechanism depends on ingress.provider.
