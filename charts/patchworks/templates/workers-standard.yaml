@@ -82,8 +82,8 @@ key in workers.microservices (excluding _default).
   {{- $slug         = printf "%s-%s" $svc.slug $company.name }}
   {{- $wNs          = $company.namespace   | default $svc.ns }}
   {{- $queue        = $company.queue       | default $company.name }}
-  {{- $replicas     = $company.replicaCount | default $svc.replicas }}
-  {{- $processes    = $company.processes   | default $svc.processes }}
+  {{- $replicas     = dig "replicaCount" $svc.replicas $company }}
+  {{- $processes    = dig "processes"   $svc.processes $company }}
   {{- $resources    = $company.resources      | default $svc.resources }}
   {{- $podAnnotations = $company.podAnnotations | default $svc.podAnnotations }}
   {{- $nodeSelector = $company.nodeSelector   | default $svc.nodeSelector }}

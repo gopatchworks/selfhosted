@@ -1,5 +1,6 @@
 {{- include "patchworks.validate" . -}}
-{{- $svc := merge (deepCopy .Values.web.gateway) .Values.web -}}
+{{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}
+{{- $svc := mergeOverwrite (deepCopy .Values.web) .Values.web.gateway -}}
 ---
 # Deployment
 apiVersion: apps/v1
