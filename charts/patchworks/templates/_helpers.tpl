@@ -1140,6 +1140,13 @@ TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quo
 {{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) }}
 {{- if not $rmqSecret.name }}
 RABBITMQ_PASSWORD: {{ include "patchworks.rabbitmq.password" . | quote }}
+{{- /* Pre-build the URL with urlquery-encoded password so special chars (@, :, etc.) don't break URL parsing at runtime. */}}
+RABBITMQ_URL: {{ printf "amqp://%s:%s@%s:%s/%s"
+  (include "patchworks.rabbitmq.username" .)
+  (urlquery (include "patchworks.rabbitmq.password" .))
+  (include "patchworks.rabbitmq.host" .)
+  (include "patchworks.rabbitmq.port" .)
+  (trimPrefix "/" (include "patchworks.rabbitmq.vhost" .)) | quote }}
 {{- end }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{- if not .Values.pusher.existingSecret.name }}
@@ -1188,7 +1195,17 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ if $rmqSecret.name }}{{ $rmqSecret.name }}{{ else }}{{ $fullname }}-secret{{ end }}
       key: {{ if $rmqSecret.name }}{{ $rmqSecret.key }}{{ else }}RABBITMQ_PASSWORD{{ end }}
+{{- if $rmqSecret.name }}
+{{- /* existingSecret: password value unknown at render time, fall back to $(VAR) substitution.
+       Ensure the password contains no special URL characters (@, #, ?, etc.). */}}
 {{ include "patchworks.env.rabbitmqUrl" . }}
+{{- else }}
+- name: RABBITMQ_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ $fullname }}-secret
+      key: RABBITMQ_URL
+{{- end }}
 {{- if .Values.app.existingSecret.name }}
 - name: APP_KEY
   valueFrom:
