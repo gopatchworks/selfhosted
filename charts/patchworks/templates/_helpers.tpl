@@ -869,7 +869,7 @@ stores:
     s3:
       bucket: {{ include "patchworks.s3.bucket" $root | quote }}
       region: {{ include "patchworks.s3.region" $root | quote }}
-  company_cache:
+  customer_cache:
     type: s3
     s3:
       bucket: {{ $root.Values.s3.companyCacheBucket | default (include "patchworks.s3.bucket" $root) | quote }}
