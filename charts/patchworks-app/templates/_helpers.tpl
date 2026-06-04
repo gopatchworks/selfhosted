@@ -1685,6 +1685,17 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.mysql.username" . | quote }}
 {{- $tenantDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
+- name: FABRIC_DB_CONNECTION
+  value: fabric
+- name: FABRIC_DB_HOST
+  value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+- name: FABRIC_DB_PORT
+  value: {{ include "patchworks.fabric.mysql.port" . | quote }}
+- name: FABRIC_DB_DATABASE
+  value: {{ include "patchworks.fabric.mysql.database" . | quote }}
+- name: FABRIC_DB_USERNAME
+  value: {{ include "patchworks.fabric.mysql.username" . | quote }}
+{{ include "patchworks.env.fabricDbPassword" . }}
 - name: TENANT_REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
 {{- if .Values.s3.enabled }}
