@@ -245,6 +245,17 @@ Mapping document storage is used by PHP core and monocore. Monocore defaults to 
 | `mapping.elasticsearch.existingSecret.usernameKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_USERNAME` |
 | `mapping.elasticsearch.existingSecret.passwordKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_PASSWORD` |
 
+## Monocore API
+
+When `workers.type=mono`, the app chart injects `MONOCORE_URL` and
+`MONOCORE_TIMEOUT` into Core app pods. The default URL targets the in-cluster
+hub monocore Service.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `monocore.url` | `""` | Override the Monocore API URL. Defaults to `http://<fullname>-workers.<workers namespace>.svc.cluster.local:8080` |
+| `monocore.timeout` | `120` | Monocore request timeout in seconds |
+
 **Multi-company workers**
 
 `workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.

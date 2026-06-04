@@ -335,6 +335,13 @@ mapping:
       usernameKey: ""
       passwordKey: ""
 
+# ── Monocore API ──────────────────────────────────────────────────────────────
+# Injected into Core app pods when workers.type is mono.
+monocore:
+  # Defaults to the in-cluster hub monocore Service when empty.
+  url: ""
+  timeout: 120
+
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
   namespace: ""  # overrides global namespace for worker resources

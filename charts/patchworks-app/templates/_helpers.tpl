@@ -71,6 +71,14 @@ Name of the app ServiceAccount.
 {{- end }}
 
 {{/*
+Monocore API URL consumed by Core. Defaults to the hub monocore worker Service
+rendered by workers-mono.yaml.
+*/}}
+{{- define "patchworks.monocore.url" -}}
+{{- .Values.monocore.url | default (printf "http://%s-workers.%s.svc.cluster.local:8080" (include "patchworks.fullname" .) (include "patchworks.workers.namespace" .)) -}}
+{{- end }}
+
+{{/*
 Common labels applied to every resource.
 */}}
 {{- define "patchworks.labels" -}}
@@ -1072,6 +1080,10 @@ FABRIC_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
 FABRIC_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
 FABRIC_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
 FABRIC_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
+{{- if eq .Values.workers.type "mono" }}
+MONOCORE_URL: {{ include "patchworks.monocore.url" . | quote }}
+MONOCORE_TIMEOUT: {{ .Values.monocore.timeout | quote }}
+{{- end }}
 {{- if .Values.s3.enabled }}
 TENANT_CACHE_AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
 TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
@@ -1712,6 +1724,12 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 - name: FABRIC_DB_USERNAME
   value: {{ include "patchworks.fabric.mysql.username" . | quote }}
 {{ include "patchworks.env.fabricDbPassword" . }}
+{{- if eq .Values.workers.type "mono" }}
+- name: MONOCORE_URL
+  value: {{ include "patchworks.monocore.url" . | quote }}
+- name: MONOCORE_TIMEOUT
+  value: {{ .Values.monocore.timeout | quote }}
+{{- end }}
 - name: TENANT_REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
 {{- if .Values.s3.enabled }}
