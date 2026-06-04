@@ -290,6 +290,10 @@ seeds:
   # Partner Sandbox, Veeqo
   tenant:
     companyName: ""
+    # Tenant database created before core seeds run. Defaults to companyName
+    # lowercased with non-alphanumeric characters removed.
+    database: ""
+    createDatabase: true
     tier: "Professional"
     adminName: ""
     adminEmail: ""

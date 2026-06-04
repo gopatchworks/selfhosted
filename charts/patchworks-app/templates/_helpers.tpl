@@ -44,6 +44,22 @@ empty, the app chart generates a stable Secret named <fullname>-app-key.
 {{- end }}
 
 {{/*
+Initial tenant database name. Fabric records the tenant, but Core owns the
+tenant database itself, so the app chart creates this database before Core
+tenant migrations run.
+*/}}
+{{- define "patchworks.seeds.tenantDatabase" -}}
+{{- $db := .Values.seeds.tenant.database | default (regexReplaceAll "[^a-z0-9]" (lower .Values.seeds.tenant.companyName) "") -}}
+{{- if not $db -}}
+{{- fail "seeds.tenant.database or seeds.tenant.companyName is required when creating the initial tenant database" -}}
+{{- end -}}
+{{- if not (regexMatch "^[A-Za-z0-9_]+$" $db) -}}
+{{- fail "seeds.tenant.database must contain only letters, numbers, and underscores" -}}
+{{- end -}}
+{{- $db -}}
+{{- end }}
+
+{{/*
 Name of the app ServiceAccount.
 */}}
 {{- define "patchworks.serviceAccountName" -}}

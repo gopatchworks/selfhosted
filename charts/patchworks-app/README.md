@@ -284,6 +284,8 @@ seeders and Core migrations.
 | `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
 | `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
 | `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
+| `seeds.tenant.database` | `""` | Initial tenant database name. Defaults to `companyName` lowercased with non-alphanumeric characters removed |
+| `seeds.tenant.createDatabase` | `true` | Create the initial tenant database before Core tenant migrations run |
 | `seeds.tenant.tier` | `Professional` | Initial tenant tier passed to `app:create-tenant` |
 | `seeds.tenant.adminName` | `""` | Initial admin user name |
 | `seeds.tenant.adminEmail` | `""` | Initial admin user email |

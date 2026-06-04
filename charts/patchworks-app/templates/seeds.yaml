@@ -101,11 +101,67 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end }}
+{{- if and .Values.seeds.core.enabled .Values.seeds.fabric.enabled .Values.seeds.tenant.createDatabase }}
+---
+# Job — creates the initial Core tenant database after Fabric has recorded the
+# tenant and before Core tenant migrations run.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "patchworks.fullname" . }}-tenant-database
+  namespace: {{ include "patchworks.seeds.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: tenant-database
+  annotations:
+    helm.sh/hook: pre-install
+    helm.sh/hook-weight: "10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "10"
+spec:
+  backoffLimit: {{ .Values.seeds.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "tenant-database" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: {{ .Values.seeds.restartPolicy }}
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:8.0
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
+              echo "MySQL ready."
+      containers:
+        - name: tenant-database
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              mysql -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} \
+                -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" \
+                -e "CREATE DATABASE IF NOT EXISTS \`{{ include "patchworks.seeds.tenantDatabase" . }}\`;"
+              printf 'Tenant database %s ready.\n' {{ include "patchworks.seeds.tenantDatabase" . | quote }}
+          env:
+            - name: MYSQL_USER
+              value: {{ include "patchworks.mysql.username" . | quote }}
+            {{- $mysqlSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
+            {{ include "patchworks.secretEnv" (dict "name" "MYSQL_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $mysqlSecret.name "key" $mysqlSecret.passwordKey)) | nindent 12 }}
+{{- end }}
 {{- if .Values.seeds.core.enabled }}
 ---
-# Job — core first-install seeder (runs after fabric seeds, before app pods).
+# Job — core first-install seeder (runs after fabric seeds, core migrations,
+# and initial tenant database creation, before app pods).
 # Runs: migrate → migrate:tenants --create --no-interaction.
-# Tenant databases seeded here must already exist (created by fabric seeds).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -153,8 +209,8 @@ spec:
             - -c
             - |
               set -e
-              php artisan migrate:tenants --create --no-interaction
               php artisan migrate --force
+              php artisan migrate:tenants --create --no-interaction
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
