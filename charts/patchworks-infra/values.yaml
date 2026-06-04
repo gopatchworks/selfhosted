@@ -221,7 +221,7 @@ dashboard:
     type: ClusterIP
     port: 80
   resources: {}
-  # Service URLs injected at container startup via entrypoint sed substitution.
+  # Service URLs injected into the dashboard SSR container as Nuxt runtime config.
   # coreUrl, startUrl, and mcpUrl default to ingress hosts when configured,
   # otherwise in-cluster service addresses. fabricUrl defaults to the dashboard
   # host /fabric route when configured, then the dedicated Fabric host, then the
@@ -230,7 +230,7 @@ dashboard:
   startUrl: ""
   fabricUrl: ""
   mcpUrl: ""
-  # External/optional config — all must be non-empty (entrypoint enforces this).
+  # External/optional dashboard runtime config.
   inboundUrl: ""
   ga4Tag: "none"
   zendeskUrl: "none"

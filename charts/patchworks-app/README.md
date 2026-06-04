@@ -40,6 +40,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 - [Images](#images)
 - [Shared values and generated credentials](#shared-values-and-generated-credentials)
 - [Application](#application)
+- [Dashboard](#dashboard)
 - [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
 - [Workers](#workers)
@@ -122,6 +123,27 @@ Shared configuration injected into every application pod (web, workers, migratio
 |-----|---------|-------------|
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
+
+---
+
+## Dashboard
+
+Dashboard values are injected into the SSR container as Nuxt runtime config
+environment variables (`NUXT_PUBLIC_*`).
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `dashboard.enabled` | `false` | Deploy the dashboard |
+| `dashboard.coreUrl` | `""` | `NUXT_PUBLIC_CORE_MAIN_URL`; defaults to the gateway ingress host when configured, otherwise the in-cluster gateway service |
+| `dashboard.startUrl` | `""` | `NUXT_PUBLIC_CORE_START_URL`; defaults to the start ingress host when configured, otherwise the in-cluster start service |
+| `dashboard.fabricUrl` | `""` | `NUXT_PUBLIC_FABRIC_URL`; defaults to the dashboard `/fabric` route, then the dedicated Fabric host, then the in-cluster Fabric service |
+| `dashboard.mcpUrl` | `""` | `NUXT_PUBLIC_MCP_URL`; defaults to the gateway ingress host `/api/v1/mcp` when configured, otherwise the in-cluster gateway service |
+| `dashboard.inboundUrl` | `""` | `NUXT_PUBLIC_INBOUND_URL` |
+| `dashboard.ga4Tag` | `none` | `NUXT_PUBLIC_GA4_TAG` |
+| `dashboard.zendeskUrl` | `none` | `NUXT_PUBLIC_ZENDESK_URL` |
+| `dashboard.forceRegistrationRequest` | `false` | `NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS` |
+| `dashboard.extraEnv` | `[]` | Additional env vars injected into the dashboard pod |
+| `dashboard.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for the dashboard pod |
 
 ---
 

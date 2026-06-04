@@ -1292,14 +1292,32 @@ Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
 {{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $startScheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
 {{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s/fabric" $dashboardScheme $ingressDashboard) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) (printf "http://%s-fabric.%s.svc.cluster.local" $fullname (include "patchworks.fabric.namespace" .)) (ne $ingressFabric "")) (ne $ingressDashboard "")) }}
 {{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
-CORE_URL: {{ $coreUrl | quote }}
-START_URL: {{ $startUrl | quote }}
-FABRIC_URL: {{ $fabricUrl | quote }}
-MCP_URL: {{ $mcpUrl | quote }}
-INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
-GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
-ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
-FORCE_REGISTRATION_REQUEST: {{ .Values.dashboard.forceRegistrationRequest | quote }}
+NUXT_PUBLIC_CORE_MAIN_URL: {{ $coreUrl | quote }}
+NUXT_PUBLIC_CORE_START_URL: {{ $startUrl | quote }}
+NUXT_PUBLIC_FABRIC_URL: {{ $fabricUrl | quote }}
+NUXT_PUBLIC_MCP_URL: {{ $mcpUrl | quote }}
+NUXT_PUBLIC_INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
+NUXT_PUBLIC_GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
+NUXT_PUBLIC_ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
+NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS: {{ .Values.dashboard.forceRegistrationRequest | quote }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+NUXT_PUBLIC_BROADCASTING_HOST: {{ include "patchworks.pusher.host" . | quote }}
+NUXT_PUBLIC_BROADCASTING_PORT: {{ include "patchworks.pusher.port" . | quote }}
+NUXT_PUBLIC_BROADCASTING_SCHEME: {{ include "patchworks.pusher.scheme" . | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
+*/}}
+{{- define "patchworks.dashboardNuxtSecretEnvRefs" -}}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{- $es := .Values.pusher.existingSecret }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $es.name "key" $es.appIdKey)) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $es.name "key" $es.appKeyKey)) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_SECRET" "value" .Values.pusher.appSecret "secret" (dict "name" $es.name "key" $es.appSecretKey)) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $es.name "key" $es.appClusterKey)) }}
+{{- end }}
 {{- end }}
 
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}

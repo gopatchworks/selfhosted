@@ -56,6 +56,7 @@ spec:
             {{- end }}
           env:
             {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
+            {{- include "patchworks.dashboardNuxtSecretEnvRefs" . | nindent 12 }}
             {{- with .Values.app.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
