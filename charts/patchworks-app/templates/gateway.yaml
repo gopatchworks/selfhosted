@@ -58,6 +58,8 @@ spec:
             {{- end }}
           env:
             {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
+            - name: APP_DOMAIN
+              value: gateway
             - name: RABBITMQ_QUEUE
               value: {{ $svc.queue | quote }}
             {{- with .Values.app.extraEnv }}
