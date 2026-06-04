@@ -104,6 +104,57 @@ web:
   start:
     queue: start
 
+# ── Core Scheduler ─────────────────────────────────────────────────────────────
+# Runs Laravel's scheduler for the gateway and start domains.
+scheduler:
+  enabled: true
+  schedule: "*/1 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  restartPolicy: Never
+  command:
+    - /usr/local/bin/php
+  args:
+    - artisan
+    - schedule:run
+  resources:
+    requests:
+      cpu: 150m
+      memory: 300M
+    limits: {}
+  extraEnv: []
+  extraEnvFrom: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  gateway:
+    enabled: true
+    schedule: ""
+    resources: {}
+    extraEnv: []
+    extraEnvFrom: []
+    podAnnotations: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
+  start:
+    enabled: true
+    schedule: ""
+    resources: {}
+    extraEnv: []
+    extraEnvFrom: []
+    podAnnotations: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
 # ── Fabric ─────────────────────────────────────────────────────────────────────
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
 fabric:

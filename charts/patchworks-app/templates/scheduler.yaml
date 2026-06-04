@@ -1,0 +1,102 @@
+{{- if .Values.scheduler.enabled }}
+{{- $root := . }}
+{{- range $name, $component := dict "gateway" .Values.scheduler.gateway "start" .Values.scheduler.start }}
+{{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) $component -}}
+{{- if $sched.enabled }}
+{{- $web := ternary $root.Values.web.gateway $root.Values.web.start (eq $name "gateway") -}}
+{{- $svc := mergeOverwrite (deepCopy $root.Values.web) $web -}}
+{{- $namespace := ternary (include "patchworks.gateway.namespace" $root) (include "patchworks.start.namespace" $root) (eq $name "gateway") -}}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "patchworks.fullname" $root }}-{{ $name }}-scheduler
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}-scheduler
+spec:
+  schedule: {{ $sched.schedule | default $root.Values.scheduler.schedule | quote }}
+  suspend: {{ $sched.suspend }}
+  concurrencyPolicy: {{ $sched.concurrencyPolicy }}
+  successfulJobsHistoryLimit: {{ $sched.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ $sched.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ $sched.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            {{- include "patchworks.selectorLabels" (dict "component" (printf "%s-scheduler" $name) "Release" $root.Release) | nindent 12 }}
+          annotations:
+            checksum/config: {{ include "patchworks.appConfigData" $root | sha256sum }}
+            {{- with $sched.podAnnotations }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        spec:
+          restartPolicy: {{ $sched.restartPolicy }}
+          activeDeadlineSeconds: {{ $sched.activeDeadlineSeconds }}
+          serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
+          {{- with $root.Values.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          initContainers:
+            {{- include "patchworks.waitForDeps" $root | nindent 12 }}
+          containers:
+            - name: {{ $name }}-scheduler
+              image: {{ include "patchworks.appImage" (dict "svc" $svc "root" $root) | quote }}
+              imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" $root) }}
+              command:
+                {{- toYaml $sched.command | nindent 16 }}
+              args:
+                {{- toYaml $sched.args | nindent 16 }}
+              envFrom:
+                - configMapRef:
+                    name: {{ include "patchworks.fullname" $root }}-config
+                {{- if include "patchworks.appSecretHasData" $root }}
+                - secretRef:
+                    name: {{ include "patchworks.fullname" $root }}-secret
+                {{- end }}
+                - secretRef:
+                    name: {{ include "patchworks.passportSecretName" $root }}
+                {{- with (concat $root.Values.app.extraEnvFrom $svc.extraEnvFrom $root.Values.scheduler.extraEnvFrom $sched.extraEnvFrom) }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              env:
+                {{- include "patchworks.appSecretEnvRefs" $root | nindent 16 }}
+                - name: APP_DOMAIN
+                  value: {{ $name | quote }}
+                - name: RABBITMQ_QUEUE
+                  value: {{ $svc.queue | quote }}
+                {{- with $root.Values.app.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- with $svc.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- with $root.Values.scheduler.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- with $sched.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+              {{- with $sched.resources }}
+              resources:
+                {{- toYaml . | nindent 16 }}
+              {{- end }}
+          {{- with $sched.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sched.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $sched.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{ end }}
+{{ end }}
+{{ end }}

@@ -44,6 +44,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 - [Dashboard](#dashboard)
 - [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
+- [Scheduler](#scheduler)
 - [Workers](#workers)
 - [Mapping documents](#mapping-documents)
 - [Migrations](#migrations)
@@ -225,6 +226,35 @@ The main Laravel web application. Always deployed.
 | `web.nodeSelector` | `{}` | Node selector |
 | `web.tolerations` | `[]` | Tolerations |
 | `web.affinity` | `{}` | Affinity rules |
+
+---
+
+## Scheduler
+
+Laravel scheduler CronJobs for the Core gateway and start domains. They use the
+same image resolution and application environment as the corresponding web
+deployment, but run `php artisan schedule:run` on a cron schedule.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `scheduler.enabled` | `true` | Create Core scheduler CronJobs |
+| `scheduler.schedule` | `*/1 * * * *` | Default cron schedule for scheduler jobs |
+| `scheduler.suspend` | `false` | Suspend scheduler CronJobs |
+| `scheduler.concurrencyPolicy` | `Forbid` | CronJob concurrency policy |
+| `scheduler.successfulJobsHistoryLimit` | `2` | Number of successful scheduler Jobs retained |
+| `scheduler.failedJobsHistoryLimit` | `2` | Number of failed scheduler Jobs retained |
+| `scheduler.backoffLimit` | `2` | Job retry backoff limit |
+| `scheduler.activeDeadlineSeconds` | `300` | Maximum runtime for a scheduler Job |
+| `scheduler.restartPolicy` | `Never` | Scheduler pod restart policy |
+| `scheduler.command` | `[/usr/local/bin/php]` | Container command |
+| `scheduler.args` | `[artisan, schedule:run]` | Container args |
+| `scheduler.resources` | requests `150m` / `300M` | Default scheduler resources |
+| `scheduler.extraEnv` | `[]` | Additional env vars injected into scheduler pods |
+| `scheduler.extraEnvFrom` | `[]` | Additional envFrom sources injected into scheduler pods |
+| `scheduler.gateway.enabled` | `true` | Create the gateway scheduler CronJob |
+| `scheduler.gateway.schedule` | `""` | Gateway scheduler schedule override |
+| `scheduler.start.enabled` | `true` | Create the start scheduler CronJob |
+| `scheduler.start.schedule` | `""` | Start scheduler schedule override |
 
 ---
 
