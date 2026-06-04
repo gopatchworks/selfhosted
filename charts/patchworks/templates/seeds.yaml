@@ -56,6 +56,7 @@ spec:
                 --tier={{ .Values.seeds.tenant.tier | quote }} \
                 --user-name={{ .Values.seeds.tenant.adminName | quote }} \
                 --user-email={{ .Values.seeds.tenant.adminEmail | quote }} \
+                --user-role={{ .Values.seeds.tenant.userRole | quote }} \
                 --user-password="${TENANT_ADMIN_PASSWORD}"
           envFrom:
             - configMapRef:

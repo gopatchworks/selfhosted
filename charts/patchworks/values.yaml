@@ -280,6 +280,7 @@ seeds:
     tier: "Professional"
     adminName: ""
     adminEmail: ""
+    userRole: "patchworks admin"
     adminPassword: ""
     # Supply the admin password from an existing Secret instead of the
     # inline value above.

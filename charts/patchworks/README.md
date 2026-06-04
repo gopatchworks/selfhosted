@@ -224,6 +224,23 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 
 ---
 
+## Seeds
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
+| `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
+| `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
+| `seeds.tenant.tier` | `Professional` | Initial tenant tier passed to `app:create-tenant` |
+| `seeds.tenant.adminName` | `""` | Initial admin user name |
+| `seeds.tenant.adminEmail` | `""` | Initial admin user email |
+| `seeds.tenant.userRole` | `patchworks admin` | Initial admin user role passed as `--user-role` |
+| `seeds.tenant.adminPassword` | `""` | Initial admin user password |
+| `seeds.tenant.existingSecret.name` | `""` | Secret name for the initial admin password |
+| `seeds.tenant.existingSecret.passwordKey` | `adminPassword` | Secret key for the initial admin password |
+
+---
+
 ## Ingress
 
 | Key | Default | Description |
