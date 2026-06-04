@@ -103,7 +103,134 @@ metadata:
     app.kubernetes.io/component: {{ $slug }}
 data:
   config.yaml: |
-{{ include "patchworks.mono.configYaml" (dict "root" $root "queueName" $queue "processes" $processes "otelServiceName" $otelSvcName) | indent 4 }}
+    logging:
+      format: {{ $mono.logging.format | quote }}
+      addSource: {{ $mono.logging.addSource }}
+      verbose: {{ $mono.logging.verbose }}
+
+    rabbitmq:
+      queue: {{ $queue | quote }}
+      topology:
+        file: "/etc/monocore/topology.yaml"
+
+    redis:
+      mode: {{ $root.Values.redis.mode | quote }}
+      addrs:
+        {{- if $root.Values.redis.addrs }}
+        {{- range $root.Values.redis.addrs }}
+        - {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - {{ printf "%s:%s" (include "patchworks.redis.host" $root) (include "patchworks.redis.port" $root) | quote }}
+        {{- end }}
+      {{- if eq $root.Values.redis.mode "sentinel" }}
+      sentinel:
+        master: {{ $root.Values.redis.sentinel.master | quote }}
+      {{- end }}
+      db: {{ $root.Values.redis.db }}
+
+    worker:
+      processes: {{ $processes }}
+
+    db:
+      landlord:
+        name: {{ include "patchworks.mysql.database" $root | quote }}
+
+    store:
+      config: "/etc/monocore/store.yaml"
+
+    mapping:
+      elasticsearch:
+        addresses:
+          {{- if $root.Values.mapping.elasticsearch.addresses }}
+          {{- range $root.Values.mapping.elasticsearch.addresses }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- else }}
+          - {{ include "patchworks.elasticsearch.url" $root | quote }}
+          {{- end }}
+        index: {{ $root.Values.mapping.elasticsearch.index | quote }}
+        {{- $mappingCloudID := $root.Values.mapping.elasticsearch.cloudId | default $root.Values.elasticsearch.external.cloudId }}
+        {{- if $mappingCloudID }}
+        cloud:
+          id: {{ $mappingCloudID | quote }}
+        {{- end }}
+        {{- $mappingUsername := $root.Values.mapping.elasticsearch.username | default $root.Values.elasticsearch.external.username }}
+        {{- if $mappingUsername }}
+        username: {{ $mappingUsername | quote }}
+        {{- end }}
+
+    otel:
+      enabled: {{ $mono.otel.enabled }}
+      service:
+        name: {{ $otelSvcName | quote }}
+      {{- if $mono.otel.endpoint }}
+      endpoint: {{ $mono.otel.endpoint | quote }}
+      {{- end }}
+    {{- $kfHost := include "patchworks.kubefaas.host" $root -}}
+    {{- $kfBuilderHost := include "patchworks.kubefaas.builderHost" $root -}}
+    {{- $kfRegistry := $root.Values.kubefaas.registry.name -}}
+    {{- if or $kfHost $kfBuilderHost $kfRegistry }}
+
+    kubefaas:
+      functions:
+        {{- if $kfHost }}
+        host: {{ $kfHost | quote }}
+        {{- end }}
+        {{- if $kfBuilderHost }}
+        builder:
+          host: {{ $kfBuilderHost | quote }}
+        {{- end }}
+        {{- if $kfRegistry }}
+        registry: {{ $kfRegistry | quote }}
+        {{- end }}
+    {{- end }}
+    {{- $pusherHost := include "patchworks.pusher.host" $root -}}
+    {{- $pusherPort := include "patchworks.pusher.port" $root -}}
+    {{- $pusherScheme := include "patchworks.pusher.scheme" $root -}}
+    {{- if or $pusherHost $pusherPort $pusherScheme }}
+
+    pusher:
+      {{- if $pusherScheme }}
+      scheme: {{ $pusherScheme | quote }}
+      {{- end }}
+      {{- if $pusherHost }}
+      host: {{ $pusherHost | quote }}
+      {{- end }}
+      {{- if $pusherPort }}
+      port: {{ $pusherPort }}
+      {{- end }}
+    {{- end }}
+    {{- with $root.Values.workers.notify }}
+    {{- if or .email.from .ses.region .ses.endpoint .aws.role.arn .aws.external.id }}
+
+    notify:
+      {{- if .email.from }}
+      email:
+        from: {{ .email.from | quote }}
+      {{- end }}
+      {{- if or .ses.region .ses.endpoint }}
+      ses:
+        {{- if .ses.region }}
+        region: {{ .ses.region | quote }}
+        {{- end }}
+        {{- if .ses.endpoint }}
+        endpoint: {{ .ses.endpoint | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if or .aws.role.arn .aws.external.id }}
+      aws:
+        {{- if .aws.role.arn }}
+        role:
+          arn: {{ .aws.role.arn | quote }}
+        {{- end }}
+        {{- if .aws.external.id }}
+        external:
+          id: {{ .aws.external.id | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -164,26 +291,7 @@ spec:
         - name: workers
           image: {{ include "patchworks.appImage" (dict "svc" $mono "root" $root) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $mono "root" $root) }}
-          args:
-            - worker
-            {{- $mappingCloudIdConfigured := include "patchworks.mapping.elasticsearchCloudIdConfigured" $root }}
-            {{- $mappingApiKeyConfigured := include "patchworks.mapping.elasticsearchApiKeyConfigured" $root }}
-            {{- $mappingUsernameConfigured := include "patchworks.mapping.elasticsearchUsernameConfigured" $root }}
-            {{- $mappingPasswordConfigured := include "patchworks.mapping.elasticsearchPasswordConfigured" $root }}
-            {{- if $mappingCloudIdConfigured }}
-            - --mapping-elasticsearch-cloud-id=$(MAPPING_ELASTICSEARCH_CLOUD_ID)
-            {{- else }}
-            - --mapping-elasticsearch-addresses=$(MAPPING_ELASTICSEARCH_ADDRESSES)
-            {{- end }}
-            {{- if $mappingApiKeyConfigured }}
-            - --mapping-elasticsearch-api-key=$(MAPPING_ELASTICSEARCH_API_KEY)
-            {{- else if and $mappingUsernameConfigured $mappingPasswordConfigured }}
-            - --mapping-elasticsearch-username=$(MAPPING_ELASTICSEARCH_USERNAME)
-            - --mapping-elasticsearch-password=$(MAPPING_ELASTICSEARCH_PASSWORD)
-            {{- end }}
-            {{- with $root.Values.mapping.elasticsearch.index }}
-            - --mapping-elasticsearch-index={{ . }}
-            {{- end }}
+          args: ["worker"]
           ports:
             - name: http
               containerPort: 8080
@@ -204,14 +312,8 @@ spec:
               value: "{{ include "patchworks.fabric.mysql.username" $root }}:$(FABRIC_DB_PASSWORD)@tcp({{ include "patchworks.fabric.mysql.host" $root }}:{{ include "patchworks.fabric.mysql.port" $root }})/{{ include "patchworks.fabric.mysql.database" $root }}?parseTime=true"
             - name: DB_LANDLORD_DSN
               value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/{{ include "patchworks.mysql.database" $root }}?parseTime=true"
-            - name: AWS_ENDPOINT_URL
-              value: {{ include "patchworks.s3.endpoint" $root | quote }}
             {{- include "patchworks.env.s3AccessKey" $root | nindent 12 }}
             {{- include "patchworks.env.s3SecretKey" $root | nindent 12 }}
-            - name: AWS_DEFAULT_REGION
-              value: {{ include "patchworks.s3.region" $root | quote }}
-            - name: S3_BUCKET
-              value: {{ include "patchworks.s3.bucket" $root | quote }}
             {{- with include "patchworks.env.laravelAppKey" $root }}
             {{- . | nindent 12 }}
             {{- end }}
@@ -228,24 +330,39 @@ spec:
             {{- include "patchworks.env.kubefaasUsername" $root | nindent 12 }}
             {{- include "patchworks.env.kubefaasPassword" $root | nindent 12 }}
             {{- end }}
-            - name: ELASTICSEARCH_HOST
-              value: {{ include "patchworks.elasticsearch.url" $root | quote }}
-            {{- include "patchworks.env.elasticSearchCloudId" $root | nindent 12 }}
-            {{- include "patchworks.env.elasticSearchCloudApiKey" $root | nindent 12 }}
-            {{- include "patchworks.env.elasticSearchApiKey" $root | nindent 12 }}
-            {{- if and (not $root.Values.elasticsearch.enabled) $root.Values.elasticsearch.external.username }}
-            - name: ELASTIC_SEARCH_USERNAME
-              value: {{ $root.Values.elasticsearch.external.username | quote }}
-            - name: ELASTICSEARCH_USER
-              value: {{ $root.Values.elasticsearch.external.username | quote }}
-            {{- $ess := dict "name" $root.Values.elasticsearch.external.existingSecret.name "key" $root.Values.elasticsearch.external.existingSecret.passwordKey }}
-            {{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" $root.Values.elasticsearch.external.password "secret" $ess) | nindent 12 }}
+            {{- $mappingSecretName := $root.Values.mapping.elasticsearch.existingSecret.name | default $root.Values.elasticsearch.external.existingSecret.name }}
+            {{- $mappingCloudIdKey := $root.Values.mapping.elasticsearch.existingSecret.cloudIdKey | default $root.Values.elasticsearch.external.existingSecret.cloudIdKey }}
+            {{- if and $mappingSecretName $mappingCloudIdKey }}
+            - name: MAPPING_ELASTICSEARCH_CLOUD_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $mappingSecretName }}
+                  key: {{ $mappingCloudIdKey }}
             {{- end }}
-            {{- include "patchworks.env.mappingElasticsearchAddresses" $root | nindent 12 }}
-            {{- include "patchworks.env.mappingElasticsearchCloudId" $root | nindent 12 }}
-            {{- include "patchworks.env.mappingElasticsearchApiKey" $root | nindent 12 }}
-            {{- include "patchworks.env.mappingElasticsearchUsername" $root | nindent 12 }}
-            {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
+            {{- $mappingApiKeyKey := $root.Values.mapping.elasticsearch.existingSecret.apiKeyKey | default $root.Values.elasticsearch.external.existingSecret.apiKeyKey | default $root.Values.elasticsearch.external.existingSecret.cloudApiKeyKey }}
+            {{- if and $mappingSecretName $mappingApiKeyKey }}
+            - name: MAPPING_ELASTICSEARCH_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $mappingSecretName }}
+                  key: {{ $mappingApiKeyKey }}
+            {{- end }}
+            {{- $mappingUsernameKey := $root.Values.mapping.elasticsearch.existingSecret.usernameKey | default $root.Values.elasticsearch.external.existingSecret.usernameKey }}
+            {{- if and $mappingSecretName $mappingUsernameKey }}
+            - name: MAPPING_ELASTICSEARCH_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $mappingSecretName }}
+                  key: {{ $mappingUsernameKey }}
+            {{- end }}
+            {{- $mappingPasswordKey := $root.Values.mapping.elasticsearch.existingSecret.passwordKey | default $root.Values.elasticsearch.external.existingSecret.passwordKey }}
+            {{- if and $mappingSecretName $mappingPasswordKey }}
+            - name: MAPPING_ELASTICSEARCH_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $mappingSecretName }}
+                  key: {{ $mappingPasswordKey }}
+            {{- end }}
             {{- if include "patchworks.pusher.isConfigured" $root }}
             {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
             {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}

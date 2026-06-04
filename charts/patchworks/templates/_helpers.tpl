@@ -808,123 +808,6 @@ RABBITMQ_URL — self-contained helper usable in any container, with or without 
 {{- end }}
 
 
-{{/*
-Render the body of monocore's config.yaml.
-Usage: {{ include "patchworks.mono.configYaml" (dict "root" . "queueName" "flows" "processes" 15 "otelServiceName" "monocore") | indent 4 }}
-All keys are required; callers compute defaults before calling.
-*/}}
-{{- define "patchworks.mono.configYaml" -}}
-{{- $root := .root -}}
-{{- $mono := $root.Values.workers.mono -}}
-logging:
-  format: {{ $mono.logging.format | quote }}
-  addSource: {{ $mono.logging.addSource }}
-  verbose: {{ $mono.logging.verbose }}
-
-rabbitmq:
-  queue: {{ .queueName | quote }}
-  topology:
-    file: "/etc/monocore/topology.yaml"
-
-redis:
-  mode: {{ $root.Values.redis.mode | quote }}
-  addrs:
-    {{- if $root.Values.redis.addrs }}
-    {{- range $root.Values.redis.addrs }}
-    - {{ . | quote }}
-    {{- end }}
-    {{- else }}
-    - {{ printf "%s:%s" (include "patchworks.redis.host" $root) (include "patchworks.redis.port" $root) | quote }}
-    {{- end }}
-  {{- if eq $root.Values.redis.mode "sentinel" }}
-  sentinel:
-    master: {{ $root.Values.redis.sentinel.master | quote }}
-  {{- end }}
-  db: {{ $root.Values.redis.db }}
-
-worker:
-  processes: {{ .processes }}
-
-db:
-  landlord:
-    name: {{ include "patchworks.mysql.database" $root | quote }}
-
-store:
-  config: "/etc/monocore/store.yaml"
-
-otel:
-  enabled: {{ $mono.otel.enabled }}
-  service:
-    name: {{ .otelServiceName | quote }}
-{{- if $mono.otel.endpoint }}
-  endpoint: {{ $mono.otel.endpoint | quote }}
-{{- end }}
-{{- $kfHost := include "patchworks.kubefaas.host" $root -}}
-{{- $kfBuilderHost := include "patchworks.kubefaas.builderHost" $root -}}
-{{- $kfRegistry := $root.Values.kubefaas.registry.name -}}
-{{- if or $kfHost $kfBuilderHost $kfRegistry }}
-
-kubefaas:
-  functions:
-    {{- if $kfHost }}
-    host: {{ $kfHost | quote }}
-    {{- end }}
-    {{- if $kfBuilderHost }}
-    builder:
-      host: {{ $kfBuilderHost | quote }}
-    {{- end }}
-    {{- if $kfRegistry }}
-    registry: {{ $kfRegistry | quote }}
-    {{- end }}
-{{- end }}
-{{- $pusherHost := include "patchworks.pusher.host" $root -}}
-{{- $pusherPort := include "patchworks.pusher.port" $root -}}
-{{- $pusherScheme := include "patchworks.pusher.scheme" $root -}}
-{{- if or $pusherHost $pusherPort $pusherScheme }}
-
-pusher:
-  {{- if $pusherScheme }}
-  scheme: {{ $pusherScheme | quote }}
-  {{- end }}
-  {{- if $pusherHost }}
-  host: {{ $pusherHost | quote }}
-  {{- end }}
-  {{- if $pusherPort }}
-  port: {{ $pusherPort }}
-  {{- end }}
-{{- end }}
-{{- with $root.Values.workers.notify }}
-{{- if or .email.from .ses.region .ses.endpoint .aws.role.arn .aws.external.id }}
-
-notify:
-  {{- if .email.from }}
-  email:
-    from: {{ .email.from | quote }}
-  {{- end }}
-  {{- if or .ses.region .ses.endpoint }}
-  ses:
-    {{- if .ses.region }}
-    region: {{ .ses.region | quote }}
-    {{- end }}
-    {{- if .ses.endpoint }}
-    endpoint: {{ .ses.endpoint | quote }}
-    {{- end }}
-  {{- end }}
-  {{- if or .aws.role.arn .aws.external.id }}
-  aws:
-    {{- if .aws.role.arn }}
-    role:
-      arn: {{ .aws.role.arn | quote }}
-    {{- end }}
-    {{- if .aws.external.id }}
-    external:
-      id: {{ .aws.external.id | quote }}
-    {{- end }}
-  {{- end }}
-{{- end }}
-{{- end }}
-{{- end }}
-
 {{/* ── Mono worker helpers ─────────────────────────────────────────────────────── */}}
 
 {{/*
@@ -1126,9 +1009,6 @@ Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in p
 {{ include "patchworks.env.elasticSearchCloudId" . }}
 {{ include "patchworks.env.elasticSearchCloudApiKey" . }}
 {{ include "patchworks.env.elasticSearchApiKey" . }}
-{{ include "patchworks.env.mappingElasticsearchCloudId" . }}
-{{ include "patchworks.env.mappingElasticsearchApiKey" . }}
-{{ include "patchworks.env.mappingElasticsearchUsername" . }}
 {{ include "patchworks.env.mappingElasticsearchPassword" . }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
 {{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
@@ -1437,9 +1317,6 @@ existingSecret overrides.
 {{ include "patchworks.env.elasticSearchApiKey" . }}
 {{ include "patchworks.env.elasticSearchUsername" . }}
 {{ include "patchworks.env.elasticSearchPassword" . }}
-{{ include "patchworks.env.mappingElasticsearchCloudId" . }}
-{{ include "patchworks.env.mappingElasticsearchApiKey" . }}
-{{ include "patchworks.env.mappingElasticsearchUsername" . }}
 {{ include "patchworks.env.mappingElasticsearchPassword" . }}
 {{- if .Values.s3.enabled }}
 {{- if .Values.s3.auth.existingSecret.name }}
