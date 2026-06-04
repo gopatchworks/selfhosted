@@ -233,7 +233,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
-| `workers.mono.rabbitmq.flowExchange` | `customer-flows` | Exchange passed to Monocore with `--rabbitmq-flow-exchange`; used by generated company-flow topology when enabled |
+| `workers.mono.rabbitmq.flowExchange` | `""` | Flow publish exchange. Empty defaults to `workers.mono.queue` when `companyFlows.enabled=false`, or `customer-flows` when enabled |
 | `workers.mono.rabbitmq.companyFlows.enabled` | `false` | Create the configured flow exchange, company queues, bindings, and fallback policy |
 | `workers.mono.otel.enabled` | `false` | Enable OpenTelemetry tracing |
 | `workers.mono.otel.endpoint` | `""` | OTLP collector endpoint |

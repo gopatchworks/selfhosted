@@ -279,7 +279,7 @@ Company deployments set the same `APP_NAME`/`APP_DOMAIN` as their hub (for `micr
 
 ### Monocore workers
 
-Monocore workers get their config from a generated `config.yaml` ConfigMap (via `patchworks.mono.configYaml`) and a generated `topology.yaml` (via `patchworks.mono.topologyYaml`). The Monocore process receives `workers.mono.rabbitmq.flowExchange` via `--rabbitmq-flow-exchange`. Company deployments bind to that exchange only when `workers.mono.rabbitmq.companyFlows.enabled` is true.
+Monocore workers get their config from a generated `config.yaml` ConfigMap (via `patchworks.mono.configYaml`) and a generated `topology.yaml` (via `patchworks.mono.topologyYaml`). The config sets `rabbitmq.queue` and `rabbitmq.flow.exchange`, and the Monocore process also receives the resolved flow exchange via `--rabbitmq-flow-exchange`. If `workers.mono.rabbitmq.flowExchange` is empty, it resolves to `workers.mono.queue` when `companyFlows.enabled` is false, or `customer-flows` when enabled. Company deployments bind to that exchange only when `workers.mono.rabbitmq.companyFlows.enabled` is true.
 
 ---
 

@@ -523,10 +523,10 @@ workers:
     # workers.mono.queue. Override only what you need to change.
     rabbitmq:
       vhost: /
-      # Exchange passed to monocore via --rabbitmq-flow-exchange. When
-      # companyFlows.enabled is true, the generated topology creates this
-      # exchange and binds company queues to it.
-      flowExchange: customer-flows
+      # Exchange used by monocore for flow publishes. Empty auto-selects
+      # workers.mono.queue when companyFlows.enabled is false, or
+      # customer-flows when companyFlows.enabled is true.
+      flowExchange: ""
       # Optional chart-managed company-flow topology. Enable only when this
       # chart should create the flow exchange, company queues, bindings, and
       # fallback policy.

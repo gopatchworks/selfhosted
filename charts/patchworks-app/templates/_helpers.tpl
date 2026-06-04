@@ -932,6 +932,24 @@ RABBITMQ_URL — self-contained helper usable in any container, with or without 
 {{/* ── Mono worker helpers ─────────────────────────────────────────────────────── */}}
 
 {{/*
+Resolve the RabbitMQ exchange used by monocore for flow publishes.
+Usage: {{ include "patchworks.mono.flowExchange" (dict "root" . "queueName" $queueName) }}
+*/}}
+{{- define "patchworks.mono.flowExchange" -}}
+{{- $root := .root -}}
+{{- $mono := $root.Values.workers.mono -}}
+{{- $queueName := .queueName -}}
+{{- $configured := $mono.rabbitmq.flowExchange | default "" -}}
+{{- if $configured -}}
+{{- $configured -}}
+{{- else if $mono.rabbitmq.companyFlows.enabled -}}
+customer-flows
+{{- else -}}
+{{- $queueName -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Render the RabbitMQ topology.yaml content (unindented).
 Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $queueName) | indent 4 }}
 */}}
@@ -940,7 +958,7 @@ Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $que
 {{- $mono := $root.Values.workers.mono -}}
 {{- $queueName := .queueName -}}
 {{- $cf := $mono.rabbitmq.companyFlows -}}
-{{- $flowExchange := $mono.rabbitmq.flowExchange | default "customer-flows" -}}
+{{- $flowExchange := include "patchworks.mono.flowExchange" (dict "root" $root "queueName" $queueName) -}}
 {{- if $mono.rabbitmq.topology -}}
 {{ $mono.rabbitmq.topology | toYaml }}
 {{- else -}}
