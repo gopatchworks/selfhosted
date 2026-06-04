@@ -225,15 +225,22 @@ dashboard:
     type: ClusterIP
     port: 80
   resources: {}
-  # Service URLs injected into the dashboard SSR container as Nuxt runtime config.
-  # coreUrl, startUrl, and mcpUrl default to ingress hosts when configured,
-  # otherwise in-cluster service addresses. fabricUrl defaults to the dashboard
-  # host /fabric route when configured, then the dedicated Fabric host, then the
-  # in-cluster Fabric service. Set explicitly to override either behavior.
+  # Public service URLs injected into the dashboard SSR container as Nuxt runtime
+  # config. When the dashboard ingress host is configured, these default to the
+  # dashboard path-routed URLs (/core-main, /core-start, /fabric). Otherwise
+  # they fall back to dedicated service ingress hosts, then in-cluster service
+  # addresses.
   coreUrl: ""
   startUrl: ""
   fabricUrl: ""
   mcpUrl: ""
+  # Private/server-side service URLs for SSR fetches. These default to
+  # in-cluster service addresses so the dashboard pod does not need to call back
+  # through public ingress during server rendering.
+  serverCoreUrl: ""
+  serverStartUrl: ""
+  serverFabricUrl: ""
+  serverMcpUrl: ""
   # External/optional dashboard runtime config.
   inboundUrl: ""
   ga4Tag: "none"

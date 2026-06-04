@@ -138,15 +138,21 @@ Shared configuration injected into every application pod (web, workers, migratio
 ## Dashboard
 
 Dashboard values are injected into the SSR container as Nuxt runtime config
-environment variables (`NUXT_PUBLIC_*`).
+environment variables. `dashboard.*Url` controls browser/public
+`NUXT_PUBLIC_*` values. `dashboard.server*Url` controls private server-side
+`NUXT_*` values used during SSR.
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `dashboard.enabled` | `false` | Deploy the dashboard |
-| `dashboard.coreUrl` | `""` | `NUXT_PUBLIC_CORE_MAIN_URL`; defaults to the gateway ingress host when configured, otherwise the in-cluster gateway service |
-| `dashboard.startUrl` | `""` | `NUXT_PUBLIC_CORE_START_URL`; defaults to the start ingress host when configured, otherwise the in-cluster start service |
+| `dashboard.coreUrl` | `""` | `NUXT_PUBLIC_CORE_MAIN_URL`; defaults to dashboard `/core-main`, then gateway ingress host, then the in-cluster gateway service |
+| `dashboard.startUrl` | `""` | `NUXT_PUBLIC_CORE_START_URL`; defaults to dashboard `/core-start`, then start ingress host, then the in-cluster start service |
 | `dashboard.fabricUrl` | `""` | `NUXT_PUBLIC_FABRIC_URL`; defaults to the dashboard `/fabric` route, then the dedicated Fabric host, then the in-cluster Fabric service |
-| `dashboard.mcpUrl` | `""` | `NUXT_PUBLIC_MCP_URL`; defaults to the gateway ingress host `/api/v1/mcp` when configured, otherwise the in-cluster gateway service |
+| `dashboard.mcpUrl` | `""` | `NUXT_PUBLIC_MCP_URL`; defaults to dashboard `/core-main/api/v1/mcp`, then gateway ingress host `/api/v1/mcp`, then the in-cluster gateway service |
+| `dashboard.serverCoreUrl` | `""` | `NUXT_CORE_MAIN_URL`; defaults to the in-cluster gateway service for SSR fetches |
+| `dashboard.serverStartUrl` | `""` | `NUXT_CORE_START_URL`; defaults to the in-cluster start service for SSR fetches |
+| `dashboard.serverFabricUrl` | `""` | `NUXT_FABRIC_URL`; defaults to the in-cluster Fabric service for SSR fetches |
+| `dashboard.serverMcpUrl` | `""` | `NUXT_MCP_URL`; defaults to the in-cluster gateway MCP endpoint for SSR fetches |
 | `dashboard.inboundUrl` | `""` | `NUXT_PUBLIC_INBOUND_URL` |
 | `dashboard.ga4Tag` | `none` | `NUXT_PUBLIC_GA4_TAG` |
 | `dashboard.zendeskUrl` | `none` | `NUXT_PUBLIC_ZENDESK_URL` |
