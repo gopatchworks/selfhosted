@@ -23,7 +23,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "dashboard" "Release" .Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s%s" (include "patchworks.appConfigData" .) (include "patchworks.dashboardConfigData" .) | sha256sum }}
+        checksum/config: {{ include "patchworks.dashboardConfigData" . | sha256sum }}
         {{- with .Values.dashboard.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -47,22 +47,25 @@ spec:
             {{- with .Values.dashboard.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- $dashboardSecretEnv := include "patchworks.dashboardNuxtSecretEnvRefs" . | trim }}
+          {{- if or $dashboardSecretEnv .Values.dashboard.extraEnv }}
           env:
-            {{- include "patchworks.dashboardNuxtSecretEnvRefs" . | nindent 12 }}
+            {{- with $dashboardSecretEnv }}
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- with .Values.dashboard.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          {{- end }}
           livenessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /healthz
+            tcpSocket:
               port: http
             initialDelaySeconds: 15
             periodSeconds: 10
