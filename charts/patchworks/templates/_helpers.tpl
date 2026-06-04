@@ -756,22 +756,13 @@ var name. Returns empty string (renders nothing) when no key is configured.
 {{- end }}
 
 {{/*
-RABBITMQ_URL — self-contained helper usable in any container, with or without appSecretEnvRefs.
-  - Literal password: references the pre-built, URL-encoded value from the managed Secret.
-  - existingSecret:   emits inline RABBITMQ_HOST/PORT/USER/VHOST entries (required for $(VAR)
-                      substitution to work) followed by the $(VAR)-templated URL.
+RABBITMQ_URL — assumes RABBITMQ_HOST/PORT/USER/VHOST/PASSWORD are already present
+in the container env. appSecretEnvRefs emits those vars before this helper so the
+$(VAR)-templated URL has no duplicate env names.
 */}}
 {{- define "patchworks.env.rabbitmqUrl" -}}
 {{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
 {{- if $rmqSecret.name -}}
-- name: RABBITMQ_HOST
-  value: {{ include "patchworks.rabbitmq.host" . | quote }}
-- name: RABBITMQ_PORT
-  value: {{ include "patchworks.rabbitmq.port" . | quote }}
-- name: RABBITMQ_USER
-  value: {{ include "patchworks.rabbitmq.username" . | quote }}
-- name: RABBITMQ_VHOST
-  value: {{ trimPrefix "/" (include "patchworks.rabbitmq.vhost" .) | quote }}
 - name: RABBITMQ_URL
   value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/$(RABBITMQ_VHOST)"
 {{- else -}}
