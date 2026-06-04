@@ -1,0 +1,111 @@
+{{- if and (not .Values.app.key) (not .Values.app.existingSecret.name) }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := .Release.Namespace }}
+{{- $saName := printf "%s-app-keygen" $fullname }}
+{{- $secretName := printf "%s-app-key" $fullname }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-10"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-10"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $secretName | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/sync-wave: "-10"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $saName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $saName }}
+    namespace: {{ $ns }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-app-keygen
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: app-keygen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "app-keygen" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ $saName }}
+      containers:
+        - name: keygen
+          image: "{{ .Values.credentials.generator.image.repository }}:{{ .Values.credentials.generator.image.tag }}"
+          imagePullPolicy: {{ .Values.credentials.generator.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+
+              if kubectl -n {{ $ns | quote }} get secret {{ $secretName | quote }} >/dev/null 2>&1; then
+                echo "APP_KEY secret already exists."
+                exit 0
+              fi
+
+              app_key="base64:$(head -c 32 /dev/urandom | base64 | tr -d '\n')"
+              kubectl -n {{ $ns | quote }} create secret generic {{ $secretName | quote }} \
+                "--from-literal=APP_KEY=${app_key}"
+              echo "APP_KEY secret created."
+{{- end }}

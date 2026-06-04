@@ -26,13 +26,14 @@ serviceAccount:
 # ── Application shared config ──────────────────────────────────────────────────
 # Injected into all Patchworks application pods (web, workers, migrations).
 app:
-  # Laravel APP_KEY — required. Generate with: php artisan key:generate --show
+  # Laravel APP_KEY. Leave empty to auto-generate a stable key Secret on install.
+  # To provide one manually: echo "base64:$(openssl rand -base64 32)"
   key: ""
   # Use an existing Secret instead of the inline key value above.
   # When both name and key are set, APP_KEY is sourced via secretKeyRef.
   existingSecret:
     name: ""
-    key: ""
+    key: APP_KEY
   env: production
   debug: "false"
   url: "http://localhost"
@@ -66,8 +67,8 @@ credentials:
   autoGenerate: true
   generator:
     image:
-      repository: bitnami/kubectl
-      tag: 1.30.4
+      repository: alpine/kubectl
+      tag: 1.36.1
       pullPolicy: IfNotPresent
 
 # ── Core Web ───────────────────────────────────────────────────────────────────

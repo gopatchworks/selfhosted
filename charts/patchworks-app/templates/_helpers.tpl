@@ -30,6 +30,20 @@ otherwise the auto-generated secret name.
 {{- end }}
 
 {{/*
+Resolve the APP_KEY source. When app.key and app.existingSecret.name are both
+empty, the app chart generates a stable Secret named <fullname>-app-key.
+*/}}
+{{- define "patchworks.appKeySecret" -}}
+{{- if .Values.app.existingSecret.name -}}
+{{- dict "name" .Values.app.existingSecret.name "key" (.Values.app.existingSecret.key | default "APP_KEY") | toJson -}}
+{{- else if not .Values.app.key -}}
+{{- dict "name" (printf "%s-app-key" (include "patchworks.fullname" .)) "key" "APP_KEY" | toJson -}}
+{{- else -}}
+{{- dict "name" "" "key" "APP_KEY" | toJson -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Name of the app ServiceAccount.
 */}}
 {{- define "patchworks.serviceAccountName" -}}
@@ -796,13 +810,11 @@ Usage (call at the right indent level via nindent):
 {{- end }}
 
 {{/*
-LARAVEL_APP_KEY — mirrors app.key / app.existingSecret under the monocore env
-var name. Returns empty string (renders nothing) when no key is configured.
+LARAVEL_APP_KEY — mirrors APP_KEY under the monocore env var name.
 */}}
 {{- define "patchworks.env.laravelAppKey" -}}
-{{- if or .Values.app.key .Values.app.existingSecret.name -}}
-{{- include "patchworks.secretEnv" (dict "name" "LARAVEL_APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) -}}
-{{- end -}}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) -}}
+{{- include "patchworks.secretEnv" (dict "name" "LARAVEL_APP_KEY" "value" .Values.app.key "secret" $appKeySecret) -}}
 {{- end }}
 
 {{/* RABBITMQ_PASSWORD — sourced from auth.passwordSecret or external.passwordSecret. */}}
@@ -985,9 +997,6 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if not (has .Values.workers.type $valid) -}}
 {{- fail (printf "workers.type must be one of: standalone, mono, microservice. Got: %q" .Values.workers.type) -}}
 {{- end -}}
-{{- if and (empty .Values.app.existingSecret.name) (not .Values.app.key) -}}
-{{- fail "app.key is required. Generate one with: echo \"base64:$(openssl rand -base64 32)\"" -}}
-{{- end -}}
 {{- if and (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
 {{- fail "Fabric has no MySQL source. Enable mysql, enable fabric.mysql, or set fabric.mysql.external.host." -}}
 {{- end -}}
@@ -1081,7 +1090,8 @@ Sensitive app env vars as a YAML list for pod spec env:.
 Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in pod env).
 */}}
 {{- define "patchworks.appSecretEnv" -}}
-{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
 {{ include "patchworks.env.dbPassword" . }}
 {{- $landlordDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $landlordDbSecret.name "key" $landlordDbSecret.passwordKey)) }}
@@ -1184,7 +1194,8 @@ Sensitive Fabric env vars as a YAML list for pod spec env:.
 Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 */}}
 {{- define "patchworks.fabricSecretEnv" -}}
-{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
 {{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
 {{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.fabric.mysql.password" .) "secret" (dict "name" $fabricDbSecret.name "key" $fabricDbSecret.passwordKey)) }}
@@ -1247,7 +1258,8 @@ stringData content for the managed patchworks-secret.
 Each key is only included when NOT backed by an existingSecret.
 */}}
 {{- define "patchworks.appSecretData" -}}
-{{- if not .Values.app.existingSecret.name }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
 {{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
@@ -1347,12 +1359,13 @@ existingSecret overrides.
       name: {{ if $rmqSecret.name }}{{ $rmqSecret.name }}{{ else }}{{ $fullname }}-secret{{ end }}
       key: {{ if $rmqSecret.name }}{{ $rmqSecret.key }}{{ else }}RABBITMQ_PASSWORD{{ end }}
 {{ include "patchworks.env.rabbitmqUrlOnly" . }}
-{{- if .Values.app.existingSecret.name }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{- if $appKeySecret.name }}
 - name: APP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.app.existingSecret.name }}
-      key: {{ .Values.app.existingSecret.key }}
+      name: {{ $appKeySecret.name }}
+      key: {{ $appKeySecret.key }}
 {{- end }}
 {{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
 {{- if $dbSecret.name }}
@@ -1457,7 +1470,8 @@ stringData content for the managed patchworks-fabric-secret.
 Same as appSecretData but uses Fabric MySQL/Redis password helpers.
 */}}
 {{- define "patchworks.fabricSecretData" -}}
-{{- if not .Values.app.existingSecret.name }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
@@ -1510,12 +1524,13 @@ env list items for managed fabric Secret: existingSecret overrides only.
 Fabric does not connect to RabbitMQ.
 */}}
 {{- define "patchworks.fabricSecretEnvRefs" -}}
-{{- if .Values.app.existingSecret.name }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{- if $appKeySecret.name }}
 - name: APP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.app.existingSecret.name }}
-      key: {{ .Values.app.existingSecret.key }}
+      name: {{ $appKeySecret.name }}
+      key: {{ $appKeySecret.key }}
 {{- end }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if $dbSecret.name }}
@@ -1602,7 +1617,8 @@ in-cluster service names or external.* overrides. Secret fields use
 patchworks.secretEnv so they can be sourced from an existing Secret.
 */}}
 {{- define "patchworks.appEnv" -}}
-{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
 - name: APP_ENV
   value: {{ .Values.app.env | quote }}
 - name: APP_DEBUG
@@ -1717,7 +1733,8 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 (dedicated, external, or the shared MySQL with a separate database).
 */}}
 {{- define "patchworks.fabricEnv" -}}
-{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" .Values.app.existingSecret) }}
+{{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
+{{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
 - name: APP_ENV
   value: {{ .Values.app.env | quote }}
 - name: APP_DEBUG

@@ -67,8 +67,8 @@ credentials:
   autoGenerate: true
   generator:
     image:
-      repository: bitnami/kubectl
-      tag: 1.30.4
+      repository: alpine/kubectl
+      tag: 1.36.1
       pullPolicy: IfNotPresent
 
 # ── Core Web ───────────────────────────────────────────────────────────────────

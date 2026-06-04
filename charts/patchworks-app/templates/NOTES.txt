@@ -89,7 +89,7 @@ To enable ingress, set:
 
 ── Next steps ────────────────────────────────────────────────────────────────
 
-  1. Ensure app.key is set to a valid Laravel APP_KEY.
+  1. If you did not set app.key, ensure the app key generator hook completed.
   2. Review resource limits for production workloads.
   3. For production, replace in-cluster MySQL/Redis/Elasticsearch with
      managed services by setting <service>.enabled=false and providing

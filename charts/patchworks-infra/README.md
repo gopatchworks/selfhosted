@@ -50,8 +50,8 @@ infra workloads start. Existing Secrets are left untouched on upgrades.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `credentials.autoGenerate` | `true` | Generate missing in-cluster infra credentials into Kubernetes Secrets |
-| `credentials.generator.image.repository` | `bitnami/kubectl` | Image used by the credential generator hook Job |
-| `credentials.generator.image.tag` | `1.30.4` | Credential generator image tag |
+| `credentials.generator.image.repository` | `alpine/kubectl` | Image used by the credential generator hook Job |
+| `credentials.generator.image.tag` | `1.36.1` | Credential generator image tag |
 | `credentials.generator.image.pullPolicy` | `IfNotPresent` | Credential generator image pull policy |
 
 Generated Secret names are derived from the stable chart fullname:
