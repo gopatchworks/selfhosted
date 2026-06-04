@@ -302,7 +302,7 @@ seeds:
       passwordKey: adminPassword
 
   # Core seeder — runs on pre-install only (not upgrade).
-  # Runs: migrate → migrate:tenants --seed.
+  # Runs: migrate → migrate:tenants --create --no-interaction.
   # Runs after fabric seeds (hook weight 2).
   core:
     enabled: false

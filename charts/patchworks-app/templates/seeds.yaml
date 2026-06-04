@@ -104,7 +104,7 @@ spec:
 {{- if .Values.seeds.core.enabled }}
 ---
 # Job — core first-install seeder (runs after fabric seeds, before app pods).
-# Runs: migrate → migrate:tenants --seed.
+# Runs: migrate → migrate:tenants --create --no-interaction.
 # Tenant databases seeded here must already exist (created by fabric seeds).
 apiVersion: batch/v1
 kind: Job
@@ -154,7 +154,7 @@ spec:
             - |
               set -e
               php artisan migrate --force
-              php artisan migrate:tenants --seed
+              php artisan migrate:tenants --create --no-interaction
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
