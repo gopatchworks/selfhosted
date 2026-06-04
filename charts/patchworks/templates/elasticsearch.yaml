@@ -2,6 +2,7 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.elasticsearch.namespace" . }}
 {{- $p := .Values.elasticsearch.persistence }}
+{{- $auth := .Values.elasticsearch.auth }}
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -65,21 +66,32 @@ spec:
               value: single-node
             - name: ES_JAVA_OPTS
               value: {{ .Values.elasticsearch.javaOpts | quote }}
-            # Disable security for single-node self-hosted deployments.
-            # Enable and configure xpack security when exposing to untrusted networks.
+            - name: ELASTIC_PASSWORD
+              {{- if and $auth.existingSecret.name $auth.existingSecret.passwordKey }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $auth.existingSecret.name }}
+                  key: {{ $auth.existingSecret.passwordKey }}
+              {{- else }}
+              value: {{ $auth.password | quote }}
+              {{- end }}
             - name: xpack.security.enabled
+              value: "true"
+            - name: xpack.security.autoconfiguration.enabled
+              value: "false"
+            - name: xpack.security.http.ssl.enabled
+              value: "false"
+            - name: xpack.security.transport.ssl.enabled
               value: "false"
           livenessProbe:
-            httpGet:
-              path: /_cluster/health
+            tcpSocket:
               port: http
             initialDelaySeconds: 60
             periodSeconds: 20
             timeoutSeconds: 10
             failureThreshold: 5
           readinessProbe:
-            httpGet:
-              path: /_cluster/health?wait_for_status=yellow&timeout=5s
+            tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10

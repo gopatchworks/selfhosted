@@ -361,6 +361,11 @@ ingress:
 | Key | Default | Description |
 |-----|---------|-------------|
 | `elasticsearch.enabled` | `true` | Deploy Elasticsearch in-cluster. Set `false` to use an external cluster |
+| `elasticsearch.auth.username` | `elastic` | Username for the in-cluster Elasticsearch built-in user |
+| `elasticsearch.auth.password` | `patchworks` | Password for the in-cluster Elasticsearch built-in user |
+| `elasticsearch.auth.existingSecret.name` | `""` | Secret name for in-cluster Elasticsearch credentials |
+| `elasticsearch.auth.existingSecret.usernameKey` | `username` | Key for `ELASTIC_SEARCH_USERNAME` when using an existing Secret |
+| `elasticsearch.auth.existingSecret.passwordKey` | `password` | Key for `ELASTIC_PASSWORD` / `ELASTIC_SEARCH_PASSWORD` when using an existing Secret |
 | `elasticsearch.external.host` | `""` | External hostname |
 | `elasticsearch.external.port` | `9200` | External port |
 | `elasticsearch.external.scheme` | `http` | `http` or `https` |

@@ -883,6 +883,13 @@ elasticsearch:
   # Set to true to deploy Elasticsearch in-cluster. Set to false and
   # populate external.* to use an existing Elasticsearch cluster.
   enabled: true
+  auth:
+    username: elastic
+    password: patchworks
+    existingSecret:
+      name: ""
+      usernameKey: username
+      passwordKey: password
   external:
     host: ""
     port: 9200

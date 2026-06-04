@@ -155,7 +155,7 @@ data:
         cloud:
           id: {{ $mappingCloudID | quote }}
         {{- end }}
-        {{- $mappingUsername := $root.Values.mapping.elasticsearch.username | default $root.Values.elasticsearch.external.username }}
+        {{- $mappingUsername := $root.Values.mapping.elasticsearch.username | default (include "patchworks.elasticsearch.username" $root) }}
         {{- if $mappingUsername }}
         username: {{ $mappingUsername | quote }}
         {{- end }}
@@ -284,6 +284,8 @@ spec:
               until nc -z {{ include "patchworks.redis.host" $root }} {{ include "patchworks.redis.port" $root }}; do sleep 2; done
               echo "Waiting for RabbitMQ..."
               until nc -z {{ include "patchworks.rabbitmq.host" $root }} {{ include "patchworks.rabbitmq.port" $root }}; do sleep 2; done
+              echo "Waiting for Elasticsearch..."
+              until nc -z {{ include "patchworks.elasticsearch.host" $root }} {{ include "patchworks.elasticsearch.port" $root }}; do sleep 2; done
               echo "Waiting for S3..."
               until nc -z {{ include "patchworks.s3.host" $root }} 9000; do sleep 2; done
               echo "All dependencies ready."
@@ -330,39 +332,10 @@ spec:
             {{- include "patchworks.env.kubefaasUsername" $root | nindent 12 }}
             {{- include "patchworks.env.kubefaasPassword" $root | nindent 12 }}
             {{- end }}
-            {{- $mappingSecretName := $root.Values.mapping.elasticsearch.existingSecret.name | default $root.Values.elasticsearch.external.existingSecret.name }}
-            {{- $mappingCloudIdKey := $root.Values.mapping.elasticsearch.existingSecret.cloudIdKey | default $root.Values.elasticsearch.external.existingSecret.cloudIdKey }}
-            {{- if and $mappingSecretName $mappingCloudIdKey }}
-            - name: MAPPING_ELASTICSEARCH_CLOUD_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $mappingSecretName }}
-                  key: {{ $mappingCloudIdKey }}
-            {{- end }}
-            {{- $mappingApiKeyKey := $root.Values.mapping.elasticsearch.existingSecret.apiKeyKey | default $root.Values.elasticsearch.external.existingSecret.apiKeyKey | default $root.Values.elasticsearch.external.existingSecret.cloudApiKeyKey }}
-            {{- if and $mappingSecretName $mappingApiKeyKey }}
-            - name: MAPPING_ELASTICSEARCH_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $mappingSecretName }}
-                  key: {{ $mappingApiKeyKey }}
-            {{- end }}
-            {{- $mappingUsernameKey := $root.Values.mapping.elasticsearch.existingSecret.usernameKey | default $root.Values.elasticsearch.external.existingSecret.usernameKey }}
-            {{- if and $mappingSecretName $mappingUsernameKey }}
-            - name: MAPPING_ELASTICSEARCH_USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $mappingSecretName }}
-                  key: {{ $mappingUsernameKey }}
-            {{- end }}
-            {{- $mappingPasswordKey := $root.Values.mapping.elasticsearch.existingSecret.passwordKey | default $root.Values.elasticsearch.external.existingSecret.passwordKey }}
-            {{- if and $mappingSecretName $mappingPasswordKey }}
-            - name: MAPPING_ELASTICSEARCH_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $mappingSecretName }}
-                  key: {{ $mappingPasswordKey }}
-            {{- end }}
+            {{- include "patchworks.env.mappingElasticsearchCloudId" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchApiKey" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchUsername" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
             {{- if include "patchworks.pusher.isConfigured" $root }}
             {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
             {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}
