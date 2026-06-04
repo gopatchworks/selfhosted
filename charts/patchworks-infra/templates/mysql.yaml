@@ -57,6 +57,8 @@ spec:
         - name: mysql
           image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
           imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          args:
+            - --max-connections={{ .Values.mysql.maxConnections }}
           ports:
             - name: mysql
               containerPort: 3306

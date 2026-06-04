@@ -204,6 +204,7 @@ fabric:
       repository: mysql
       tag: "8.0"
       pullPolicy: IfNotPresent
+    maxConnections: 1000
     auth:
       rootPassword: ""
       database: fabric
@@ -913,6 +914,7 @@ mysql:
     repository: mysql
     tag: "8.0"
     pullPolicy: IfNotPresent
+  maxConnections: 1000
   auth:
     rootPassword: ""
     database: core
