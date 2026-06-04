@@ -259,8 +259,9 @@ migrations:
 
 # ── Seeds ──────────────────────────────────────────────────────────────────────
 # One-shot Jobs that seed reference data on first install.
-# Run as post-install hooks only (not post-upgrade) with a higher weight than
-# migrations so they execute after the schema is ready.
+# Run by the app chart as pre-install hooks only (not upgrade). Fabric seeders
+# run before core migrations; core seeders run after Fabric seeders and core
+# migrations.
 # Seeders are idempotent (upsert-based), so re-enabling and upgrading is safe.
 seeds:
   namespace: ""  # overrides global namespace; defaults to migrations namespace
@@ -270,10 +271,10 @@ seeds:
   affinity: {}
   tolerations: []
 
-  # Fabric seeder — runs on post-install only (not upgrade).
+  # Fabric seeder — runs on pre-install only (not upgrade).
   # Runs: migrate → app:install (reference data + passport clients) →
   #       app:create-tenant (creates initial company + admin user).
-  # Must complete before core seeds run (hook weight 1 vs 2).
+  # Must complete before core migrations and core seeds run.
   fabric:
     enabled: false
     image:

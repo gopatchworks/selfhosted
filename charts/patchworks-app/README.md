@@ -23,8 +23,9 @@ echo "base64:$(openssl rand -base64 32)"
 ```
 
 Migrations run as `pre-install,pre-upgrade` hooks. Seeders run as `pre-install`
-hooks only. The hook jobs render their required environment directly instead of
-depending on app ConfigMaps/Secrets that Helm has not created yet.
+hooks only. Fabric seeders run before Core migrations; Core seeders run after
+Core migrations. The hook jobs render their required environment directly
+instead of depending on app ConfigMaps/Secrets that Helm has not created yet.
 
 When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 `seeds.tenant.existingSecret.name` is provided, the app chart creates a stable
@@ -263,7 +264,8 @@ Mapping document storage is used by PHP core and monocore. Monocore defaults to 
 
 ## Migrations
 
-Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
+Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook. On first
+install, Fabric seeders run before this job.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -273,6 +275,9 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 ---
 
 ## Seeds
+
+Fabric seeders run before Core migrations. Core seeders run after Fabric
+seeders and Core migrations.
 
 | Key | Default | Description |
 |-----|---------|-------------|
