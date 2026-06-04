@@ -149,8 +149,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "patchworks.fullname" $root }}-config
+            {{- if include "patchworks.appSecretHasData" $root }}
             - secretRef:
                 name: {{ include "patchworks.fullname" $root }}-secret
+            {{- end }}
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" $root }}
             {{- with $envFrom }}

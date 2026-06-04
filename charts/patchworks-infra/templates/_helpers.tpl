@@ -184,6 +184,10 @@ password
 {{- end -}}
 {{- end }}
 
+{{- define "patchworks.kubefaas.authGenerated" -}}
+{{- if and .Values.kubefaas.enabled .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) .Values.credentials.autoGenerate (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) -}}true{{- end -}}
+{{- end }}
+
 {{/* Registry secret name and key. */}}
 {{- define "patchworks.kubefaas.registrySecretName" -}}
 {{- if .Values.kubefaas.registry.existingSecret.name -}}
@@ -1020,11 +1024,11 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if not (has .Values.workers.type $valid) -}}
 {{- fail (printf "workers.type must be one of: standalone, mono, microservice. Got: %q" .Values.workers.type) -}}
 {{- end -}}
-{{- if and (empty .Values.app.existingSecret.name) (not .Values.app.key) -}}
-{{- fail "app.key is required. Generate one with: echo \"base64:$(openssl rand -base64 32)\"" -}}
-{{- end -}}
 {{- if and (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
 {{- fail "Fabric has no MySQL source. Enable mysql, enable fabric.mysql, or set fabric.mysql.external.host." -}}
+{{- end -}}
+{{- if and .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) (not (include "patchworks.kubefaas.authGenerated" .)) -}}
+{{- fail "kubefaas.auth.username and kubefaas.auth.password are required unless kubefaas.auth.existingSecret.name is set, or kubefaas.enabled and credentials.autoGenerate are both true." -}}
 {{- end -}}
 {{- end -}}
 
@@ -1351,7 +1355,7 @@ PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
 PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
 {{- end }}
 {{- end }}
-{{- if and (or .Values.kubefaas.enabled .Values.kubefaas.host) (not .Values.kubefaas.auth.existingSecret.name) }}
+{{- if and .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (not (include "patchworks.kubefaas.authGenerated" .)) }}
 KUBEFAAS_FUNCTIONS_USERNAME: {{ .Values.kubefaas.auth.username | quote }}
 KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
 {{- end }}
@@ -1482,17 +1486,20 @@ existingSecret overrides.
       name: {{ .Values.pusher.existingSecret.name }}
       key: {{ .Values.pusher.existingSecret.appClusterKey }}
 {{- end }}
-{{- if .Values.kubefaas.auth.existingSecret.name }}
+{{- if or .Values.kubefaas.auth.existingSecret.name (include "patchworks.kubefaas.authGenerated" .) }}
+{{- $authSecretName := .Values.kubefaas.auth.existingSecret.name | default (include "patchworks.kubefaas.authSecretName" .) }}
+{{- $authUsernameKey := .Values.kubefaas.auth.existingSecret.usernameKey | default (include "patchworks.kubefaas.authUsernameKey" .) }}
+{{- $authPasswordKey := .Values.kubefaas.auth.existingSecret.passwordKey | default (include "patchworks.kubefaas.authPasswordKey" .) }}
 - name: KUBEFAAS_FUNCTIONS_USERNAME
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.kubefaas.auth.existingSecret.name }}
-      key: {{ .Values.kubefaas.auth.existingSecret.usernameKey }}
+      name: {{ $authSecretName }}
+      key: {{ $authUsernameKey }}
 - name: KUBEFAAS_FUNCTIONS_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.kubefaas.auth.existingSecret.name }}
-      key: {{ .Values.kubefaas.auth.existingSecret.passwordKey }}
+      name: {{ $authSecretName }}
+      key: {{ $authPasswordKey }}
 {{- end }}
 {{- end }}
 

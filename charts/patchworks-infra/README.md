@@ -543,14 +543,17 @@ When `s3.enabled` is `true`, a MinIO instance is deployed and a post-install/upg
 
 Optional serverless function execution layer. Disabled by default.
 
+When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate` are all true, missing auth credentials are generated into `<release>-kubefaas-auth` in both the KubeFaaS namespace and the app release namespace. The app chart consumes the release namespace copy. For external KubeFaaS, provide both inline auth values or `kubefaas.auth.existingSecret.name`.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `kubefaas.enabled` | `false` | Deploy KubeFaaS in-cluster |
 | `kubefaas.namespace` | `kubefaas` | Namespace for KubeFaaS components (separate from app namespace) |
 | `kubefaas.functions.namespaceCount` | `5` | Number of function execution namespaces created |
 | `kubefaas.builder.tls.mode` | `helm` | TLS mode: `helm`, `certManager`, or `existingSecret` |
-| `kubefaas.auth.username` | `kubefaas` | Auth username shared by controller and builder |
-| `kubefaas.auth.password` | `""` | Auth password |
+| `kubefaas.auth.enabled` | `false` | Enable KubeFaaS basic auth env wiring |
+| `kubefaas.auth.username` | `""` | Auth username shared by controller and builder; generated when omitted and eligible |
+| `kubefaas.auth.password` | `""` | Auth password; generated when omitted and eligible |
 | `kubefaas.auth.existingSecret.name` | `""` | Source auth credentials from this Secret instead of inline values |
 | `kubefaas.auth.existingSecret.usernameKey` | `username` | Key for the username |
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |

@@ -693,6 +693,8 @@ kubefaas:
           memory: 2Gi
 
   # Credentials shared between controller, builder, and monocore workers.
+  # When kubefaas.enabled and credentials.autoGenerate are true, missing values
+  # are generated into a Secret by the infra chart.
   auth:
     enabled: false
     username: ""

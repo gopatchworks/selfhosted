@@ -15,7 +15,7 @@ metadata:
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
 {{- $authUsernameKey := include "patchworks.kubefaas.authUsernameKey" . }}
 {{- $authPasswordKey := include "patchworks.kubefaas.authPasswordKey" . }}
-{{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
+{{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) (not (and .Values.credentials.autoGenerate (or (not $kf.auth.username) (not $kf.auth.password)))) }}
 ---
 apiVersion: v1
 kind: Secret
@@ -29,6 +29,21 @@ type: Opaque
 data:
   username: {{ $kf.auth.username | b64enc }}
   password: {{ $kf.auth.password | b64enc }}
+{{- if ne $ns .Release.Namespace }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $authSecretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-auth
+type: Opaque
+data:
+  username: {{ $kf.auth.username | b64enc }}
+  password: {{ $kf.auth.password | b64enc }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: v1

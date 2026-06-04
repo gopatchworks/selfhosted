@@ -129,6 +129,10 @@ spec:
               s3_secret_key={{ include "patchworks.s3.secretKey" . | quote }}
 
               {{- if $s3CredentialSecret.name }}
+              echo "Waiting for S3 credential Secret {{ $s3CredentialSecret.name }}..."
+              until kubectl -n {{ include "patchworks.s3.namespace" . | quote }} get secret {{ $s3CredentialSecret.name | quote }} >/dev/null 2>&1; do
+                sleep 2
+              done
               s3_access_key="$(kubectl -n {{ include "patchworks.s3.namespace" . | quote }} get secret {{ $s3CredentialSecret.name | quote }} -o "jsonpath={.data['{{ $s3CredentialSecret.accessKeyKey }}']}" | base64 -d)"
               s3_secret_key="$(kubectl -n {{ include "patchworks.s3.namespace" . | quote }} get secret {{ $s3CredentialSecret.name | quote }} -o "jsonpath={.data['{{ $s3CredentialSecret.secretKeyKey }}']}" | base64 -d)"
               {{- end }}
@@ -462,7 +466,7 @@ spec:
             {{- include "patchworks.secretEnv" (dict "name" "REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" $root) "secret" $rs) | nindent 12 }}
             {{- end }}
             {{- end }}
-            {{- if or $root.Values.kubefaas.enabled $root.Values.kubefaas.host $root.Values.kubefaas.auth.existingSecret.name }}
+            {{- if or $root.Values.kubefaas.auth.enabled $root.Values.kubefaas.auth.existingSecret.name }}
             {{- include "patchworks.env.kubefaasUsername" $root | nindent 12 }}
             {{- include "patchworks.env.kubefaasPassword" $root | nindent 12 }}
             {{- end }}

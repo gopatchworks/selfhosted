@@ -50,8 +50,10 @@ spec:
           envFrom:
             - configMapRef:
                 name: {{ include "patchworks.fullname" . }}-config
+            {{- if include "patchworks.appSecretHasData" . }}
             - secretRef:
                 name: {{ include "patchworks.fullname" . }}-secret
+            {{- end }}
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
             {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
