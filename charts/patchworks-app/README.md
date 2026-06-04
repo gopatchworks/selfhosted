@@ -116,6 +116,15 @@ Shared configuration injected into every application pod (web, workers, migratio
 
 ---
 
+## Fabric
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
+| `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
+
+---
+
 ## Passport OAuth keys
 
 Both Core and Fabric use [Laravel Passport](https://laravel.com/docs/passport) for OAuth token signing and verification. They share a single RSA key pair:

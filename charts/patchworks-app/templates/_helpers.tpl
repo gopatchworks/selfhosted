@@ -1908,6 +1908,14 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{- end }}
 {{- end }}
 
+{{/* Fabric web session env only. Keep this out of fabric-init/seeder jobs. */}}
+{{- define "patchworks.fabricRuntimeEnv" -}}
+- name: SESSION_DRIVER
+  value: {{ .Values.fabric.session.driver | quote }}
+- name: SESSION_LIFETIME
+  value: {{ .Values.fabric.session.lifetime | quote }}
+{{- end }}
+
 {{/*
 Init containers that wait for required infrastructure to be reachable
 before starting application pods.

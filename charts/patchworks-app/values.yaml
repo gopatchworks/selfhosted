@@ -117,6 +117,10 @@ fabric:
   service:
     type: ClusterIP
     port: 80
+  # Fabric web session settings. Laravel SESSION_LIFETIME is in minutes.
+  session:
+    driver: redis
+    lifetime: 10080
   # ── Fabric MySQL ──────────────────────────────────────────────────────────
   # Fabric uses its own database, isolated from the core application.
   #
