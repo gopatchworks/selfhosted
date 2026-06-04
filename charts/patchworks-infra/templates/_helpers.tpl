@@ -672,6 +672,10 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- if .Values.s3.enabled -}}{{ .Values.s3.region }}{{- else -}}{{ .Values.s3.external.region }}{{- end -}}
 {{- end }}
 
+{{- define "patchworks.s3.pathStyle" -}}
+{{- if .Values.s3.enabled -}}true{{- else -}}{{ .Values.s3.external.pathStyle }}{{- end -}}
+{{- end }}
+
 {{/* ── Supervisord helper ─────────────────────────────────────────────────────── */}}
 
 {{/*
@@ -984,13 +988,25 @@ stores:
   default:
     type: s3
     s3:
+      {{- with include "patchworks.s3.endpoint" $root }}
+      endpoint: {{ . | quote }}
+      {{- end }}
       bucket: {{ include "patchworks.s3.bucket" $root | quote }}
       region: {{ include "patchworks.s3.region" $root | quote }}
+      access_key_id: {{ include "patchworks.s3.accessKey" $root | quote }}
+      secret_access_key: {{ include "patchworks.s3.secretKey" $root | quote }}
+      path_style: {{ include "patchworks.s3.pathStyle" $root }}
   customer_cache:
     type: s3
     s3:
+      {{- with include "patchworks.s3.endpoint" $root }}
+      endpoint: {{ . | quote }}
+      {{- end }}
       bucket: {{ $root.Values.s3.companyCacheBucket | default (include "patchworks.s3.bucket" $root) | quote }}
       region: {{ include "patchworks.s3.region" $root | quote }}
+      access_key_id: {{ include "patchworks.s3.accessKey" $root | quote }}
+      secret_access_key: {{ include "patchworks.s3.secretKey" $root | quote }}
+      path_style: {{ include "patchworks.s3.pathStyle" $root }}
 {{- end }}
 
 {{/* ── Validation ─────────────────────────────────────────────────────────────── */}}
@@ -1874,8 +1890,10 @@ before starting application pods.
       until nc -z {{ include "patchworks.rabbitmq.host" . }} {{ include "patchworks.rabbitmq.port" . }}; do sleep 2; done
       echo "Waiting for Elasticsearch..."
       until nc -z {{ include "patchworks.elasticsearch.host" . }} {{ include "patchworks.elasticsearch.port" . }}; do sleep 2; done
+      {{- if .Values.s3.enabled }}
       echo "Waiting for S3..."
       until nc -z {{ include "patchworks.s3.host" . }} 9000; do sleep 2; done
+      {{- end }}
       echo "All dependencies ready."
 {{- end }}
 

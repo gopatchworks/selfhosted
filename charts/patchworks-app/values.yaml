@@ -526,6 +526,13 @@ workers:
     # built-in topology default.
     queue: flows
     processes: 15
+    store:
+      # Use an existing Secret containing monocore's store.yaml instead of
+      # generating one from s3.* values. For cross-namespace company workers,
+      # create the same Secret in each worker namespace.
+      existingSecret:
+        name: ""
+        key: store.yaml
 
     # RabbitMQ topology options. The topology itself is auto-generated from
     # workers.mono.queue. Override only what you need to change.
@@ -972,6 +979,7 @@ s3:
     secretKey: ""
     region: us-east-1
     bucket: patchworks
+    pathStyle: false
     useSSL: "false"
     # Use an existing Secret for the S3 credentials when using an external instance.
     existingSecret:

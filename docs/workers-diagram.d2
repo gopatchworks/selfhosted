@@ -88,7 +88,7 @@ mono: "type: mono" {
   hub: Hub {
     direction: right
     topology: "{name}-workers-topology\ntopology.yaml\nflows + optional flow exchange" { shape: document }
-    store:    "{name}-workers-store\nstore.yaml (shared)"       { shape: document }
+    store:    "{name}-workers-store or existing Secret\nstore.yaml\nS3 endpoint + credentials" { shape: document }
     config:   "{name}-workers-config\nconfig.yaml\nqueue: workers.mono.queue" { shape: document }
     dep:      "Deployment\n{name}-workers"                      { shape: rectangle }
     topology -> dep: mounts
@@ -104,5 +104,5 @@ mono: "type: mono" {
     config -> dep: mounts
   }
 
-  hub -> company: "× workers.companies[]\nbinds queues when companyFlows.enabled\ntopology + store copied if cross-ns"
+  hub -> company: "× workers.companies[]\nbinds queues when companyFlows.enabled\ntopology copied + store Secret generated if cross-ns"
 }

@@ -5,6 +5,10 @@
 {{- $hubNs := include "patchworks.workers.namespace" . }}
 {{- $mainQueue := $mono.queue | default .Values.workers.queue.name }}
 {{- $flowExchange := include "patchworks.mono.flowExchange" (dict "root" . "queueName" $mainQueue) }}
+{{- $storeExistingSecret := $mono.store.existingSecret }}
+{{- $storeSecretName := $storeExistingSecret.name | default (printf "%s-workers-store" $fullname) }}
+{{- $storeSecretKey := $storeExistingSecret.key | default "store.yaml" }}
+{{- $s3CredentialSecret := fromJson (include "patchworks.s3.existingSecret" .) }}
 ---
 # topology.yaml — RabbitMQ topology asserted by monocore at startup.
 # When workers.companies are defined their queues and bindings are included
@@ -21,19 +25,153 @@ metadata:
 data:
   topology.yaml: |
 {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $mainQueue) | indent 4 }}
+{{- if not $storeExistingSecret.name }}
 ---
-# store.yaml — S3 object store definitions
+# store.yaml — generated as a Secret because it contains S3 credentials.
 apiVersion: v1
-kind: ConfigMap
+kind: ServiceAccount
 metadata:
-  name: {{ $fullname }}-workers-store
-  namespace: {{ $hubNs }}
+  name: {{ $fullname }}-workers-storegen
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
-    app.kubernetes.io/component: workers
-data:
-  store.yaml: |
-{{ include "patchworks.mono.storeYaml" (dict "root" .) | indent 4 }}
+    app.kubernetes.io/component: workers-storegen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-15"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $fullname }}-workers-storegen
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers-storegen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-15"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "create", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $fullname }}-workers-storegen
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers-storegen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-15"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-15"
+subjects:
+  - kind: ServiceAccount
+    name: {{ $fullname }}-workers-storegen
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $fullname }}-workers-storegen
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-workers-storegen
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers-storegen
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-10"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "workers-storegen" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ $fullname }}-workers-storegen
+      containers:
+        - name: kubectl
+          image: "{{ .Values.credentials.generator.image.repository }}:{{ .Values.credentials.generator.image.tag }}"
+          imagePullPolicy: {{ .Values.credentials.generator.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+
+              s3_endpoint={{ include "patchworks.s3.endpoint" . | quote }}
+              s3_bucket={{ include "patchworks.s3.bucket" . | quote }}
+              s3_customer_cache_bucket={{ .Values.s3.companyCacheBucket | default (include "patchworks.s3.bucket" .) | quote }}
+              s3_region={{ include "patchworks.s3.region" . | quote }}
+              s3_path_style={{ include "patchworks.s3.pathStyle" . | quote }}
+              s3_access_key={{ include "patchworks.s3.accessKey" . | quote }}
+              s3_secret_key={{ include "patchworks.s3.secretKey" . | quote }}
+
+              {{- if $s3CredentialSecret.name }}
+              s3_access_key="$(kubectl -n {{ include "patchworks.s3.namespace" . | quote }} get secret {{ $s3CredentialSecret.name | quote }} -o "jsonpath={.data['{{ $s3CredentialSecret.accessKeyKey }}']}" | base64 -d)"
+              s3_secret_key="$(kubectl -n {{ include "patchworks.s3.namespace" . | quote }} get secret {{ $s3CredentialSecret.name | quote }} -o "jsonpath={.data['{{ $s3CredentialSecret.secretKeyKey }}']}" | base64 -d)"
+              {{- end }}
+
+              write_store() {
+                store_name="$1"
+                bucket="$2"
+
+                printf '  %s:\n' "$store_name"
+                printf '    type: s3\n'
+                printf '    s3:\n'
+                if [ -n "$s3_endpoint" ]; then
+                  printf '      endpoint: "%s"\n' "$s3_endpoint"
+                fi
+                printf '      bucket: "%s"\n' "$bucket"
+                printf '      region: "%s"\n' "$s3_region"
+                printf '      access_key_id: "%s"\n' "$s3_access_key"
+                printf '      secret_access_key: "%s"\n' "$s3_secret_key"
+                printf '      path_style: %s\n' "$s3_path_style"
+              }
+
+              {
+                printf 'stores:\n'
+                write_store "default" "$s3_bucket"
+                write_store "customer_cache" "$s3_customer_cache_bucket"
+              } > /tmp/store.yaml
+
+              apply_store_secret() {
+                target_ns="$1"
+                kubectl -n "$target_ns" create secret generic {{ $storeSecretName | quote }} \
+                  --from-file=store.yaml=/tmp/store.yaml \
+                  --dry-run=client \
+                  -o yaml | kubectl apply -f -
+              }
+
+              apply_store_secret {{ $hubNs | quote }}
+              {{- range .Values.workers.companies }}
+              {{- $companyNs := .namespace | default $hubNs }}
+              {{- if ne $companyNs $hubNs }}
+              apply_store_secret {{ $companyNs | quote }}
+              {{- end }}
+              {{- end }}
+{{- end }}
 
 {{/* Build the worker list: hub first, then one entry per company. */}}
 {{- $workers := list (dict "isHub" true "company" (dict)) }}
@@ -64,9 +202,8 @@ data:
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
 {{- end }}
 {{- $topoCMName := printf "%s-workers-topology" $fullname }}
-{{- $storeCMName := printf "%s-workers-store" $fullname }}
 
-{{/* Cross-namespace companies need local copies of the shared ConfigMaps. */}}
+{{/* Cross-namespace companies need local copies of the shared topology ConfigMap. */}}
 {{- if and (not $isHub) (ne $wNs $hubNs) }}
 ---
 apiVersion: v1
@@ -80,18 +217,6 @@ metadata:
 data:
   topology.yaml: |
 {{ include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue) | indent 4 }}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: {{ $storeCMName }}
-  namespace: {{ $wNs }}
-  labels:
-    {{- include "patchworks.labels" $root | nindent 4 }}
-    app.kubernetes.io/component: {{ $slug }}
-data:
-  store.yaml: |
-{{ include "patchworks.mono.storeYaml" (dict "root" $root) | indent 4 }}
 {{- end }}
 ---
 apiVersion: v1
@@ -254,7 +379,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ $root.Values.workers | toJson | sha256sum }}
+        checksum/config: {{ printf "%s%s%s%s%s%s" ($root.Values.workers | toJson) (include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue)) (include "patchworks.mono.storeYaml" (dict "root" $root)) $storeSecretName $storeSecretKey ($queue | toString) | sha256sum }}
         {{- with $root.Values.workers.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -273,8 +398,11 @@ spec:
             sources:
               - configMap:
                   name: {{ $topoCMName }}
-              - configMap:
-                  name: {{ $storeCMName }}
+              - secret:
+                  name: {{ $storeSecretName }}
+                  items:
+                    - key: {{ $storeSecretKey | quote }}
+                      path: store.yaml
       initContainers:
         - name: wait-for-deps
           image: busybox:1.37
@@ -290,8 +418,10 @@ spec:
               until nc -z {{ include "patchworks.rabbitmq.host" $root }} {{ include "patchworks.rabbitmq.port" $root }}; do sleep 2; done
               echo "Waiting for Elasticsearch..."
               until nc -z {{ include "patchworks.elasticsearch.host" $root }} {{ include "patchworks.elasticsearch.port" $root }}; do sleep 2; done
+              {{- if $root.Values.s3.enabled }}
               echo "Waiting for S3..."
               until nc -z {{ include "patchworks.s3.host" $root }} 9000; do sleep 2; done
+              {{- end }}
               echo "All dependencies ready."
       containers:
         - name: workers
@@ -320,8 +450,6 @@ spec:
               value: "{{ include "patchworks.fabric.mysql.username" $root }}:$(FABRIC_DB_PASSWORD)@tcp({{ include "patchworks.fabric.mysql.host" $root }}:{{ include "patchworks.fabric.mysql.port" $root }})/{{ include "patchworks.fabric.mysql.database" $root }}?parseTime=true"
             - name: DB_LANDLORD_DSN
               value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/{{ include "patchworks.mysql.database" $root }}?parseTime=true"
-            {{- include "patchworks.env.s3AccessKey" $root | nindent 12 }}
-            {{- include "patchworks.env.s3SecretKey" $root | nindent 12 }}
             {{- with include "patchworks.env.laravelAppKey" $root }}
             {{- . | nindent 12 }}
             {{- end }}

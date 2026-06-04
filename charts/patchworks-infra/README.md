@@ -262,11 +262,20 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
+| `workers.mono.store.existingSecret.name` | `""` | Existing Secret containing monocore's `store.yaml`; skips the generated store Secret hook |
+| `workers.mono.store.existingSecret.key` | `store.yaml` | Secret key to mount as `/etc/monocore/store.yaml` |
 | `workers.mono.rabbitmq.flowExchange` | `""` | Flow publish exchange. Empty defaults to `workers.mono.queue` when `companyFlows.enabled=false`, or `customer-flows` when enabled |
 | `workers.mono.rabbitmq.companyFlows.enabled` | `false` | Create the configured flow exchange, company queues, bindings, and fallback policy |
 | `workers.mono.otel.enabled` | `false` | Enable OpenTelemetry tracing |
 | `workers.mono.otel.endpoint` | `""` | OTLP collector endpoint |
 | `workers.mono.otel.serviceName` | `monocore` | Service name reported to the collector |
+
+When `workers.type=mono`, the app chart creates a `<fullname>-workers-store`
+Secret containing monocore's `store.yaml`, unless
+`workers.mono.store.existingSecret.name` is set. The generated file includes the
+resolved S3 endpoint, bucket names, region, path-style setting, and access
+credentials for both the `default` and `customer_cache` stores. Existing store
+Secrets must exist in every namespace where monocore worker pods run.
 
 ## Mapping documents
 
@@ -523,6 +532,8 @@ When `s3.enabled` is `true`, a MinIO instance is deployed and a post-install/upg
 | `s3.external.existingSecret.secretKeyKey` | `secret-key` | Key for the secret key |
 | `s3.external.region` | `us-east-1` | Region |
 | `s3.external.bucket` | `patchworks` | Bucket name |
+| `s3.external.pathStyle` | `false` | Use path-style S3 addressing for external S3-compatible storage |
+| `s3.companyCacheBucket` | `""` | Bucket for monocore's `customer_cache` store; defaults to `s3.bucket` / `s3.external.bucket` |
 | `s3.persistence.size` | `10Gi` | PVC size |
 | `s3.persistence.existingClaim` | `""` | Use a pre-existing PVC |
 
