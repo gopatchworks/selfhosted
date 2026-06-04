@@ -1241,14 +1241,18 @@ Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
 */}}
 {{- define "patchworks.dashboardConfigData" -}}
 {{- $fullname := include "patchworks.fullname" . }}
-{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
 {{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
 {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
-{{- $ingressFabric  := .Values.ingress.hosts.fabric  | default "" }}
-{{- $coreUrl   := .Values.dashboard.coreUrl   | default (ternary (printf "%s://%s" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
-{{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $scheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
-{{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s" $scheme $ingressFabric)  (printf "http://%s-fabric.%s.svc.cluster.local"  $fullname (include "patchworks.fabric.namespace" .))  (ne $ingressFabric "")) }}
-{{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $scheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
+{{- $ingressFabric := .Values.ingress.hosts.fabric | default "" }}
+{{- $ingressDashboard := .Values.ingress.hosts.dashboard | default "" }}
+{{- $gatewayScheme := ternary "https" "http" (ne (dig "gateway" "secretName" "" .Values.ingress.tls) "") }}
+{{- $startScheme := ternary "https" "http" (ne (dig "start" "secretName" "" .Values.ingress.tls) "") }}
+{{- $fabricScheme := ternary "https" "http" (ne (dig "fabric" "secretName" "" .Values.ingress.tls) "") }}
+{{- $dashboardScheme := ternary "https" "http" (ne (dig "dashboard" "secretName" "" .Values.ingress.tls) "") }}
+{{- $coreUrl   := .Values.dashboard.coreUrl   | default (ternary (printf "%s://%s" $gatewayScheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
+{{- $startUrl  := .Values.dashboard.startUrl  | default (ternary (printf "%s://%s" $startScheme $ingressStart)   (printf "http://%s-start.%s.svc.cluster.local"   $fullname (include "patchworks.start.namespace" .))   (ne $ingressStart "")) }}
+{{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s://%s/fabric" $dashboardScheme $ingressDashboard) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) (printf "http://%s-fabric.%s.svc.cluster.local" $fullname (include "patchworks.fabric.namespace" .)) (ne $ingressFabric "")) (ne $ingressDashboard "")) }}
+{{- $mcpUrl    := .Values.dashboard.mcpUrl    | default (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) (printf "http://%s-gateway.%s.svc.cluster.local/api/v1/mcp" $fullname (include "patchworks.gateway.namespace" .)) (ne $ingressGateway "")) }}
 CORE_URL: {{ $coreUrl | quote }}
 START_URL: {{ $startUrl | quote }}
 FABRIC_URL: {{ $fabricUrl | quote }}

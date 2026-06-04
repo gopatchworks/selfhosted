@@ -327,6 +327,10 @@ When `ingress.hosts.dashboard` is set, two Ingress resources are created on that
 - **`patchworks-dashboard`** — routes `/` to the dashboard service (no rewrite).
 - **`patchworks-dashboard-routes`** — routes `/fabric`, `/core-main`, and `/core-start` to their respective services with the prefix stripped before forwarding.
 
+When `dashboard.fabricUrl` is left empty, the dashboard uses this same-origin
+`/fabric` route by default. If `ingress.hosts.dashboard` is not set, it falls
+back to the dedicated `ingress.hosts.fabric` URL when configured.
+
 > ⚠️ **`ingress.rewriteAnnotations` is required** for prefix stripping to work. The default is configured for Contour. If you use a different ingress controller you must override this value — see the examples below.
 
 #### Contour (default)
