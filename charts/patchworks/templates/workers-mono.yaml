@@ -164,7 +164,26 @@ spec:
         - name: workers
           image: {{ include "patchworks.appImage" (dict "svc" $mono "root" $root) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $mono "root" $root) }}
-          args: ["worker"]
+          args:
+            - worker
+            {{- $mappingCloudIdConfigured := include "patchworks.mapping.elasticsearchCloudIdConfigured" $root }}
+            {{- $mappingApiKeyConfigured := include "patchworks.mapping.elasticsearchApiKeyConfigured" $root }}
+            {{- $mappingUsernameConfigured := include "patchworks.mapping.elasticsearchUsernameConfigured" $root }}
+            {{- $mappingPasswordConfigured := include "patchworks.mapping.elasticsearchPasswordConfigured" $root }}
+            {{- if $mappingCloudIdConfigured }}
+            - --mapping-elasticsearch-cloud-id=$(MAPPING_ELASTICSEARCH_CLOUD_ID)
+            {{- else }}
+            - --mapping-elasticsearch-addresses=$(MAPPING_ELASTICSEARCH_ADDRESSES)
+            {{- end }}
+            {{- if $mappingApiKeyConfigured }}
+            - --mapping-elasticsearch-api-key=$(MAPPING_ELASTICSEARCH_API_KEY)
+            {{- else if and $mappingUsernameConfigured $mappingPasswordConfigured }}
+            - --mapping-elasticsearch-username=$(MAPPING_ELASTICSEARCH_USERNAME)
+            - --mapping-elasticsearch-password=$(MAPPING_ELASTICSEARCH_PASSWORD)
+            {{- end }}
+            {{- with $root.Values.mapping.elasticsearch.index }}
+            - --mapping-elasticsearch-index={{ . }}
+            {{- end }}
           ports:
             - name: http
               containerPort: 8080
@@ -211,12 +230,22 @@ spec:
             {{- end }}
             - name: ELASTICSEARCH_HOST
               value: {{ include "patchworks.elasticsearch.url" $root | quote }}
+            {{- include "patchworks.env.elasticSearchCloudId" $root | nindent 12 }}
+            {{- include "patchworks.env.elasticSearchCloudApiKey" $root | nindent 12 }}
+            {{- include "patchworks.env.elasticSearchApiKey" $root | nindent 12 }}
             {{- if and (not $root.Values.elasticsearch.enabled) $root.Values.elasticsearch.external.username }}
+            - name: ELASTIC_SEARCH_USERNAME
+              value: {{ $root.Values.elasticsearch.external.username | quote }}
             - name: ELASTICSEARCH_USER
               value: {{ $root.Values.elasticsearch.external.username | quote }}
             {{- $ess := dict "name" $root.Values.elasticsearch.external.existingSecret.name "key" $root.Values.elasticsearch.external.existingSecret.passwordKey }}
-            {{- include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" $root.Values.elasticsearch.external.password "secret" $ess) | nindent 12 }}
+            {{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" $root.Values.elasticsearch.external.password "secret" $ess) | nindent 12 }}
             {{- end }}
+            {{- include "patchworks.env.mappingElasticsearchAddresses" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchCloudId" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchApiKey" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchUsername" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
             {{- if include "patchworks.pusher.isConfigured" $root }}
             {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
             {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}

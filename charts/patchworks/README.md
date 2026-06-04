@@ -13,6 +13,7 @@ Full `values.yaml` reference for the Patchworks chart.
 - [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
 - [Workers](#workers)
+- [Mapping documents](#mapping-documents)
 - [Migrations](#migrations)
 - [Ingress](#ingress)
 - [MySQL](#mysql)
@@ -186,6 +187,24 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.otel.endpoint` | `""` | OTLP collector endpoint |
 | `workers.mono.otel.serviceName` | `monocore` | Service name reported to the collector |
 
+## Mapping documents
+
+Mapping document storage is used by PHP core and monocore. Monocore defaults to the main Elasticsearch connection, and `mapping.elasticsearch.*` only needs to be set when mappings use a different endpoint or credentials.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `mapping.elasticsearch.addresses` | `[]` | Elasticsearch addresses for monocore mapping storage. Defaults to the main Elasticsearch URL |
+| `mapping.elasticsearch.cloudId` | `""` | Elastic Cloud ID for monocore mapping storage |
+| `mapping.elasticsearch.apiKey` | `""` | Elasticsearch API key for monocore mapping storage |
+| `mapping.elasticsearch.username` | `""` | Username for monocore mapping storage basic auth |
+| `mapping.elasticsearch.password` | `""` | Password for monocore mapping storage basic auth |
+| `mapping.elasticsearch.index` | `mappings` | Mapping documents index |
+| `mapping.elasticsearch.existingSecret.name` | `""` | Secret name for mapping-specific credentials |
+| `mapping.elasticsearch.existingSecret.cloudIdKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_CLOUD_ID` |
+| `mapping.elasticsearch.existingSecret.apiKeyKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_API_KEY` |
+| `mapping.elasticsearch.existingSecret.usernameKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_USERNAME` |
+| `mapping.elasticsearch.existingSecret.passwordKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_PASSWORD` |
+
 **Multi-company workers**
 
 `workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.
@@ -345,10 +364,17 @@ ingress:
 | `elasticsearch.external.host` | `""` | External hostname |
 | `elasticsearch.external.port` | `9200` | External port |
 | `elasticsearch.external.scheme` | `http` | `http` or `https` |
-| `elasticsearch.external.username` | `""` | Username (if auth enabled) |
-| `elasticsearch.external.password` | `""` | Password (or use `existingSecret`) |
+| `elasticsearch.external.cloudId` | `""` | Elastic Cloud ID for PHP core |
+| `elasticsearch.external.cloudApiKey` | `""` | Elastic Cloud API key for PHP core |
+| `elasticsearch.external.apiKey` | `""` | Elasticsearch API key for PHP core |
+| `elasticsearch.external.username` | `""` | Username for PHP core basic auth |
+| `elasticsearch.external.password` | `""` | Password for PHP core basic auth |
 | `elasticsearch.external.existingSecret.name` | `""` | Secret name for credentials |
-| `elasticsearch.external.existingSecret.passwordKey` | `password` | Key for the password |
+| `elasticsearch.external.existingSecret.cloudIdKey` | `""` | Key for `ELASTIC_SEARCH_CLOUD_ID` |
+| `elasticsearch.external.existingSecret.cloudApiKeyKey` | `""` | Key for `ELASTIC_SEARCH_CLOUD_API_KEY` |
+| `elasticsearch.external.existingSecret.apiKeyKey` | `""` | Key for `ELASTIC_SEARCH_API_KEY` |
+| `elasticsearch.external.existingSecret.usernameKey` | `ELASTIC_SEARCH_USERNAME` | Key for `ELASTIC_SEARCH_USERNAME` |
+| `elasticsearch.external.existingSecret.passwordKey` | `ELASTIC_SEARCH_PASSWORD` | Key for `ELASTIC_SEARCH_PASSWORD` |
 | `elasticsearch.persistence.size` | `15Gi` | PVC size |
 | `elasticsearch.persistence.existingClaim` | `""` | Use a pre-existing PVC |
 | `elasticsearch.javaOpts` | `-Xms512m -Xmx512m` | JVM heap settings |

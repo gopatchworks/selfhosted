@@ -298,6 +298,25 @@ seeds:
       pullPolicy: ""
     resources: {}
 
+# ── Mapping Documents ─────────────────────────────────────────────────────────
+# Mapping document storage shared by PHP core and monocore. By default monocore
+# uses the main Elasticsearch connection; set these fields only when mapping
+# documents need a different Elasticsearch endpoint or credentials.
+mapping:
+  elasticsearch:
+    addresses: []
+    cloudId: ""
+    apiKey: ""
+    username: ""
+    password: ""
+    index: mappings
+    existingSecret:
+      name: ""
+      cloudIdKey: ""
+      apiKeyKey: ""
+      usernameKey: ""
+      passwordKey: ""
+
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
   namespace: ""  # overrides global namespace for worker resources
@@ -867,12 +886,21 @@ elasticsearch:
   external:
     host: ""
     port: 9200
+    # Elastic Cloud ID. Self-hosted Elasticsearch does not normally provide this;
+    # use host/port/scheme for self-hosted clusters.
+    cloudId: ""
+    cloudApiKey: ""
+    apiKey: ""
     username: ""
     password: ""
-    # Use an existing Secret for the Elasticsearch password when using an external instance.
+    # Use an existing Secret for Elasticsearch credentials when using an external instance.
     existingSecret:
       name: ""
-      passwordKey: password
+      cloudIdKey: ""
+      cloudApiKeyKey: ""
+      apiKeyKey: ""
+      usernameKey: ELASTIC_SEARCH_USERNAME
+      passwordKey: ELASTIC_SEARCH_PASSWORD
     scheme: http
   image:
     repository: elasticsearch

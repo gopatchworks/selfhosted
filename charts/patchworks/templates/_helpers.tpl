@@ -444,6 +444,136 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- end -}}
 {{- end }}
 
+{{- define "patchworks.elasticsearch.secret" -}}
+{{- $es := .Values.elasticsearch.external.existingSecret -}}
+{{- dict
+  "name" $es.name
+  "cloudIdKey" $es.cloudIdKey
+  "cloudApiKeyKey" $es.cloudApiKeyKey
+  "apiKeyKey" $es.apiKeyKey
+  "usernameKey" $es.usernameKey
+  "passwordKey" $es.passwordKey
+  | toJson -}}
+{{- end }}
+
+{{- define "patchworks.env.elasticSearchCloudId" -}}
+{{- if and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.cloudId (and .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.cloudIdKey)) -}}
+{{- $s := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.cloudIdKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_CLOUD_ID" "value" .Values.elasticsearch.external.cloudId "secret" $s) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.elasticSearchCloudApiKey" -}}
+{{- if and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.cloudApiKey (and .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.cloudApiKeyKey)) -}}
+{{- $s := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.cloudApiKeyKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_CLOUD_API_KEY" "value" .Values.elasticsearch.external.cloudApiKey "secret" $s) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.elasticSearchApiKey" -}}
+{{- if and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.apiKey (and .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.apiKeyKey)) -}}
+{{- $s := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.apiKeyKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_API_KEY" "value" .Values.elasticsearch.external.apiKey "secret" $s) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.elasticSearchUsername" -}}
+{{- if and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.username (and .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.usernameKey)) -}}
+{{- $s := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.usernameKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_USERNAME" "value" .Values.elasticsearch.external.username "secret" $s) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.elasticSearchPassword" -}}
+{{- if and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.password (and .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.passwordKey)) -}}
+{{- $s := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey -}}
+{{- include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $s) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchAddresses" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- if $es.addresses -}}
+{{- join "," $es.addresses -}}
+{{- else -}}
+{{- include "patchworks.elasticsearch.url" . -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchSecret" -}}
+{{- $es := .Values.mapping.elasticsearch.existingSecret -}}
+{{- dict "name" $es.name "cloudIdKey" $es.cloudIdKey "apiKeyKey" $es.apiKeyKey "usernameKey" $es.usernameKey "passwordKey" $es.passwordKey | toJson -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchCloudIdConfigured" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- if or $es.cloudId (and $es.existingSecret.name $es.existingSecret.cloudIdKey) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.cloudIdKey) -}}true{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchApiKeyConfigured" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- if or $es.apiKey (and $es.existingSecret.name $es.existingSecret.apiKeyKey) (and (not .Values.elasticsearch.enabled) (or .Values.elasticsearch.external.apiKey .Values.elasticsearch.external.cloudApiKey)) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.existingSecret.name (or .Values.elasticsearch.external.existingSecret.apiKeyKey .Values.elasticsearch.external.existingSecret.cloudApiKeyKey)) -}}true{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchUsernameConfigured" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- if or $es.username (and $es.existingSecret.name $es.existingSecret.usernameKey) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.usernameKey) -}}true{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchPasswordConfigured" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- if or $es.password (and $es.existingSecret.name $es.existingSecret.passwordKey) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.password) (and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.existingSecret.name .Values.elasticsearch.external.existingSecret.passwordKey) -}}true{{- end -}}
+{{- end }}
+
+{{- define "patchworks.mapping.elasticsearchEnabled" -}}
+{{- if or (include "patchworks.mapping.elasticsearchCloudIdConfigured" .) (include "patchworks.mapping.elasticsearchApiKeyConfigured" .) (include "patchworks.mapping.elasticsearchUsernameConfigured" .) (include "patchworks.mapping.elasticsearchPasswordConfigured" .) (include "patchworks.mapping.elasticsearchAddresses" .) -}}true{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.mappingElasticsearchAddresses" -}}
+- name: MAPPING_ELASTICSEARCH_ADDRESSES
+  value: {{ include "patchworks.mapping.elasticsearchAddresses" . | quote }}
+{{- end }}
+
+{{- define "patchworks.env.mappingElasticsearchCloudId" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- $value := $es.cloudId | default .Values.elasticsearch.external.cloudId -}}
+{{- $secretName := $es.existingSecret.name | default .Values.elasticsearch.external.existingSecret.name -}}
+{{- $secretKey := $es.existingSecret.cloudIdKey | default .Values.elasticsearch.external.existingSecret.cloudIdKey -}}
+{{- if include "patchworks.mapping.elasticsearchCloudIdConfigured" . -}}
+{{- include "patchworks.secretEnv" (dict "name" "MAPPING_ELASTICSEARCH_CLOUD_ID" "value" $value "secret" (dict "name" $secretName "key" $secretKey)) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.mappingElasticsearchApiKey" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- $value := $es.apiKey | default .Values.elasticsearch.external.apiKey | default .Values.elasticsearch.external.cloudApiKey -}}
+{{- $secretName := $es.existingSecret.name | default .Values.elasticsearch.external.existingSecret.name -}}
+{{- $secretKey := $es.existingSecret.apiKeyKey | default .Values.elasticsearch.external.existingSecret.apiKeyKey | default .Values.elasticsearch.external.existingSecret.cloudApiKeyKey -}}
+{{- if include "patchworks.mapping.elasticsearchApiKeyConfigured" . -}}
+{{- include "patchworks.secretEnv" (dict "name" "MAPPING_ELASTICSEARCH_API_KEY" "value" $value "secret" (dict "name" $secretName "key" $secretKey)) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.mappingElasticsearchUsername" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- $value := $es.username | default .Values.elasticsearch.external.username -}}
+{{- $secretName := $es.existingSecret.name | default .Values.elasticsearch.external.existingSecret.name -}}
+{{- $secretKey := $es.existingSecret.usernameKey | default .Values.elasticsearch.external.existingSecret.usernameKey -}}
+{{- if include "patchworks.mapping.elasticsearchUsernameConfigured" . -}}
+{{- include "patchworks.secretEnv" (dict "name" "MAPPING_ELASTICSEARCH_USERNAME" "value" $value "secret" (dict "name" $secretName "key" $secretKey)) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.env.mappingElasticsearchPassword" -}}
+{{- $es := .Values.mapping.elasticsearch -}}
+{{- $value := $es.password | default .Values.elasticsearch.external.password -}}
+{{- $secretName := $es.existingSecret.name | default .Values.elasticsearch.external.existingSecret.name -}}
+{{- $secretKey := $es.existingSecret.passwordKey | default .Values.elasticsearch.external.existingSecret.passwordKey -}}
+{{- if include "patchworks.mapping.elasticsearchPasswordConfigured" . -}}
+{{- include "patchworks.secretEnv" (dict "name" "MAPPING_ELASTICSEARCH_PASSWORD" "value" $value "secret" (dict "name" $secretName "key" $secretKey)) -}}
+{{- end -}}
+{{- end }}
+
 {{/* ── S3 helpers ─────────────────────────────────────────────────────────────── */}}
 
 {{- define "patchworks.s3.host" -}}
@@ -918,8 +1048,22 @@ RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
 RABBITMQ_VHOST: {{ trimPrefix "/" (include "patchworks.rabbitmq.vhost" .) | quote }}
+ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}
+ELASTIC_SEARCH_CLOUD_ID: {{ .Values.elasticsearch.external.cloudId | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudApiKey }}
+ELASTIC_SEARCH_CLOUD_API_KEY: {{ .Values.elasticsearch.external.cloudApiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.apiKey }}
+ELASTIC_SEARCH_API_KEY: {{ .Values.elasticsearch.external.apiKey | quote }}
+{{- end }}
+{{- if and (include "patchworks.mapping.elasticsearchEnabled" .) .Values.mapping.elasticsearch.index }}
+MAPPING_ELASTICSEARCH_INDEX: {{ .Values.mapping.elasticsearch.index | quote }}
+{{- end }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+ELASTIC_SEARCH_USERNAME: {{ .Values.elasticsearch.external.username | quote }}
 ELASTICSEARCH_USER: {{ .Values.elasticsearch.external.username | quote }}
 {{- end }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
@@ -979,9 +1123,16 @@ Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in p
 {{- $s := dict "name" .Values.redis.external.existingSecret.name "key" .Values.redis.external.existingSecret.passwordKey }}
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
 {{- end }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
+{{ include "patchworks.env.mappingElasticsearchCloudId" . }}
+{{ include "patchworks.env.mappingElasticsearchApiKey" . }}
+{{ include "patchworks.env.mappingElasticsearchUsername" . }}
+{{ include "patchworks.env.mappingElasticsearchPassword" . }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
 {{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
 {{- end }}
 {{ include "patchworks.env.s3AccessKey" . }}
 {{ include "patchworks.env.s3SecretKey" . }}
@@ -1026,8 +1177,19 @@ LANDLORD_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
 LANDLORD_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
 REDIS_HOST: {{ include "patchworks.fabric.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.fabric.redis.port" . | quote }}
+ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}
+ELASTIC_SEARCH_CLOUD_ID: {{ .Values.elasticsearch.external.cloudId | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudApiKey }}
+ELASTIC_SEARCH_CLOUD_API_KEY: {{ .Values.elasticsearch.external.cloudApiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.apiKey }}
+ELASTIC_SEARCH_API_KEY: {{ .Values.elasticsearch.external.apiKey | quote }}
+{{- end }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+ELASTIC_SEARCH_USERNAME: {{ .Values.elasticsearch.external.username | quote }}
 ELASTICSEARCH_USER: {{ .Values.elasticsearch.external.username | quote }}
 {{- end }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
@@ -1076,9 +1238,12 @@ Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 {{- $s := dict "name" $fabricRedisExistingSecretName "key" $fabricRedisExistingSecretKey }}
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.fabric.redis.password" .) "secret" $s) }}
 {{- end }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
 {{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
 {{- end }}
 {{ include "patchworks.env.s3AccessKey" . }}
 {{ include "patchworks.env.s3SecretKey" . }}
@@ -1149,8 +1314,17 @@ FABRIC_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
 {{- if and (not .Values.redis.enabled) (not .Values.redis.external.existingSecret.name) (include "patchworks.redis.password" .) }}
 REDIS_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
 {{- end }}
-{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username (not .Values.elasticsearch.external.existingSecret.name) }}
-ELASTICSEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_CLOUD_ID: {{ .Values.elasticsearch.external.cloudId | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudApiKey (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_CLOUD_API_KEY: {{ .Values.elasticsearch.external.cloudApiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.apiKey (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_API_KEY: {{ .Values.elasticsearch.external.apiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.password (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
 {{- end }}
 {{- $s3ExSecret := ternary .Values.s3.auth.existingSecret .Values.s3.external.existingSecret .Values.s3.enabled }}
 {{- if not $s3ExSecret.name }}
@@ -1258,13 +1432,15 @@ existingSecret overrides.
       name: {{ .Values.redis.external.existingSecret.name }}
       key: {{ .Values.redis.external.existingSecret.passwordKey }}
 {{- end }}
-{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username .Values.elasticsearch.external.existingSecret.name }}
-- name: ELASTICSEARCH_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ .Values.elasticsearch.external.existingSecret.name }}
-      key: {{ .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{- end }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
+{{ include "patchworks.env.elasticSearchUsername" . }}
+{{ include "patchworks.env.elasticSearchPassword" . }}
+{{ include "patchworks.env.mappingElasticsearchCloudId" . }}
+{{ include "patchworks.env.mappingElasticsearchApiKey" . }}
+{{ include "patchworks.env.mappingElasticsearchUsername" . }}
+{{ include "patchworks.env.mappingElasticsearchPassword" . }}
 {{- if .Values.s3.enabled }}
 {{- if .Values.s3.auth.existingSecret.name }}
 - name: AWS_ACCESS_KEY_ID
@@ -1366,8 +1542,17 @@ TENANT_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
 {{- if and (not $fabricRedisExistingSecretName) (include "patchworks.fabric.redis.password" .) }}
 REDIS_PASSWORD: {{ include "patchworks.fabric.redis.password" . | quote }}
 {{- end }}
-{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username (not .Values.elasticsearch.external.existingSecret.name) }}
-ELASTICSEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_CLOUD_ID: {{ .Values.elasticsearch.external.cloudId | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudApiKey (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_CLOUD_API_KEY: {{ .Values.elasticsearch.external.cloudApiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.apiKey (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_API_KEY: {{ .Values.elasticsearch.external.apiKey | quote }}
+{{- end }}
+{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.password (not .Values.elasticsearch.external.existingSecret.name) }}
+ELASTIC_SEARCH_PASSWORD: {{ .Values.elasticsearch.external.password | quote }}
 {{- end }}
 {{- $s3ExSecret := ternary .Values.s3.auth.existingSecret .Values.s3.external.existingSecret .Values.s3.enabled }}
 {{- if not $s3ExSecret.name }}
@@ -1424,13 +1609,11 @@ Fabric does not connect to RabbitMQ.
       name: {{ $fabricRedisExistingSecret.name }}
       key: {{ $fabricRedisExistingSecret.passwordKey }}
 {{- end }}
-{{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username .Values.elasticsearch.external.existingSecret.name }}
-- name: ELASTICSEARCH_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ .Values.elasticsearch.external.existingSecret.name }}
-      key: {{ .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{- end }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
+{{ include "patchworks.env.elasticSearchUsername" . }}
+{{ include "patchworks.env.elasticSearchPassword" . }}
 {{- if .Values.s3.enabled }}
 {{- if .Values.s3.auth.existingSecret.name }}
 - name: AWS_ACCESS_KEY_ID
@@ -1549,13 +1732,20 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{- end }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
 {{ include "patchworks.env.rabbitmqUrl" . }}
+- name: ELASTIC_SEARCH_HOSTS
+  value: {{ include "patchworks.elasticsearch.url" . | quote }}
 - name: ELASTICSEARCH_HOST
   value: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+- name: ELASTIC_SEARCH_USERNAME
+  value: {{ .Values.elasticsearch.external.username | quote }}
 - name: ELASTICSEARCH_USER
   value: {{ .Values.elasticsearch.external.username | quote }}
 {{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
 {{- end }}
 - name: AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
@@ -1671,13 +1861,20 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{- end }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
 {{ include "patchworks.env.rabbitmqUrl" . }}
+- name: ELASTIC_SEARCH_HOSTS
+  value: {{ include "patchworks.elasticsearch.url" . | quote }}
 - name: ELASTICSEARCH_HOST
   value: {{ include "patchworks.elasticsearch.url" . | quote }}
+{{ include "patchworks.env.elasticSearchCloudId" . }}
+{{ include "patchworks.env.elasticSearchCloudApiKey" . }}
+{{ include "patchworks.env.elasticSearchApiKey" . }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.username }}
+- name: ELASTIC_SEARCH_USERNAME
+  value: {{ .Values.elasticsearch.external.username | quote }}
 - name: ELASTICSEARCH_USER
   value: {{ .Values.elasticsearch.external.username | quote }}
 {{- $esSecret := dict "name" .Values.elasticsearch.external.existingSecret.name "key" .Values.elasticsearch.external.existingSecret.passwordKey }}
-{{ include "patchworks.secretEnv" (dict "name" "ELASTICSEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "ELASTIC_SEARCH_PASSWORD" "value" .Values.elasticsearch.external.password "secret" $esSecret) }}
 {{- end }}
 - name: AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
