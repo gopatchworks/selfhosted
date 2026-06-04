@@ -153,8 +153,8 @@ spec:
             - -c
             - |
               set -e
-              php artisan migrate --force
               php artisan migrate:tenants --create --no-interaction
+              php artisan migrate --force
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
