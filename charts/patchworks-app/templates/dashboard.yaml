@@ -29,12 +29,11 @@ spec:
         {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
+      automountServiceAccountToken: false
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      initContainers:
-        {{- include "patchworks.waitForDeps" . | nindent 8 }}
       containers:
         - name: dashboard
           image: {{ include "patchworks.appImage" (dict "svc" .Values.dashboard "root" .) | quote }}
@@ -44,22 +43,12 @@ spec:
               containerPort: 80
           envFrom:
             - configMapRef:
-                name: {{ include "patchworks.fullname" . }}-config
-            - configMapRef:
                 name: {{ include "patchworks.fullname" . }}-dashboard-config
-            - secretRef:
-                name: {{ include "patchworks.fullname" . }}-secret
-            - secretRef:
-                name: {{ include "patchworks.passportSecretName" . }}
-            {{- with (concat .Values.app.extraEnvFrom .Values.dashboard.extraEnvFrom) }}
+            {{- with .Values.dashboard.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
-            {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
             {{- include "patchworks.dashboardNuxtSecretEnvRefs" . | nindent 12 }}
-            {{- with .Values.app.extraEnv }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
             {{- with .Values.dashboard.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

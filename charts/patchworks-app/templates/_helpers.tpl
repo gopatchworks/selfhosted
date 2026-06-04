@@ -1315,7 +1315,6 @@ Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
 {{- $es := .Values.pusher.existingSecret }}
 {{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $es.name "key" $es.appIdKey)) }}
 {{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $es.name "key" $es.appKeyKey)) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_SECRET" "value" .Values.pusher.appSecret "secret" (dict "name" $es.name "key" $es.appSecretKey)) }}
 {{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $es.name "key" $es.appClusterKey)) }}
 {{- end }}
 {{- end }}
