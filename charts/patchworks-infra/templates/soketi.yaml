@@ -1,0 +1,148 @@
+{{- if and .Values.pusher.enabled (not (dig "subchart" "enabled" false .Values.soketi)) }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $secretName := printf "%s-soketi-auth" $fullname }}
+{{- $pusherSecret := .Values.pusher.existingSecret }}
+{{- $pusherGenerated := and .Values.credentials.autoGenerate (not $pusherSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- if and (not $pusherSecret.name) (not $pusherGenerated) }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $secretName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: soketi
+type: Opaque
+stringData:
+  {{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}: {{ .Values.pusher.appId | quote }}
+  {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}: {{ .Values.pusher.appKey | quote }}
+  {{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}: {{ .Values.pusher.appSecret | quote }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-soketi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: soketi
+spec:
+  replicas: {{ .Values.soketi.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "soketi" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "soketi" "Release" .Release) | nindent 8 }}
+      {{- with .Values.soketi.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      terminationGracePeriodSeconds: {{ .Values.soketi.terminationGracePeriodSeconds }}
+      {{- with .Values.soketi.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: soketi
+          image: "{{ .Values.soketi.image.repository }}:{{ .Values.soketi.image.tag }}"
+          imagePullPolicy: {{ .Values.soketi.image.pullPolicy }}
+          {{- with .Values.soketi.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          command:
+            {{- toYaml .Values.soketi.command | nindent 12 }}
+          ports:
+            - name: soketi
+              containerPort: 6001
+              protocol: TCP
+            - name: metrics
+              containerPort: 9601
+              protocol: TCP
+            - name: cluster
+              containerPort: 11002
+              protocol: UDP
+          env:
+            - name: SOKETI_PORT
+              value: "6001"
+            - name: SOKETI_MODE
+              value: {{ .Values.soketi.mode | quote }}
+            - name: DEFAULT_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appIdKey | default "app-id" }}
+            - name: DEFAULT_APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appKeyKey | default "app-key" }}
+            - name: DEFAULT_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appSecretKey | default "app-secret" }}
+            {{- with .Values.soketi.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: soketi
+              httpHeaders:
+                - name: X-Kube-Healthcheck
+                  value: "Yes"
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /accept-traffic
+              port: soketi
+              httpHeaders:
+                - name: X-Kube-Healthcheck
+                  value: "Yes"
+            initialDelaySeconds: 5
+            periodSeconds: 1
+            failureThreshold: 1
+          {{- with .Values.soketi.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.soketi.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.soketi.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.soketi.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-soketi
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: soketi
+spec:
+  type: {{ .Values.soketi.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "soketi" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: soketi
+      port: {{ .Values.soketi.service.port }}
+      targetPort: soketi
+      protocol: TCP
+{{- end }}

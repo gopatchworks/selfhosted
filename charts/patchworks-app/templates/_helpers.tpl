@@ -255,7 +255,10 @@ true
 {{/* PUSHER_HOST — in-cluster Soketi service FQDN, or external host. */}}
 {{- define "patchworks.pusher.host" -}}
 {{- if .Values.pusher.enabled -}}
-{{- printf "%s-soketi.%s.svc.cluster.local" .Release.Name .Release.Namespace -}}
+{{- $useSubchart := dig "subchart" "enabled" false .Values.soketi -}}
+{{- $subchartName := .Values.soketi.fullnameOverride | default (printf "%s-soketi" .Release.Name) -}}
+{{- $name := ternary $subchartName (printf "%s-soketi" (include "patchworks.fullname" .)) $useSubchart -}}
+{{- printf "%s.%s.svc.cluster.local" $name .Release.Namespace -}}
 {{- else -}}
 {{- .Values.pusher.external.host -}}
 {{- end -}}
@@ -900,25 +903,41 @@ RABBITMQ_URL — self-contained helper usable in any container, with or without 
 
 {{/* PUSHER_APP_ID */}}
 {{- define "patchworks.env.pusherAppId" -}}
-{{- $s := dict "name" .Values.pusher.existingSecret.name "key" .Values.pusher.existingSecret.appIdKey -}}
+{{- $name := .Values.pusher.existingSecret.name -}}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- $s := dict "name" $name "key" (.Values.pusher.existingSecret.appIdKey | default "app-id") -}}
 {{- include "patchworks.secretEnv" (dict "name" "PUSHER_APP_ID" "value" .Values.pusher.appId "secret" $s) -}}
 {{- end }}
 
 {{/* PUSHER_APP_KEY */}}
 {{- define "patchworks.env.pusherAppKey" -}}
-{{- $s := dict "name" .Values.pusher.existingSecret.name "key" .Values.pusher.existingSecret.appKeyKey -}}
+{{- $name := .Values.pusher.existingSecret.name -}}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- $s := dict "name" $name "key" (.Values.pusher.existingSecret.appKeyKey | default "app-key") -}}
 {{- include "patchworks.secretEnv" (dict "name" "PUSHER_APP_KEY" "value" .Values.pusher.appKey "secret" $s) -}}
 {{- end }}
 
 {{/* PUSHER_APP_SECRET */}}
 {{- define "patchworks.env.pusherAppSecret" -}}
-{{- $s := dict "name" .Values.pusher.existingSecret.name "key" .Values.pusher.existingSecret.appSecretKey -}}
+{{- $name := .Values.pusher.existingSecret.name -}}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- $s := dict "name" $name "key" (.Values.pusher.existingSecret.appSecretKey | default "app-secret") -}}
 {{- include "patchworks.secretEnv" (dict "name" "PUSHER_APP_SECRET" "value" .Values.pusher.appSecret "secret" $s) -}}
 {{- end }}
 
 {{/* PUSHER_APP_CLUSTER */}}
 {{- define "patchworks.env.pusherAppCluster" -}}
-{{- $s := dict "name" .Values.pusher.existingSecret.name "key" .Values.pusher.existingSecret.appClusterKey -}}
+{{- $name := .Values.pusher.existingSecret.name -}}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- $s := dict "name" $name "key" (.Values.pusher.existingSecret.appClusterKey | default "app-cluster") -}}
 {{- include "patchworks.secretEnv" (dict "name" "PUSHER_APP_CLUSTER" "value" .Values.pusher.appCluster "secret" $s) -}}
 {{- end }}
 
@@ -1077,6 +1096,9 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- end -}}
 {{- if and (include "patchworks.kubefaas.host" .) .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) (not (include "patchworks.kubefaas.authGenerated" .)) -}}
 {{- fail "kubefaas.auth.username and kubefaas.auth.password are required unless kubefaas.auth.existingSecret.name is set, or kubefaas.enabled and credentials.autoGenerate are both true." -}}
+{{- end -}}
+{{- if and .Values.pusher.enabled (not .Values.credentials.autoGenerate) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required when pusher.enabled=true unless pusher.existingSecret.name is set, or credentials.autoGenerate=true." -}}
 {{- end -}}
 {{- end -}}
 
@@ -1361,9 +1383,13 @@ Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
 {{- define "patchworks.dashboardNuxtSecretEnvRefs" -}}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{- $es := .Values.pusher.existingSecret }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $es.name "key" $es.appIdKey)) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $es.name "key" $es.appKeyKey)) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $es.name "key" $es.appClusterKey)) }}
+{{- $name := $es.name }}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
+{{- end }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $name "key" ($es.appIdKey | default "app-id"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
 {{- end }}
 {{- end }}
 
@@ -1428,7 +1454,7 @@ RABBITMQ_URL: {{ printf "amqp://%s:%s@%s:%s/%s"
   (trimPrefix "/" (include "patchworks.rabbitmq.vhost" .)) | quote }}
 {{- end }}
 {{- if include "patchworks.pusher.isConfigured" . }}
-{{- if not .Values.pusher.existingSecret.name }}
+{{- if and (not .Values.pusher.existingSecret.name) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)))) }}
 PUSHER_APP_ID: {{ .Values.pusher.appId | quote }}
 PUSHER_APP_KEY: {{ .Values.pusher.appKey | quote }}
 PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
@@ -1549,27 +1575,33 @@ existingSecret overrides.
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.secretKeyKey }}
 {{- end }}
-{{- if and (include "patchworks.pusher.isConfigured" .) .Values.pusher.existingSecret.name }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{- $pusherName := .Values.pusher.existingSecret.name }}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $pusherName) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- $pusherName = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
+{{- end }}
+{{- if $pusherName }}
 - name: PUSHER_APP_ID
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appIdKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}
 - name: PUSHER_APP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appKeyKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}
 - name: PUSHER_APP_SECRET
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appSecretKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}
 - name: PUSHER_APP_CLUSTER
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appClusterKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}
+{{- end }}
 {{- end }}
 {{- if and (include "patchworks.kubefaas.host" .) (or .Values.kubefaas.auth.existingSecret.name (include "patchworks.kubefaas.authGenerated" .)) }}
 {{- $authSecretName := .Values.kubefaas.auth.existingSecret.name | default (include "patchworks.kubefaas.authSecretName" .) }}
@@ -1633,7 +1665,7 @@ TENANT_CACHE_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }
 TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 {{- end }}
 {{- if include "patchworks.pusher.isConfigured" . }}
-{{- if not .Values.pusher.existingSecret.name }}
+{{- if and (not .Values.pusher.existingSecret.name) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)))) }}
 PUSHER_APP_ID: {{ .Values.pusher.appId | quote }}
 PUSHER_APP_KEY: {{ .Values.pusher.appKey | quote }}
 PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
@@ -1713,27 +1745,33 @@ Fabric does not connect to RabbitMQ.
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.secretKeyKey }}
 {{- end }}
-{{- if and (include "patchworks.pusher.isConfigured" .) .Values.pusher.existingSecret.name }}
+{{- if include "patchworks.pusher.isConfigured" . }}
+{{- $pusherName := .Values.pusher.existingSecret.name }}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $pusherName) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- $pusherName = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
+{{- end }}
+{{- if $pusherName }}
 - name: PUSHER_APP_ID
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appIdKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}
 - name: PUSHER_APP_KEY
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appKeyKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}
 - name: PUSHER_APP_SECRET
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appSecretKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}
 - name: PUSHER_APP_CLUSTER
   valueFrom:
     secretKeyRef:
-      name: {{ .Values.pusher.existingSecret.name }}
-      key: {{ .Values.pusher.existingSecret.appClusterKey }}
+      name: {{ $pusherName }}
+      key: {{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}
+{{- end }}
 {{- end }}
 {{- end }}
 

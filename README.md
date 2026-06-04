@@ -7,7 +7,8 @@ The deployment is available as a legacy all-in-one chart and as two split
 charts:
 
 - `charts/patchworks-infra`: baseline infrastructure, including MySQL, Redis,
-  RabbitMQ, Elasticsearch, S3/MinIO, KubeFaaS, and generated infra credentials.
+  RabbitMQ, Elasticsearch, S3/MinIO, Soketi, KubeFaaS, and generated infra
+  credentials.
 - `charts/patchworks-app`: Patchworks application resources, migrations,
   seeders, workers, and ingress.
 
@@ -63,7 +64,9 @@ kubectl get nodes
 helm dependency update charts/patchworks-infra
 ```
 
-Downloads the Soketi sub-chart. Only needed once (or after updating `Chart.yaml`).
+Downloads optional chart dependencies, including the upstream Soketi sub-chart
+used only when `soketi.subchart.enabled=true`. Only needed once (or after
+updating `Chart.yaml`).
 
 ### 3. Install the infrastructure chart
 

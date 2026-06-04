@@ -64,3 +64,6 @@ optional: "Optional Integrations" {
 
   soketi: "Soketi\n(PUSHER_*)" { shape: rectangle }
 }
+
+application.web -> optional.soketi: PUSHER_*
+application.workers -> optional.soketi: PUSHER_*

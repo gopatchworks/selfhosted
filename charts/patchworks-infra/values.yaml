@@ -780,8 +780,8 @@ kubefaas:
 # and no credentials are provided.
 pusher:
   enabled: false
-  # App credentials — required for both in-cluster and external Pusher servers.
-  # Injected as PUSHER_APP_* env vars into all app pods.
+  # App credentials. For in-cluster Soketi, omitted values are generated when
+  # credentials.autoGenerate=true. Injected as PUSHER_APP_* env vars into app pods.
   appId: ""
   appKey: ""
   appSecret: ""
@@ -789,10 +789,10 @@ pusher:
   # Use an existing Secret instead of the inline values above.
   existingSecret:
     name: ""
-    appIdKey: ""
-    appKeyKey: ""
-    appSecretKey: ""
-    appClusterKey: ""
+    appIdKey: app-id
+    appKeyKey: app-key
+    appSecretKey: app-secret
+    appClusterKey: app-cluster
   # External Pusher-compatible server (used when enabled: false).
   # Leave host empty to use pusher.com (credentials above still apply).
   external:
@@ -1022,20 +1022,41 @@ s3:
     spec: {}
   resources: {}
 
-# ── Sockudo ────────────────────────────────────────────────────────────────────
-# Pusher-compatible WebSocket server. When enabled, Sockudo is deployed
-# in-cluster and the pusher host/port in monocore config is auto-wired.
-# ── Soketi subchart ────────────────────────────────────────────────────────────
-# Values passed through to the Soketi subchart when pusher.enabled is true.
-# Configure Soketi app credentials and other options here.
-# See https://helm.soketi.app for all available options.
-# Example: configure the default app with the same credentials as pusher.*
-#   soketi:
-#     extraEnv:
-#       - name: DEFAULT_APP_ID
-#         value: "myappid"
-#       - name: DEFAULT_APP_KEY
-#         value: "myappkey"
-#       - name: DEFAULT_APP_SECRET
-#         value: "myappsecret"
-soketi: {}
+# ── Soketi ─────────────────────────────────────────────────────────────────────
+# Native in-cluster Pusher-compatible WebSocket server. Enabled via
+# pusher.enabled and configured from pusher.* credentials.
+soketi:
+  fullnameOverride: patchworks-soketi
+  replicaCount: 1
+  image:
+    repository: quay.io/soketi/soketi
+    tag: "1.6-16-debian"
+    pullPolicy: IfNotPresent
+  command:
+    - node
+    - --max-old-space-size=256
+    - --max_old_space_size=256
+    - --optimize_for_size
+    - --optimize-for-size
+    - /app/bin/server.js
+    - start
+  mode: full
+  service:
+    type: ClusterIP
+    port: 6001
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  extraEnv: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  securityContext: {}
+  podSecurityContext: {}
+  terminationGracePeriodSeconds: 30
+  # Opt into the upstream Soketi subchart instead of the native template.
+  # When true, configure upstream values under this same soketi.* tree.
+  subchart:
+    enabled: false
