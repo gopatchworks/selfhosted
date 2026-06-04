@@ -40,6 +40,7 @@ metadata:
     app.kubernetes.io/component: mysql
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   # Recreate is required: InnoDB exclusively locks ibdata1 so two concurrent
   # pods sharing the same PVC deadlock immediately.
   strategy:

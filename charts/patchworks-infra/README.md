@@ -25,6 +25,7 @@ infra workloads start. Existing Secrets are left untouched on upgrades.
 
 ## Contents
 
+- [Global](#global)
 - [Images](#images)
 - [Generated infrastructure credentials](#generated-infrastructure-credentials)
 - [Application](#application)
@@ -67,6 +68,12 @@ Generated Secret names are derived from the stable chart fullname:
 
 Set the relevant `auth.existingSecret.name` to bring your own Secret, or set
 the inline password value to bypass generated credentials for that field.
+
+## Global
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `revisionHistoryLimit` | `3` | Number of old ReplicaSets retained for chart-managed Deployments |
 
 ## Images
 

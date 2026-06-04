@@ -27,6 +27,7 @@ metadata:
     app.kubernetes.io/component: kubefaas-redis
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-redis" "Release" .Release) | nindent 6 }}

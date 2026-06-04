@@ -15,6 +15,7 @@ metadata:
   {{- end }}
 spec:
   replicas: {{ .Values.dashboard.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "dashboard" "Release" .Release) | nindent 6 }}

@@ -37,6 +37,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 
 ## Contents
 
+- [Global](#global)
 - [Images](#images)
 - [Shared values and generated credentials](#shared-values-and-generated-credentials)
 - [Application](#application)
@@ -76,6 +77,12 @@ Secrets created by the infra chart:
 If you use component namespace overrides, remember Kubernetes Secrets are
 namespace-scoped. Keep app and generated infra secrets in the same namespace or
 provide copied Secrets via the relevant `existingSecret` values.
+
+## Global
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `revisionHistoryLimit` | `3` | Number of old ReplicaSets retained for chart-managed Deployments |
 
 ## Images
 

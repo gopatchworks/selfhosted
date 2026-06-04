@@ -245,6 +245,7 @@ metadata:
     app.kubernetes.io/component: {{ $slug }}
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 6 }}

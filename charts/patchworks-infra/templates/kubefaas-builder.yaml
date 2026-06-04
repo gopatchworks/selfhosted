@@ -240,7 +240,7 @@ metadata:
     app.kubernetes.io/component: kubefaas-builder
 spec:
   replicas: {{ $kf.builder.replicaCount }}
-  revisionHistoryLimit: 2
+  revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-builder" "Release" .Release) | nindent 6 }}

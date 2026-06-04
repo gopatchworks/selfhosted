@@ -27,6 +27,7 @@ metadata:
     app.kubernetes.io/component: fabric-redis
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   strategy:
     type: Recreate
   selector:

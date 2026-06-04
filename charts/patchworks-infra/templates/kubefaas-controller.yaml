@@ -119,7 +119,7 @@ metadata:
     app.kubernetes.io/component: kubefaas-controller
 spec:
   replicas: {{ $kf.controller.replicaCount }}
-  revisionHistoryLimit: 2
+  revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-controller" "Release" .Release) | nindent 6 }}

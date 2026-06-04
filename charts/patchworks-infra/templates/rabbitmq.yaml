@@ -27,6 +27,7 @@ metadata:
     app.kubernetes.io/component: rabbitmq
 spec:
   replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 6 }}

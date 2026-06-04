@@ -12,6 +12,9 @@ image:
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
 
+# Number of old ReplicaSets retained for chart-managed Deployments.
+revisionHistoryLimit: 3
+
 # ── Service account ────────────────────────────────────────────────────────────
 # Shared ServiceAccount used by all app pods (gateway, start, fabric, workers,
 # dashboard, migrations). imagePullSecrets from image.pullSecrets are attached.
