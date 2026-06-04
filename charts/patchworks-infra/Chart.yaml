@@ -1,0 +1,17 @@
+apiVersion: v2
+name: patchworks-infra
+description: >
+  Patchworks self-hosted infrastructure chart — installs baseline infrastructure
+  services and generated credentials for the Patchworks application chart.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - patchworks
+  - self-hosted
+  - infrastructure
+dependencies:
+  - name: soketi
+    version: "2.0.0"
+    repository: "https://helm.soketi.app"
+    condition: pusher.enabled

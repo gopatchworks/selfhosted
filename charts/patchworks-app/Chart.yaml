@@ -1,0 +1,13 @@
+apiVersion: v2
+name: patchworks-app
+description: >
+  Patchworks self-hosted application chart — installs Core, Fabric, workers,
+  migrations, seeders, dashboard, and ingress. Infrastructure is provided by
+  the patchworks-infra chart or by external services using the same values API.
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - patchworks
+  - self-hosted
+  - application

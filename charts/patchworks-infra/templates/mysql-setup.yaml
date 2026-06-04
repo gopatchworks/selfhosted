@@ -1,0 +1,58 @@
+{{/*
+Only runs in shared-MySQL mode: main mysql is enabled and Fabric is not using
+a dedicated or external MySQL. Creates the fabric database and grants the main
+MySQL user access to it so Fabric can connect with existing credentials.
+*/}}
+{{- if and .Values.mysql.enabled (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.mysql.namespace" . }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-mysql-setup
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "mysql-setup" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:8.0
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
+              echo "MySQL ready."
+      containers:
+        - name: mysql-setup
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              mysql -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} \
+                -uroot -p"${MYSQL_ROOT_PASSWORD}" <<'SQL'
+              CREATE DATABASE IF NOT EXISTS `{{ .Values.fabric.mysql.database }}`;
+              GRANT ALL PRIVILEGES ON `{{ .Values.fabric.mysql.database }}`.* TO '{{ include "patchworks.mysql.username" . }}'@'%';
+              FLUSH PRIVILEGES;
+              SQL
+              echo "Fabric database {{ .Values.fabric.mysql.database | quote }} ready."
+          env:
+            {{- $es := fromJson (include "patchworks.mysql.existingSecret" .) }}
+            {{- include "patchworks.secretEnv" (dict "name" "MYSQL_ROOT_PASSWORD" "value" .Values.mysql.auth.rootPassword "secret" (dict "name" $es.name "key" $es.rootPasswordKey)) | nindent 12 }}
+{{- end }}

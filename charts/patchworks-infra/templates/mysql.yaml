@@ -1,0 +1,123 @@
+{{- if .Values.mysql.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.mysql.namespace" . }}
+{{- $p := .Values.mysql.persistence }}
+---
+# Init script: elevate the app user to superuser after MySQL creates it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-mysql-init
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+data:
+  grant-superuser.sql: |
+    GRANT ALL PRIVILEGES ON *.* TO '{{ .Values.mysql.auth.username }}'@'%' WITH GRANT OPTION;
+    FLUSH PRIVILEGES;
+{{- if not $p.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  replicas: 1
+  # Recreate is required: InnoDB exclusively locks ibdata1 so two concurrent
+  # pods sharing the same PVC deadlock immediately.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "mysql" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "mysql" "Release" .Release) | nindent 8 }}
+    spec:
+      containers:
+        - name: mysql
+          image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"
+          imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            {{- $es := fromJson (include "patchworks.mysql.existingSecret" .) }}
+            {{- include "patchworks.secretEnv" (dict "name" "MYSQL_ROOT_PASSWORD" "value" .Values.mysql.auth.rootPassword "secret" (dict "name" $es.name "key" $es.rootPasswordKey)) | nindent 12 }}
+            - name: MYSQL_DATABASE
+              value: {{ .Values.mysql.auth.database | quote }}
+            - name: MYSQL_USER
+              value: {{ .Values.mysql.auth.username | quote }}
+            {{- include "patchworks.secretEnv" (dict "name" "MYSQL_PASSWORD" "value" .Values.mysql.auth.password "secret" (dict "name" $es.name "key" $es.passwordKey)) | nindent 12 }}
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h localhost -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - mysqladmin ping -h localhost -uroot -p"${MYSQL_ROOT_PASSWORD}"
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+          {{- with .Values.mysql.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default (printf "%s-mysql" $fullname) }}
+        - name: init
+          configMap:
+            name: {{ $fullname }}-mysql-init
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-mysql
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mysql
+spec:
+  type: {{ .Values.mysql.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "mysql" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: mysql
+      port: 3306
+      targetPort: mysql
+{{- end }}

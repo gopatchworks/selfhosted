@@ -1,0 +1,100 @@
+{{- if .Values.s3.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.s3.namespace" . }}
+{{- $p := .Values.s3.persistence }}
+{{- if not $p.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-s3
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-s3
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "s3" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "s3" "Release" .Release) | nindent 8 }}
+    spec:
+      containers:
+        - name: minio
+          image: "{{ .Values.s3.image.repository }}:{{ .Values.s3.image.tag }}"
+          imagePullPolicy: {{ .Values.s3.image.pullPolicy }}
+          args: ["server", "/data", "--console-address", ":9001"]
+          ports:
+            - name: s3
+              containerPort: 9000
+            - name: console
+              containerPort: 9001
+          env:
+            {{- $es := fromJson (include "patchworks.s3.existingSecret" .) }}
+            {{- include "patchworks.secretEnv" (dict "name" "MINIO_ROOT_USER" "value" .Values.s3.auth.rootUser "secret" (dict "name" $es.name "key" $es.rootUserKey)) | nindent 12 }}
+            {{- include "patchworks.secretEnv" (dict "name" "MINIO_ROOT_PASSWORD" "value" .Values.s3.auth.rootPassword "secret" (dict "name" $es.name "key" $es.rootPasswordKey)) | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: s3
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: s3
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          {{- with .Values.s3.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default (printf "%s-s3" $fullname) }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-s3
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "s3" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: s3
+      port: 9000
+      targetPort: s3
+    - name: console
+      port: 9001
+      targetPort: console
+{{- end }}

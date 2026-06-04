@@ -1,0 +1,70 @@
+{{- if .Values.migrations.enabled }}
+---
+# Job — runs database migrations before application resources are deployed.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "patchworks.fullname" . }}-core-migrations
+  namespace: {{ include "patchworks.migrations.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core-migrations
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "core-migrations" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: {{ .Values.migrations.restartPolicy }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-mysql
+          image: mysql:8.0
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
+              echo "MySQL ready."
+      containers:
+        - name: core-migrations
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.migrations "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.migrations "root" .) }}
+          command: ["/bin/sh", "-c", {{ .Values.migrations.command | quote }}]
+          envFrom:
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
+            {{- with .Values.app.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+          {{- with .Values.migrations.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.migrations.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.migrations.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

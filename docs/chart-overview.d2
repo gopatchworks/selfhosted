@@ -36,6 +36,12 @@ infra: "Infrastructure (in-cluster or external)" {
   rabbitmq:      "RabbitMQ 3\n(RABBITMQ_URL)"             { shape: queue    }
   elasticsearch: "Elasticsearch 8\n(ELASTICSEARCH_HOST)"  { shape: cylinder }
   s3:            "MinIO / S3\n(AWS_*)"                    { shape: cylinder }
+  credentials:   "Credential Generator\n(pre-install / pre-upgrade)" { shape: rectangle }
+
+  credentials -> mysql: creates Secret
+  credentials -> rabbitmq: creates Secret
+  credentials -> elasticsearch: creates Secret
+  credentials -> s3: creates Secret
 }
 
 optional: "Optional Integrations" {

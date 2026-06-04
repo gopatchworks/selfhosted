@@ -1,0 +1,406 @@
+{{- if eq .Values.workers.type "mono" }}
+{{- $root := . }}
+{{- $mono := .Values.workers.mono }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $hubNs := include "patchworks.workers.namespace" . }}
+{{- $mainQueue := .Values.workers.queue.name }}
+---
+# topology.yaml — RabbitMQ topology asserted by monocore at startup.
+# When workers.companies are defined their queues and bindings are included
+# here so topology is managed in one place by the hub deployment.
+# Set workers.mono.rabbitmq.topology to replace the entire contents.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-workers-topology
+  namespace: {{ $hubNs }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers
+data:
+  topology.yaml: |
+{{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $mainQueue) | indent 4 }}
+---
+# store.yaml — S3 object store definitions
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-workers-store
+  namespace: {{ $hubNs }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers
+data:
+  store.yaml: |
+{{ include "patchworks.mono.storeYaml" (dict "root" .) | indent 4 }}
+
+{{/* Build the worker list: hub first, then one entry per company. */}}
+{{- $workers := list (dict "isHub" true "company" (dict)) }}
+{{- range .Values.workers.companies }}
+{{- $workers = append $workers (dict "isHub" false "company" .) }}
+{{- end }}
+
+{{- range $workers }}
+{{- $w := . }}
+{{- $isHub := $w.isHub }}
+{{- $company := $w.company }}
+
+{{/* Resolve per-worker configuration. */}}
+{{- $slug := "workers" }}
+{{- $wNs := $hubNs }}
+{{- $queue := $mainQueue }}
+{{- $processes := $mono.processes }}
+{{- $otelSvcName := $mono.otel.serviceName }}
+{{- $resources := $root.Values.workers.resources }}
+{{- $configMapName := printf "%s-workers-config" $fullname }}
+{{- if not $isHub }}
+  {{- $slug = printf "workers-%s" $company.name }}
+  {{- $wNs = $company.namespace | default $hubNs }}
+  {{- $queue = $company.queue | default $company.name }}
+  {{- $processes = dig "processes" $mono.processes $company }}
+  {{- $otelSvcName = dig "otel" "serviceName" (printf "monocore-%s" $company.name) $company }}
+  {{- $resources = $company.resources | default $root.Values.workers.resources }}
+  {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
+{{- end }}
+{{- $topoCMName := printf "%s-workers-topology" $fullname }}
+{{- $storeCMName := printf "%s-workers-store" $fullname }}
+
+{{/* Cross-namespace companies need local copies of the shared ConfigMaps. */}}
+{{- if and (not $isHub) (ne $wNs $hubNs) }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $topoCMName }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}
+data:
+  topology.yaml: |
+{{ include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue) | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $storeCMName }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}
+data:
+  store.yaml: |
+{{ include "patchworks.mono.storeYaml" (dict "root" $root) | indent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $configMapName }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}
+data:
+  config.yaml: |
+    logging:
+      format: {{ $mono.logging.format | quote }}
+      addSource: {{ $mono.logging.addSource }}
+      verbose: {{ $mono.logging.verbose }}
+
+    rabbitmq:
+      queue: {{ $queue | quote }}
+      topology:
+        file: "/etc/monocore/topology.yaml"
+
+    redis:
+      mode: {{ $root.Values.redis.mode | quote }}
+      addrs:
+        {{- if $root.Values.redis.addrs }}
+        {{- range $root.Values.redis.addrs }}
+        - {{ . | quote }}
+        {{- end }}
+        {{- else }}
+        - {{ printf "%s:%s" (include "patchworks.redis.host" $root) (include "patchworks.redis.port" $root) | quote }}
+        {{- end }}
+      {{- if eq $root.Values.redis.mode "sentinel" }}
+      sentinel:
+        master: {{ $root.Values.redis.sentinel.master | quote }}
+      {{- end }}
+      db: {{ $root.Values.redis.db }}
+
+    worker:
+      processes: {{ $processes }}
+
+    db:
+      landlord:
+        name: {{ include "patchworks.mysql.database" $root | quote }}
+
+    store:
+      config: "/etc/monocore/store.yaml"
+
+    mapping:
+      elasticsearch:
+        addresses:
+          {{- if $root.Values.mapping.elasticsearch.addresses }}
+          {{- range $root.Values.mapping.elasticsearch.addresses }}
+          - {{ . | quote }}
+          {{- end }}
+          {{- else }}
+          - {{ include "patchworks.elasticsearch.url" $root | quote }}
+          {{- end }}
+        index: {{ $root.Values.mapping.elasticsearch.index | quote }}
+        {{- $mappingCloudID := $root.Values.mapping.elasticsearch.cloudId | default $root.Values.elasticsearch.external.cloudId }}
+        {{- if $mappingCloudID }}
+        cloud:
+          id: {{ $mappingCloudID | quote }}
+        {{- end }}
+        {{- $mappingUsername := $root.Values.mapping.elasticsearch.username | default (include "patchworks.elasticsearch.username" $root) }}
+        {{- if $mappingUsername }}
+        username: {{ $mappingUsername | quote }}
+        {{- end }}
+
+    otel:
+      enabled: {{ $mono.otel.enabled }}
+      service:
+        name: {{ $otelSvcName | quote }}
+      {{- if $mono.otel.endpoint }}
+      endpoint: {{ $mono.otel.endpoint | quote }}
+      {{- end }}
+    {{- $kfHost := include "patchworks.kubefaas.host" $root -}}
+    {{- $kfBuilderHost := include "patchworks.kubefaas.builderHost" $root -}}
+    {{- $kfRegistry := $root.Values.kubefaas.registry.name -}}
+    {{- if or $kfHost $kfBuilderHost $kfRegistry }}
+
+    kubefaas:
+      functions:
+        {{- if $kfHost }}
+        host: {{ $kfHost | quote }}
+        {{- end }}
+        {{- if $kfBuilderHost }}
+        builder:
+          host: {{ $kfBuilderHost | quote }}
+        {{- end }}
+        {{- if $kfRegistry }}
+        registry: {{ $kfRegistry | quote }}
+        {{- end }}
+    {{- end }}
+    {{- $pusherHost := include "patchworks.pusher.host" $root -}}
+    {{- $pusherPort := include "patchworks.pusher.port" $root -}}
+    {{- $pusherScheme := include "patchworks.pusher.scheme" $root -}}
+    {{- if or $pusherHost $pusherPort $pusherScheme }}
+
+    pusher:
+      {{- if $pusherScheme }}
+      scheme: {{ $pusherScheme | quote }}
+      {{- end }}
+      {{- if $pusherHost }}
+      host: {{ $pusherHost | quote }}
+      {{- end }}
+      {{- if $pusherPort }}
+      port: {{ $pusherPort }}
+      {{- end }}
+    {{- end }}
+    {{- with $root.Values.workers.notify }}
+    {{- if or .email.from .ses.region .ses.endpoint .aws.role.arn .aws.external.id }}
+
+    notify:
+      {{- if .email.from }}
+      email:
+        from: {{ .email.from | quote }}
+      {{- end }}
+      {{- if or .ses.region .ses.endpoint }}
+      ses:
+        {{- if .ses.region }}
+        region: {{ .ses.region | quote }}
+        {{- end }}
+        {{- if .ses.endpoint }}
+        endpoint: {{ .ses.endpoint | quote }}
+        {{- end }}
+      {{- end }}
+      {{- if or .aws.role.arn .aws.external.id }}
+      aws:
+        {{- if .aws.role.arn }}
+        role:
+          arn: {{ .aws.role.arn | quote }}
+        {{- end }}
+        {{- if .aws.external.id }}
+        external:
+          id: {{ .aws.external.id | quote }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+    {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-{{ $slug }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ $root.Values.workers | toJson | sha256sum }}
+        {{- with $root.Values.workers.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
+      {{- with $root.Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      volumes:
+        - name: monocore-config
+          configMap:
+            name: {{ $configMapName }}
+        - name: monocore-etc
+          projected:
+            sources:
+              - configMap:
+                  name: {{ $topoCMName }}
+              - configMap:
+                  name: {{ $storeCMName }}
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.37
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for MySQL..."
+              until nc -z {{ include "patchworks.mysql.host" $root }} {{ include "patchworks.mysql.port" $root }}; do sleep 2; done
+              echo "Waiting for Redis..."
+              until nc -z {{ include "patchworks.redis.host" $root }} {{ include "patchworks.redis.port" $root }}; do sleep 2; done
+              echo "Waiting for RabbitMQ..."
+              until nc -z {{ include "patchworks.rabbitmq.host" $root }} {{ include "patchworks.rabbitmq.port" $root }}; do sleep 2; done
+              echo "Waiting for Elasticsearch..."
+              until nc -z {{ include "patchworks.elasticsearch.host" $root }} {{ include "patchworks.elasticsearch.port" $root }}; do sleep 2; done
+              echo "Waiting for S3..."
+              until nc -z {{ include "patchworks.s3.host" $root }} 9000; do sleep 2; done
+              echo "All dependencies ready."
+      containers:
+        - name: workers
+          image: {{ include "patchworks.appImage" (dict "svc" $mono "root" $root) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $mono "root" $root) }}
+          args: ["worker"]
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 8081
+          volumeMounts:
+            - name: monocore-config
+              mountPath: /config.yaml
+              subPath: config.yaml
+              readOnly: true
+            - name: monocore-etc
+              mountPath: /etc/monocore
+              readOnly: true
+          env:
+            {{- include "patchworks.env.dbPassword" $root | nindent 12 }}
+            {{- include "patchworks.env.fabricDbPassword" $root | nindent 12 }}
+            - name: DB_FABRIC_DSN
+              value: "{{ include "patchworks.fabric.mysql.username" $root }}:$(FABRIC_DB_PASSWORD)@tcp({{ include "patchworks.fabric.mysql.host" $root }}:{{ include "patchworks.fabric.mysql.port" $root }})/{{ include "patchworks.fabric.mysql.database" $root }}?parseTime=true"
+            - name: DB_LANDLORD_DSN
+              value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/{{ include "patchworks.mysql.database" $root }}?parseTime=true"
+            {{- include "patchworks.env.s3AccessKey" $root | nindent 12 }}
+            {{- include "patchworks.env.s3SecretKey" $root | nindent 12 }}
+            {{- with include "patchworks.env.laravelAppKey" $root }}
+            {{- . | nindent 12 }}
+            {{- end }}
+            {{- include "patchworks.env.rabbitmqPassword" $root | nindent 12 }}
+            {{- include "patchworks.env.rabbitmqUrl" $root | nindent 12 }}
+            {{- if or $root.Values.redis.external.password $root.Values.redis.external.existingSecret.name }}
+            {{- $rs := dict "name" $root.Values.redis.external.existingSecret.name "key" $root.Values.redis.external.existingSecret.passwordKey }}
+            {{- include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" $root) "secret" $rs) | nindent 12 }}
+            {{- if eq $root.Values.redis.mode "sentinel" }}
+            {{- include "patchworks.secretEnv" (dict "name" "REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" $root) "secret" $rs) | nindent 12 }}
+            {{- end }}
+            {{- end }}
+            {{- if or $root.Values.kubefaas.enabled $root.Values.kubefaas.host $root.Values.kubefaas.auth.existingSecret.name }}
+            {{- include "patchworks.env.kubefaasUsername" $root | nindent 12 }}
+            {{- include "patchworks.env.kubefaasPassword" $root | nindent 12 }}
+            {{- end }}
+            {{- include "patchworks.env.mappingElasticsearchCloudId" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchApiKey" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchUsername" $root | nindent 12 }}
+            {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
+            {{- if include "patchworks.pusher.isConfigured" $root }}
+            {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
+            {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}
+            {{- include "patchworks.env.pusherAppSecret" $root | nindent 12 }}
+            {{- include "patchworks.env.pusherAppCluster" $root | nindent 12 }}
+            {{- end }}
+            {{- with $root.Values.workers.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if not $isHub }}
+            {{- with $company.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- with $resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $root.Values.workers.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.workers.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $root.Values.workers.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-{{ $slug }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+    - name: metrics
+      port: 8081
+      targetPort: metrics
+{{- end }}
+{{- end }}

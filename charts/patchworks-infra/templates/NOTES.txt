@@ -1,0 +1,96 @@
+Patchworks Self-Hosted — {{ .Chart.Version }}
+============================================
+
+Release:   {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+── Application ──────────────────────────────────────────────────────────────
+
+Gateway and Start are deployed and available within the cluster.
+{{- if .Values.ingress.enabled }}
+
+Ingress is enabled. Patchworks is reachable at:
+{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
+{{- with .Values.ingress.hosts.dashboard }}  {{ $scheme }}://{{ . }}           (dashboard)
+  {{ $scheme }}://{{ . }}/fabric      (fabric)
+  {{ $scheme }}://{{ . }}/core-main   (core gateway)
+  {{ $scheme }}://{{ . }}/core-start  (core start)
+{{- end }}
+{{- with .Values.ingress.hosts.gateway }}  {{ $scheme }}://{{ . }}  (core gateway — dedicated host)
+{{- end }}
+{{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (core start — dedicated host)
+{{- end }}
+{{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric — dedicated host)
+{{- end }}
+{{- if .Values.ingress.hosts.dashboard }}
+{{- if eq .Values.ingress.provider "contour" }}
+
+  An HTTPProxy (projectcontour.io/v1) is deployed for the dashboard host.
+  Prefix stripping is handled natively — no annotation config needed.
+{{- else }}
+
+  !! ingress.rewriteAnnotations must be set for /fabric, /core-main and
+  !! /core-start prefix stripping to work with your ingress controller.
+  !! See the Ingress section of the chart README for controller-specific
+  !! annotation examples (nginx, Traefik, etc.).
+{{- end }}
+{{- end }}
+{{- else }}
+
+Ingress is disabled. To reach Gateway from your local machine, run:
+
+  kubectl port-forward -n {{ .Release.Namespace }} \
+    svc/{{ include "patchworks.fullname" . }}-gateway \
+    8080:{{ .Values.web.service.port }}
+
+Then open http://localhost:8080
+
+To enable ingress, set:
+  ingress.enabled=true
+  ingress.hosts[0].host=<your-domain>
+{{- end }}
+
+── Workers ───────────────────────────────────────────────────────────────────
+  Type: {{ .Values.workers.type }}
+{{- if eq .Values.workers.type "standalone" }}
+  Replicas: {{ .Values.workers.replicaCount }}, connection: {{ .Values.workers.queue.connection }}
+{{- else if eq .Values.workers.type "mono" }}
+  Processes: {{ .Values.workers.mono.processes }}
+{{- end }}
+
+── Infrastructure ────────────────────────────────────────────────────────────
+{{- if .Values.mysql.enabled }}
+  MySQL:         in-cluster  ({{ include "patchworks.fullname" . }}-mysql:3306)
+{{- else }}
+  MySQL:         external    ({{ .Values.mysql.external.host }}:{{ .Values.mysql.external.port }})
+{{- end }}
+{{- if .Values.redis.enabled }}
+  Redis:         in-cluster  ({{ include "patchworks.fullname" . }}-redis:6379)
+{{- else }}
+  Redis:         external    ({{ .Values.redis.external.host }}:{{ .Values.redis.external.port }})
+{{- end }}
+{{- if .Values.elasticsearch.enabled }}
+  Elasticsearch: in-cluster  ({{ include "patchworks.fullname" . }}-elasticsearch:9200)
+{{- else }}
+  Elasticsearch: external    ({{ .Values.elasticsearch.external.host }}:{{ .Values.elasticsearch.external.port }})
+{{- end }}
+{{- if .Values.s3.enabled }}
+  S3 (MinIO):    in-cluster  ({{ include "patchworks.fullname" . }}-s3:9000)
+
+  To access the MinIO console, run:
+    kubectl port-forward -n {{ .Release.Namespace }} \
+      svc/{{ include "patchworks.fullname" . }}-s3 \
+      9001:9001
+  Then open http://localhost:9001
+  Credentials: {{ .Values.s3.auth.rootUser }} / {{ .Values.s3.auth.rootPassword }}
+{{- else }}
+  S3:            external    ({{ .Values.s3.external.endpoint }})
+{{- end }}
+
+── Next steps ────────────────────────────────────────────────────────────────
+
+  1. Ensure app.key is set to a valid Laravel APP_KEY.
+  2. Review resource limits for production workloads.
+  3. For production, replace in-cluster MySQL/Redis/Elasticsearch with
+     managed services by setting <service>.enabled=false and providing
+     <service>.external.* connection details.
