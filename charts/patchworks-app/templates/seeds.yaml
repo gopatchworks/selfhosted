@@ -74,9 +74,15 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.seeds.tenant.existingSecret.name }}
                   key: {{ .Values.seeds.tenant.existingSecret.passwordKey }}
-            {{- else }}
+            {{- else if .Values.seeds.tenant.adminPassword }}
             - name: TENANT_ADMIN_PASSWORD
               value: {{ .Values.seeds.tenant.adminPassword | quote }}
+            {{- else }}
+            - name: TENANT_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "patchworks.fullname" . }}-tenant-admin
+                  key: {{ .Values.seeds.tenant.existingSecret.passwordKey }}
             {{- end }}
           {{- with .Values.seeds.fabric.resources }}
           resources:

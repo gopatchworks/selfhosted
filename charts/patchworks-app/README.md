@@ -26,6 +26,10 @@ Migrations run as `pre-install,pre-upgrade` hooks. Seeders run as `pre-install`
 hooks only. The hook jobs render their required environment directly instead of
 depending on app ConfigMaps/Secrets that Helm has not created yet.
 
+When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
+`seeds.tenant.existingSecret.name` is provided, the app chart creates a stable
+`patchworks-tenant-admin` Secret before the Fabric seed job runs.
+
 ← [Back to repo README](../../README.md)
 
 ---
@@ -279,7 +283,7 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 | `seeds.tenant.adminName` | `""` | Initial admin user name |
 | `seeds.tenant.adminEmail` | `""` | Initial admin user email |
 | `seeds.tenant.userRole` | `patchworks admin` | Initial admin user role passed as `--user-role` |
-| `seeds.tenant.adminPassword` | `""` | Initial admin user password |
+| `seeds.tenant.adminPassword` | `""` | Initial admin user password. Generated when empty and Fabric seeds are enabled |
 | `seeds.tenant.existingSecret.name` | `""` | Secret name for the initial admin password |
 | `seeds.tenant.existingSecret.passwordKey` | `adminPassword` | Secret key for the initial admin password |
 
