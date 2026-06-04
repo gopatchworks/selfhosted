@@ -3,7 +3,7 @@
 {{- $mono := .Values.workers.mono }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $hubNs := include "patchworks.workers.namespace" . }}
-{{- $mainQueue := .Values.workers.queue.name }}
+{{- $mainQueue := $mono.queue | default .Values.workers.queue.name }}
 ---
 # topology.yaml — RabbitMQ topology asserted by monocore at startup.
 # When workers.companies are defined their queues and bindings are included
@@ -293,7 +293,9 @@ spec:
         - name: workers
           image: {{ include "patchworks.appImage" (dict "svc" $mono "root" $root) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $mono "root" $root) }}
-          args: ["worker"]
+          args:
+            - worker
+            - {{ printf "--rabbitmq-flow-exchange=%s" ($mono.rabbitmq.flowExchange | default "customer-flows") | quote }}
           ports:
             - name: http
               containerPort: 8080

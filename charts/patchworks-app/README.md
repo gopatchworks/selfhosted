@@ -209,7 +209,7 @@ The main Laravel web application. Always deployed.
 | `workers.replicaCount` | `1` | Replica count (standalone only) |
 | `workers.processes` | `15` | Worker concurrency — `numprocs` in supervisord.conf (standalone/microservice) |
 | `workers.queue.connection` | `rabbitmq` | Laravel queue connection |
-| `workers.queue.name` | `default` | Hub queue name (standalone/mono) |
+| `workers.queue.name` | `default` | Hub queue name for standalone workers |
 | `workers.resources` | `{}` | Resource requests and limits |
 | `workers.extraEnv` | `[]` | Additional env vars for all worker pods |
 | `workers.extraEnvFrom` | `[]` | Additional env sources for all worker pods |
@@ -231,7 +231,10 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `workers.mono.image.repository` | `monocore` | Image repository |
+| `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
+| `workers.mono.rabbitmq.flowExchange` | `customer-flows` | Exchange passed to Monocore with `--rabbitmq-flow-exchange`; used by generated company-flow topology when enabled |
+| `workers.mono.rabbitmq.companyFlows.enabled` | `false` | Create the configured flow exchange, company queues, bindings, and fallback policy |
 | `workers.mono.otel.enabled` | `false` | Enable OpenTelemetry tracing |
 | `workers.mono.otel.endpoint` | `""` | OTLP collector endpoint |
 | `workers.mono.otel.serviceName` | `monocore` | Service name reported to the collector |

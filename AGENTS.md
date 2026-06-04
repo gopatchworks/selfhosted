@@ -270,7 +270,7 @@ The full list of microservices is derived from the haberdashery `apps/core/overl
 
 `workers.companies[]` is shared across all three worker types. Each entry adds one extra Deployment per service (for `microservice`) or one extra Deployment overall (for `standalone`/`mono`).
 
-- Hub queue: the service's `domain` (microservice) or `workers.queue.name` (standalone/mono)
+- Hub queue: the service's `domain` (microservice), `workers.queue.name` (standalone), or `workers.mono.queue` (mono)
 - Company queue: `company.queue | default company.name`
 
 Company deployments set the same `APP_NAME`/`APP_DOMAIN` as their hub (for `microservice`). The queue name is the company's queue — all microservice types for a given company share one queue.
@@ -279,7 +279,7 @@ Company deployments set the same `APP_NAME`/`APP_DOMAIN` as their hub (for `micr
 
 ### Monocore workers
 
-Monocore workers get their config from a generated `config.yaml` ConfigMap (via `patchworks.mono.configYaml`) and a generated `topology.yaml` (via `patchworks.mono.topologyYaml`). Company deployments bind to the company-flows exchange and require `workers.mono.rabbitmq.companyFlows.enabled: true` on the hub.
+Monocore workers get their config from a generated `config.yaml` ConfigMap (via `patchworks.mono.configYaml`) and a generated `topology.yaml` (via `patchworks.mono.topologyYaml`). The Monocore process receives `workers.mono.rabbitmq.flowExchange` via `--rabbitmq-flow-exchange`. Company deployments bind to that exchange only when `workers.mono.rabbitmq.companyFlows.enabled` is true.
 
 ---
 

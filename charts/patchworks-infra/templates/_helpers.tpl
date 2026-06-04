@@ -904,6 +904,7 @@ Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $que
 {{- $mono := $root.Values.workers.mono -}}
 {{- $queueName := .queueName -}}
 {{- $cf := $mono.rabbitmq.companyFlows -}}
+{{- $flowExchange := $mono.rabbitmq.flowExchange | default "customer-flows" -}}
 {{- if $mono.rabbitmq.topology -}}
 {{ $mono.rabbitmq.topology | toYaml }}
 {{- else -}}
@@ -924,7 +925,7 @@ exchanges:
     type: topic
     durable: true
   {{- if $cf.enabled }}
-  - name: {{ printf "company-%s" $queueName | quote }}
+  - name: {{ $flowExchange | quote }}
     type: direct
     durable: true
   {{- end }}
@@ -937,7 +938,7 @@ bindings:
   {{- if $cf.enabled }}
   {{- range $root.Values.workers.companies }}
   {{- $cq := .queue | default .name }}
-  - exchange: {{ printf "company-%s" $queueName | quote }}
+  - exchange: {{ $flowExchange | quote }}
     queue: {{ $cq | quote }}
     routing_keys:
       - {{ $cq | quote }}
@@ -945,8 +946,8 @@ bindings:
   {{- end }}
 {{- if $cf.enabled }}
 policies:
-  - name: {{ printf "company-%s-fallback" $queueName | quote }}
-    pattern: {{ printf "company-%s" $queueName | quote }}
+  - name: {{ printf "%s-fallback" $flowExchange | quote }}
+    pattern: {{ $flowExchange | quote }}
     apply_to: exchanges
     priority: 0
     definition:

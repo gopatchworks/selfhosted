@@ -513,23 +513,22 @@ workers:
       registry: ""
       tag: ""
       pullPolicy: ""
+    # Queue consumed by the hub monocore deployment. This matches monocore's
+    # built-in topology default.
+    queue: flows
     processes: 15
 
     # RabbitMQ topology options. The topology itself is auto-generated from
-    # workers.queue.name. Override only what you need to change.
+    # workers.mono.queue. Override only what you need to change.
     rabbitmq:
       vhost: /
-      # Company-flows exchange configuration.
-      #
-      # Hub mode (spoke.routingKey empty):
-      #   Creates the company-<queue> direct exchange and a fallback policy
-      #   that routes unmatched messages back to the main queue. Use this on
-      #   the primary monocore deployment.
-      #
-      # Spoke mode (spoke.routingKey set):
-      #   Skips exchange and policy creation. Binds this queue to an existing
-      #   company exchange using the given routing key. Use this for
-      #   company-specific monocore deployments.
+      # Exchange passed to monocore via --rabbitmq-flow-exchange. When
+      # companyFlows.enabled is true, the generated topology creates this
+      # exchange and binds company queues to it.
+      flowExchange: customer-flows
+      # Optional chart-managed company-flow topology. Enable only when this
+      # chart should create the flow exchange, company queues, bindings, and
+      # fallback policy.
       companyFlows:
         enabled: false
       # Advanced: supply a full topology to replace the auto-generated one.
@@ -555,8 +554,8 @@ workers:
   # for standalone workers — this is only automated for type: mono via
   # monocore's topology.yaml startup assertion.
   #
-  # NOTE (type: mono): also requires workers.mono.rabbitmq.companyFlows.enabled: true
-  # on the hub deployment to set up the company-flows exchange and bindings.
+  # NOTE (type: mono): workers.mono.rabbitmq.companyFlows.enabled creates the
+  # configured workers.mono.rabbitmq.flowExchange and binds company queues to it.
   companies: []
   # - name: molten-core           # used for K8s resource names
   #   namespace: ""               # deploys to a separate namespace (defaults to workers.namespace)
@@ -571,7 +570,6 @@ workers:
   #   tolerations: []
   #   affinity: {}
   #   # mono only:
-  #   exchange: company-flows     # exchange to bind to (defaults to company-<workers.queue.name>)
   #   processes: 5                # mono: defaults to workers.mono.processes
   #   otel:
   #     serviceName: monocore-molten-core  # defaults to monocore-<name>
