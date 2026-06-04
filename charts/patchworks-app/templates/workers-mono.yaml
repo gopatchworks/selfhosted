@@ -466,7 +466,7 @@ spec:
             {{- include "patchworks.secretEnv" (dict "name" "REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" $root) "secret" $rs) | nindent 12 }}
             {{- end }}
             {{- end }}
-            {{- if or $root.Values.kubefaas.auth.enabled $root.Values.kubefaas.auth.existingSecret.name }}
+            {{- if and (include "patchworks.kubefaas.host" $root) (or $root.Values.kubefaas.auth.enabled $root.Values.kubefaas.auth.existingSecret.name) }}
             {{- include "patchworks.env.kubefaasUsername" $root | nindent 12 }}
             {{- include "patchworks.env.kubefaasPassword" $root | nindent 12 }}
             {{- end }}

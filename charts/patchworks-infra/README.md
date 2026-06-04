@@ -551,7 +551,7 @@ When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate`
 | `kubefaas.namespace` | `kubefaas` | Namespace for KubeFaaS components (separate from app namespace) |
 | `kubefaas.functions.namespaceCount` | `5` | Number of function execution namespaces created |
 | `kubefaas.builder.tls.mode` | `helm` | TLS mode: `helm`, `certManager`, or `existingSecret` |
-| `kubefaas.auth.enabled` | `false` | Enable KubeFaaS basic auth env wiring |
+| `kubefaas.auth.enabled` | `true` | Enable KubeFaaS basic auth env wiring |
 | `kubefaas.auth.username` | `""` | Auth username shared by controller and builder; generated when omitted and eligible |
 | `kubefaas.auth.password` | `""` | Auth password; generated when omitted and eligible |
 | `kubefaas.auth.existingSecret.name` | `""` | Source auth credentials from this Secret instead of inline values |

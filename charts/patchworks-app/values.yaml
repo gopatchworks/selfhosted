@@ -696,7 +696,7 @@ kubefaas:
   # When kubefaas.enabled and credentials.autoGenerate are true, missing values
   # are generated into a Secret by the infra chart.
   auth:
-    enabled: false
+    enabled: true
     username: ""
     password: ""
     existingSecret:
