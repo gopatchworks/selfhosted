@@ -20,6 +20,10 @@ Ingress is enabled. Patchworks is reachable at:
 {{- end }}
 {{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (core start — dedicated host)
 {{- end }}
+{{- with .Values.ingress.hosts.webhook }}  {{ $scheme }}://{{ . }}  (webhooks — core start)
+{{- end }}
+{{- with .Values.ingress.hosts.callback }}  {{ $scheme }}://{{ . }}  (callbacks — core start)
+{{- end }}
 {{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric — dedicated host)
 {{- end }}
 {{- if .Values.ingress.hosts.dashboard }}

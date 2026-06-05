@@ -871,6 +871,10 @@ ingress:
       secretName: ""
     start:
       secretName: ""
+    webhook:
+      secretName: ""
+    callback:
+      secretName: ""
     fabric:
       secretName: ""
     dashboard:
@@ -881,6 +885,8 @@ ingress:
   hosts:
     gateway: ""
     start: ""
+    webhook: ""
+    callback: ""
     fabric: ""
     dashboard: ""
   # Upstream response timeout (in seconds) applied to all routes.

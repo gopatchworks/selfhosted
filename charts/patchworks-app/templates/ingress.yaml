@@ -4,6 +4,8 @@
 {{- $services := list
   (dict "host" $ing.hosts.gateway "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .) "tlsSecret" (dig "gateway"  "secretName" "" $ing.tls))
   (dict "host" $ing.hosts.start   "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "start"    "secretName" "" $ing.tls))
+  (dict "host" $ing.hosts.webhook "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "webhook"  "secretName" "" $ing.tls) "name" (printf "%s-webhook" $fullname))
+  (dict "host" $ing.hosts.callback "svcName" (printf "%s-start"   $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "callback" "secretName" "" $ing.tls) "name" (printf "%s-callback" $fullname))
   (dict "host" $ing.hosts.fabric  "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .) "tlsSecret" (dig "fabric"   "secretName" "" $ing.tls))
 }}
 {{- range $services }}
@@ -12,7 +14,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: {{ .svcName }}
+  name: {{ .name | default .svcName }}
   namespace: {{ .ns }}
   labels:
     {{- include "patchworks.labels" $ | nindent 4 }}

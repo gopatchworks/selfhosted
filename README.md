@@ -175,7 +175,7 @@ If you prefer hostnames to `port-forward`, install Contour and enable ingress:
 Add the hostnames to `/etc/hosts`:
 
 ```bash
-echo "127.0.0.1 patchworks.local core.local start.local fabric.local" | sudo tee -a /etc/hosts
+echo "127.0.0.1 patchworks.local core.local start.local webhooks.local callbacks.local fabric.local" | sudo tee -a /etc/hosts
 ```
 
 Then upgrade the release with ingress enabled:
@@ -187,6 +187,8 @@ helm upgrade patchworks-app ./charts/patchworks-app \
   --set ingress.className=contour \
   --set ingress.hosts.gateway=core.local \
   --set ingress.hosts.start=start.local \
+  --set ingress.hosts.webhook=webhooks.local \
+  --set ingress.hosts.callback=callbacks.local \
   --set ingress.hosts.fabric=fabric.local \
   --set ingress.hosts.dashboard=patchworks.local \
   --namespace patchworks \

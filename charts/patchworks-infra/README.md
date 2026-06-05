@@ -360,9 +360,11 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 | `ingress.enabled` | `false` | Create Ingress resources |
 | `ingress.className` | `""` | `ingressClassName` |
 | `ingress.annotations` | `{}` | Annotations applied to every Ingress resource |
-| `ingress.tls` | `[]` | TLS configuration applied to every Ingress resource |
+| `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |
 | `ingress.hosts.gateway` | `""` | Hostname for the Core gateway service (`/`) |
 | `ingress.hosts.start` | `""` | Hostname for the Core start service (`/`) |
+| `ingress.hosts.webhook` | `""` | Hostname for webhook traffic; routes to the Core start service (`/`) |
+| `ingress.hosts.callback` | `""` | Hostname for callback traffic; routes to the Core start service (`/`) |
 | `ingress.hosts.fabric` | `""` | Hostname for the Fabric service (`/`) |
 | `ingress.hosts.dashboard` | `""` | Hostname for the dashboard and path-based routes (see below) |
 | `ingress.rewriteAnnotations` | see below | Annotations added only to the path-rewriting Ingress |
@@ -377,6 +379,11 @@ When `ingress.hosts.dashboard` is set, two Ingress resources are created on that
 When `dashboard.fabricUrl` is left empty, the dashboard uses this same-origin
 `/fabric` route by default. If `ingress.hosts.dashboard` is not set, it falls
 back to the dedicated `ingress.hosts.fabric` URL when configured.
+
+`ingress.hosts.webhook` and `ingress.hosts.callback` create dedicated Ingresses
+that route `/` to the Core start service. This matches the production
+Haberdashery layout where `webhooks.*` and `callbacks.*` are separate public
+hosts handled by Core Start.
 
 > ⚠️ **`ingress.rewriteAnnotations` is required** for prefix stripping to work. The default is configured for Contour. If you use a different ingress controller you must override this value — see the examples below.
 
