@@ -725,6 +725,10 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- .Values.s3.fileDownloadsBucket | default (include "patchworks.s3.bucket" .) -}}
 {{- end }}
 
+{{- define "patchworks.s3.bucketCreationEndpoint" -}}
+{{- .Values.s3.bucketCreationEndpoint | default (include "patchworks.s3.endpoint" .) -}}
+{{- end }}
+
 {{- define "patchworks.s3.region" -}}
 {{- if .Values.s3.enabled -}}{{ .Values.s3.region }}{{- else -}}{{ .Values.s3.external.region }}{{- end -}}
 {{- end }}
@@ -1173,9 +1177,7 @@ FILE_DOWNLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }
 FILE_DOWNLOADS_AWS_BUCKET: {{ include "patchworks.s3.fileDownloadsBucket" . | quote }}
 FILE_DOWNLOADS_AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
-{{- with .Values.s3.bucketCreationEndpoint }}
-S3_BUCKET_CREATION_ENDPOINT: {{ . | quote }}
-{{- end }}
+S3_BUCKET_CREATION_ENDPOINT: {{ include "patchworks.s3.bucketCreationEndpoint" . | quote }}
 TENANT_DB_CONNECTION: "tenant"
 TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
 TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
@@ -1945,10 +1947,8 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.s3.endpoint" . | quote }}
 - name: FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT
   value: {{ include "patchworks.s3.pathStyle" . | quote }}
-{{- with .Values.s3.bucketCreationEndpoint }}
 - name: S3_BUCKET_CREATION_ENDPOINT
-  value: {{ . | quote }}
-{{- end }}
+  value: {{ include "patchworks.s3.bucketCreationEndpoint" . | quote }}
 - name: TENANT_DB_CONNECTION
   value: tenant
 - name: TENANT_DB_HOST
