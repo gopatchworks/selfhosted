@@ -383,7 +383,8 @@ back to the dedicated `ingress.hosts.fabric` URL when configured.
 `ingress.hosts.webhook` and `ingress.hosts.callback` create dedicated Ingresses
 that route `/` to the Core start service. This matches the production
 Haberdashery layout where `webhooks.*` and `callbacks.*` are separate public
-hosts handled by Core Start.
+hosts handled by Core Start. The same host values are also injected into Core
+application pods as `WEBHOOK_DOMAIN` and `CALLBACK_DOMAIN`.
 
 > ⚠️ **`ingress.rewriteAnnotations` is required** for prefix stripping to work. The default is configured for Contour. If you use a different ingress controller you must override this value — see the examples below.
 

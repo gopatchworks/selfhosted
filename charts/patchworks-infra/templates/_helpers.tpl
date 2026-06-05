@@ -1061,6 +1061,12 @@ Non-sensitive app env vars as a YAML map for ConfigMap data:.
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
 APP_URL: {{ .Values.app.url | quote }}
+{{- with .Values.ingress.hosts.callback }}
+CALLBACK_DOMAIN: {{ . | quote }}
+{{- end }}
+{{- with .Values.ingress.hosts.webhook }}
+WEBHOOK_DOMAIN: {{ . | quote }}
+{{- end }}
 DB_CONNECTION: "mysql"
 DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
 DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
