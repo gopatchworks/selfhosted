@@ -675,6 +675,18 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- if .Values.s3.enabled -}}{{ .Values.s3.bucket }}{{- else -}}{{ .Values.s3.external.bucket }}{{- end -}}
 {{- end }}
 
+{{- define "patchworks.s3.payloadsBucket" -}}
+{{- .Values.s3.payloadsBucket | default (include "patchworks.s3.bucket" .) -}}
+{{- end }}
+
+{{- define "patchworks.s3.tenantCacheBucket" -}}
+{{- .Values.s3.tenantCacheBucket | default .Values.s3.companyCacheBucket | default (include "patchworks.s3.bucket" .) -}}
+{{- end }}
+
+{{- define "patchworks.s3.fileDownloadsBucket" -}}
+{{- .Values.s3.fileDownloadsBucket | default (include "patchworks.s3.bucket" .) -}}
+{{- end }}
+
 {{- define "patchworks.s3.region" -}}
 {{- if .Values.s3.enabled -}}{{ .Values.s3.region }}{{- else -}}{{ .Values.s3.external.region }}{{- end -}}
 {{- end }}
@@ -1025,7 +1037,7 @@ stores:
       {{- with include "patchworks.s3.endpoint" $root }}
       endpoint: {{ . | quote }}
       {{- end }}
-      bucket: {{ $root.Values.s3.companyCacheBucket | default (include "patchworks.s3.bucket" $root) | quote }}
+      bucket: {{ include "patchworks.s3.tenantCacheBucket" $root | quote }}
       region: {{ include "patchworks.s3.region" $root | quote }}
       access_key_id: {{ include "patchworks.s3.accessKey" $root | quote }}
       secret_access_key: {{ include "patchworks.s3.secretKey" $root | quote }}
@@ -1102,8 +1114,20 @@ ELASTIC_SEARCH_USERNAME: {{ include "patchworks.elasticsearch.username" . | quot
 ELASTICSEARCH_USER: {{ include "patchworks.elasticsearch.username" . | quote }}
 {{- end }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
+PAYLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+PAYLOADS_AWS_BUCKET: {{ include "patchworks.s3.payloadsBucket" . | quote }}
+PAYLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
+FILE_DOWNLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+FILE_DOWNLOADS_AWS_BUCKET: {{ include "patchworks.s3.fileDownloadsBucket" . | quote }}
+FILE_DOWNLOADS_AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
+FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
+{{- with .Values.s3.bucketCreationEndpoint }}
+S3_BUCKET_CREATION_ENDPOINT: {{ . | quote }}
+{{- end }}
 TENANT_DB_CONNECTION: "tenant"
 TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
 TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
@@ -1120,7 +1144,7 @@ TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
 {{- else }}
 TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
 {{- end }}
-TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 BROADCAST_CONNECTION: "pusher"
@@ -1217,8 +1241,17 @@ ELASTIC_SEARCH_USERNAME: {{ include "patchworks.elasticsearch.username" . | quot
 ELASTICSEARCH_USER: {{ include "patchworks.elasticsearch.username" . | quote }}
 {{- end }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
+AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
+PAYLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+PAYLOADS_AWS_BUCKET: {{ include "patchworks.s3.payloadsBucket" . | quote }}
+PAYLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
+FILE_DOWNLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
+FILE_DOWNLOADS_AWS_BUCKET: {{ include "patchworks.s3.fileDownloadsBucket" . | quote }}
+FILE_DOWNLOADS_AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
+FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
 TENANT_DB_CONNECTION: "tenant"
 TENANT_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
 TENANT_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
@@ -1230,7 +1263,7 @@ TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
 {{- else }}
 TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
 {{- end }}
-TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 BROADCAST_CONNECTION: "pusher"
@@ -1374,8 +1407,12 @@ ELASTIC_SEARCH_PASSWORD: {{ include "patchworks.elasticsearch.password" . | quot
 {{- if not $s3ExSecret.name }}
 AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
 AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+PAYLOADS_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+PAYLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 TENANT_CACHE_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
 TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+FILE_DOWNLOADS_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 {{- end }}
 {{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) }}
 {{- if not $rmqSecret.name }}
@@ -1494,12 +1531,32 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.secretKeyKey }}
+- name: PAYLOADS_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.accessKeyKey }}
+- name: PAYLOADS_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.secretKeyKey }}
 - name: TENANT_CACHE_AWS_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.accessKeyKey }}
 - name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.secretKeyKey }}
+- name: FILE_DOWNLOADS_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.accessKeyKey }}
+- name: FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY
   valueFrom:
     secretKeyRef:
       name: {{ $s3Secret.name }}
@@ -1590,8 +1647,12 @@ ELASTIC_SEARCH_PASSWORD: {{ include "patchworks.elasticsearch.password" . | quot
 {{- if not $s3ExSecret.name }}
 AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
 AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+PAYLOADS_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+PAYLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 TENANT_CACHE_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
 TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
+FILE_DOWNLOADS_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
+FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 {{- end }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{- if and (not .Values.pusher.existingSecret.name) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)))) }}
@@ -1658,12 +1719,32 @@ Fabric does not connect to RabbitMQ.
     secretKeyRef:
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.secretKeyKey }}
+- name: PAYLOADS_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.accessKeyKey }}
+- name: PAYLOADS_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.secretKeyKey }}
 - name: TENANT_CACHE_AWS_ACCESS_KEY_ID
   valueFrom:
     secretKeyRef:
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.accessKeyKey }}
 - name: TENANT_CACHE_AWS_SECRET_ACCESS_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.secretKeyKey }}
+- name: FILE_DOWNLOADS_AWS_ACCESS_KEY_ID
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s3Secret.name }}
+      key: {{ $s3Secret.accessKeyKey }}
+- name: FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY
   valueFrom:
     secretKeyRef:
       name: {{ $s3Secret.name }}
@@ -1757,12 +1838,34 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{ include "patchworks.env.elasticSearchPassword" . }}
 - name: AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: AWS_ENDPOINT
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
 {{ include "patchworks.env.s3AccessKey" . }}
 {{ include "patchworks.env.s3SecretKey" . }}
 - name: AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 - name: AWS_BUCKET
   value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
+- name: PAYLOADS_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+- name: PAYLOADS_AWS_BUCKET
+  value: {{ include "patchworks.s3.payloadsBucket" . | quote }}
+- name: PAYLOADS_AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
+- name: FILE_DOWNLOADS_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+- name: FILE_DOWNLOADS_AWS_BUCKET
+  value: {{ include "patchworks.s3.fileDownloadsBucket" . | quote }}
+- name: FILE_DOWNLOADS_AWS_ENDPOINT
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
+{{- with .Values.s3.bucketCreationEndpoint }}
+- name: S3_BUCKET_CREATION_ENDPOINT
+  value: {{ . | quote }}
+{{- end }}
 - name: TENANT_DB_CONNECTION
   value: tenant
 - name: TENANT_DB_HOST
@@ -1786,11 +1889,15 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{- end }}
 {{- $s3Secret := fromJson (include "patchworks.s3.existingSecret" .) }}
 {{- $s3AccessSecret := dict "name" $s3Secret.name "key" $s3Secret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOADS_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "FILE_DOWNLOADS_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
 {{- $s3SecretSecret := dict "name" $s3Secret.name "key" $s3Secret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOADS_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 - name: TENANT_CACHE_AWS_BUCKET
-  value: {{ include "patchworks.s3.bucket" . | quote }}
+  value: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 - name: TENANT_CACHE_AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}
@@ -1874,12 +1981,30 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{ include "patchworks.env.elasticSearchPassword" . }}
 - name: AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: AWS_ENDPOINT
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
 {{ include "patchworks.env.s3AccessKey" . }}
 {{ include "patchworks.env.s3SecretKey" . }}
 - name: AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 - name: AWS_BUCKET
   value: {{ include "patchworks.s3.bucket" . | quote }}
+- name: AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
+- name: PAYLOADS_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+- name: PAYLOADS_AWS_BUCKET
+  value: {{ include "patchworks.s3.payloadsBucket" . | quote }}
+- name: PAYLOADS_AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
+- name: FILE_DOWNLOADS_AWS_DEFAULT_REGION
+  value: {{ include "patchworks.s3.region" . | quote }}
+- name: FILE_DOWNLOADS_AWS_BUCKET
+  value: {{ include "patchworks.s3.fileDownloadsBucket" . | quote }}
+- name: FILE_DOWNLOADS_AWS_ENDPOINT
+  value: {{ include "patchworks.s3.endpoint" . | quote }}
+- name: FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT
+  value: {{ include "patchworks.s3.pathStyle" . | quote }}
 - name: TENANT_DB_CONNECTION
   value: tenant
 - name: TENANT_DB_HOST
@@ -1902,11 +2027,15 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{- end }}
 {{- $s3Secret := fromJson (include "patchworks.s3.existingSecret" .) }}
 {{- $s3AccessSecret := dict "name" $s3Secret.name "key" $s3Secret.accessKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOADS_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "FILE_DOWNLOADS_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
 {{- $s3SecretSecret := dict "name" $s3Secret.name "key" $s3Secret.secretKeyKey }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOADS_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
+{{ include "patchworks.secretEnv" (dict "name" "FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 - name: TENANT_CACHE_AWS_BUCKET
-  value: {{ include "patchworks.s3.bucket" . | quote }}
+  value: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 - name: TENANT_CACHE_AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}

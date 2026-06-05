@@ -1067,7 +1067,15 @@ s3:
       rootUserKey: root-user
       rootPasswordKey: root-password
   bucket: patchworks
-  # Company-cache bucket for monocore's store.yaml; defaults to bucket above.
+  # Default bucket for Core payloads when tenant-specific buckets are not available.
+  payloadsBucket: ""
+  # Bucket for tenant cache payloads; defaults to companyCacheBucket, then bucket above.
+  tenantCacheBucket: ""
+  # Bucket for file downloads; defaults to bucket above.
+  fileDownloadsBucket: ""
+  # Optional pwops-compatible endpoint for creating tenant-specific buckets.
+  bucketCreationEndpoint: ""
+  # Deprecated alias for monocore's customer_cache store; prefer tenantCacheBucket.
   companyCacheBucket: ""
   region: us-east-1
   persistence:
