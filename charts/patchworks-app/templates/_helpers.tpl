@@ -1448,6 +1448,9 @@ NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS: {{ .Values.dashboard.forceRegistrationR
 PUSHER_HOST: {{ include "patchworks.dashboardBroadcastingHost" . | quote }}
 PUSHER_PORT: {{ include "patchworks.dashboardBroadcastingPort" . | quote }}
 PUSHER_SCHEME: {{ include "patchworks.dashboardBroadcastingScheme" . | quote }}
+NUXT_PUBLIC_BROADCASTING_HOST: {{ include "patchworks.dashboardBroadcastingHost" . | quote }}
+NUXT_PUBLIC_BROADCASTING_PORT: {{ include "patchworks.dashboardBroadcastingPort" . | quote }}
+NUXT_PUBLIC_BROADCASTING_SCHEME: {{ include "patchworks.dashboardBroadcastingScheme" . | quote }}
 {{- end }}
 {{- end }}
 
@@ -1464,6 +1467,8 @@ Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
 {{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $name "key" ($es.appIdKey | default "app-id"))) }}
 {{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
 {{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
 {{- end }}
 {{- end }}
 
