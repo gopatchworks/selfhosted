@@ -294,6 +294,10 @@ dashboard:
   serverMcpUrl: ""
   # External/optional dashboard runtime config.
   inboundUrl: ""
+  broadcasting:
+    host: ""
+    port: ""
+    scheme: ""
   ga4Tag: "none"
   zendeskUrl: "none"
   forceRegistrationRequest: "false"
@@ -849,6 +853,13 @@ pusher:
     host: ""
     port: 443
     scheme: https
+  ingress:
+    enabled: false
+    provider: contour
+    className: ""
+    annotations: {}
+    host: ""
+    tlsSecretName: ""
 
 # ── Ingress ────────────────────────────────────────────────────────────────────
 ingress:

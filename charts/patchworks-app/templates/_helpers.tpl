@@ -274,6 +274,39 @@ true
 {{- if .Values.pusher.enabled -}}http{{- else -}}{{ .Values.pusher.external.scheme }}{{- end -}}
 {{- end }}
 
+{{/* Dashboard websocket host. Prefer explicit dashboard config, then Soketi ingress. */}}
+{{- define "patchworks.dashboardBroadcastingHost" -}}
+{{- if .Values.dashboard.broadcasting.host -}}
+{{- .Values.dashboard.broadcasting.host -}}
+{{- else if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host -}}
+{{- .Values.pusher.ingress.host -}}
+{{- else -}}
+{{- include "patchworks.pusher.host" . -}}
+{{- end -}}
+{{- end }}
+
+{{/* Dashboard websocket port. Prefer explicit dashboard config, then Soketi ingress. */}}
+{{- define "patchworks.dashboardBroadcastingPort" -}}
+{{- if .Values.dashboard.broadcasting.port -}}
+{{- .Values.dashboard.broadcasting.port -}}
+{{- else if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host -}}
+{{- if .Values.pusher.ingress.tlsSecretName -}}443{{- else -}}80{{- end -}}
+{{- else -}}
+{{- include "patchworks.pusher.port" . -}}
+{{- end -}}
+{{- end }}
+
+{{/* Dashboard websocket scheme. Prefer explicit dashboard config, then Soketi ingress. */}}
+{{- define "patchworks.dashboardBroadcastingScheme" -}}
+{{- if .Values.dashboard.broadcasting.scheme -}}
+{{- .Values.dashboard.broadcasting.scheme -}}
+{{- else if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host -}}
+{{- if .Values.pusher.ingress.tlsSecretName -}}https{{- else -}}http{{- end -}}
+{{- else -}}
+{{- include "patchworks.pusher.scheme" . -}}
+{{- end -}}
+{{- end }}
+
 {{/* ── Image helpers ──────────────────────────────────────────────────────────── */}}
 
 {{/*
@@ -1412,9 +1445,9 @@ NUXT_PUBLIC_GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
 NUXT_PUBLIC_ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
 NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS: {{ .Values.dashboard.forceRegistrationRequest | quote }}
 {{- if include "patchworks.pusher.isConfigured" . }}
-NUXT_PUBLIC_BROADCASTING_HOST: {{ include "patchworks.pusher.host" . | quote }}
-NUXT_PUBLIC_BROADCASTING_PORT: {{ include "patchworks.pusher.port" . | quote }}
-NUXT_PUBLIC_BROADCASTING_SCHEME: {{ include "patchworks.pusher.scheme" . | quote }}
+PUSHER_HOST: {{ include "patchworks.dashboardBroadcastingHost" . | quote }}
+PUSHER_PORT: {{ include "patchworks.dashboardBroadcastingPort" . | quote }}
+PUSHER_SCHEME: {{ include "patchworks.dashboardBroadcastingScheme" . | quote }}
 {{- end }}
 {{- end }}
 
@@ -1428,9 +1461,9 @@ Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
 {{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
 {{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
 {{- end }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $name "key" ($es.appIdKey | default "app-id"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $name "key" ($es.appIdKey | default "app-id"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
+{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
 {{- end }}
 {{- end }}
 

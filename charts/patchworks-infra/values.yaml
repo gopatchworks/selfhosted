@@ -799,6 +799,13 @@ pusher:
     host: ""
     port: 443
     scheme: https
+  ingress:
+    enabled: false
+    provider: contour
+    className: ""
+    annotations: {}
+    host: ""
+    tlsSecretName: ""
 
 # ── Ingress ────────────────────────────────────────────────────────────────────
 ingress:

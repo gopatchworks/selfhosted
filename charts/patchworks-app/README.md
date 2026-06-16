@@ -156,6 +156,9 @@ environment variables. `dashboard.*Url` controls browser/public
 | `dashboard.serverFabricUrl` | `""` | `NUXT_FABRIC_URL`; defaults to the in-cluster Fabric service for SSR fetches |
 | `dashboard.serverMcpUrl` | `""` | `NUXT_MCP_URL`; defaults to the in-cluster gateway MCP endpoint for SSR fetches |
 | `dashboard.inboundUrl` | `""` | `NUXT_PUBLIC_INBOUND_URL` |
+| `dashboard.broadcasting.host` | `""` | `PUSHER_HOST` for the dashboard container; defaults to the shared `pusher` host |
+| `dashboard.broadcasting.port` | `""` | `PUSHER_PORT` for the dashboard container; defaults to the shared `pusher` port |
+| `dashboard.broadcasting.scheme` | `""` | `PUSHER_SCHEME` for the dashboard container; defaults to the shared `pusher` scheme |
 | `dashboard.ga4Tag` | `none` | `NUXT_PUBLIC_GA4_TAG` |
 | `dashboard.zendeskUrl` | `none` | `NUXT_PUBLIC_ZENDESK_URL` |
 | `dashboard.forceRegistrationRequest` | `false` | `NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS` |
@@ -607,7 +610,10 @@ When `s3.enabled` is `true`, a MinIO instance is deployed by the infra chart and
 
 The app chart does not deploy Soketi resources. It consumes the same shared
 `pusher.*` values as the infra chart and injects the corresponding `PUSHER_*`
-env vars into application pods and dashboard broadcasting config.
+env vars into application pods and dashboard broadcasting config. When
+`pusher.ingress.enabled=true` and `pusher.ingress.host` is set, the dashboard
+defaults its websocket connection to that public host while backend services
+continue using the in-cluster Soketi service.
 
 When `pusher.enabled=true`, the app chart assumes the infra chart has deployed
 the native `patchworks-soketi` Service. For an external Pusher-compatible server,
@@ -629,6 +635,12 @@ leave `pusher.enabled=false` and set `pusher.external.host`, `port`, and
 | `pusher.external.host` | `""` | External Pusher-compatible host when `pusher.enabled=false` |
 | `pusher.external.port` | `443` | External Pusher-compatible port |
 | `pusher.external.scheme` | `https` | External Pusher-compatible scheme |
+| `pusher.ingress.enabled` | `false` | Expose in-cluster Soketi through an ingress for browser websocket traffic |
+| `pusher.ingress.provider` | `contour` | Ingress provider hint; `contour` adds the websocket route annotation |
+| `pusher.ingress.className` | `""` | Optional ingress class name for the Soketi ingress |
+| `pusher.ingress.annotations` | `{}` | Additional annotations for the Soketi ingress |
+| `pusher.ingress.host` | `""` | Hostname for the Soketi ingress. When set, the dashboard defaults `PUSHER_HOST` to this value |
+| `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress. Also flips dashboard defaults to `https:443` |
 | `soketi.fullnameOverride` | `patchworks-soketi` | Stable resource name used when opting into the upstream Soketi subchart |
 | `soketi.subchart.enabled` | `false` | Shared with the infra chart; when true, app pods target the upstream Soketi subchart service name |
 

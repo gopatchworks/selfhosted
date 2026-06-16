@@ -586,6 +586,12 @@ For an external Pusher-compatible server, leave `pusher.enabled=false` and set
 | `pusher.external.host` | `""` | External Pusher-compatible host when `pusher.enabled=false` |
 | `pusher.external.port` | `443` | External Pusher-compatible port |
 | `pusher.external.scheme` | `https` | External Pusher-compatible scheme |
+| `pusher.ingress.enabled` | `false` | Render an ingress in front of the native Soketi service |
+| `pusher.ingress.provider` | `contour` | Ingress provider hint; `contour` adds the websocket route annotation |
+| `pusher.ingress.className` | `""` | Optional ingress class name for the Soketi ingress |
+| `pusher.ingress.annotations` | `{}` | Additional annotations for the Soketi ingress |
+| `pusher.ingress.host` | `""` | Hostname for the Soketi ingress |
+| `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress |
 | `soketi.fullnameOverride` | `patchworks-soketi` | Stable resource name used when opting into the upstream Soketi subchart |
 | `soketi.replicaCount` | `1` | Number of native Soketi replicas |
 | `soketi.image.repository` | `quay.io/soketi/soketi` | Native Soketi image repository |
