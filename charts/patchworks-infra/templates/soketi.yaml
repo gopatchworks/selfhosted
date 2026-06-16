@@ -73,17 +73,17 @@ spec:
               value: "6001"
             - name: SOKETI_MODE
               value: {{ .Values.soketi.mode | quote }}
-            - name: DEFAULT_APP_ID
+            - name: SOKETI_DEFAULT_APP_ID
               valueFrom:
                 secretKeyRef:
                   name: {{ $pusherSecret.name | default $secretName }}
                   key: {{ $pusherSecret.appIdKey | default "app-id" }}
-            - name: DEFAULT_APP_KEY
+            - name: SOKETI_DEFAULT_APP_KEY
               valueFrom:
                 secretKeyRef:
                   name: {{ $pusherSecret.name | default $secretName }}
                   key: {{ $pusherSecret.appKeyKey | default "app-key" }}
-            - name: DEFAULT_APP_SECRET
+            - name: SOKETI_DEFAULT_APP_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ $pusherSecret.name | default $secretName }}
