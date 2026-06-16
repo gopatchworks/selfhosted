@@ -592,6 +592,7 @@ For an external Pusher-compatible server, leave `pusher.enabled=false` and set
 | `pusher.ingress.annotations` | `{}` | Additional annotations for the Soketi ingress |
 | `pusher.ingress.host` | `""` | Hostname for the Soketi ingress |
 | `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress |
+| `pusher.ingress.timeout` | `3600` | Websocket proxy read/send timeout in seconds for nginx ingress |
 | `soketi.fullnameOverride` | `patchworks-soketi` | Stable resource name used when opting into the upstream Soketi subchart |
 | `soketi.replicaCount` | `1` | Number of native Soketi replicas |
 | `soketi.image.repository` | `quay.io/soketi/soketi` | Native Soketi image repository |

@@ -641,6 +641,7 @@ leave `pusher.enabled=false` and set `pusher.external.host`, `port`, and
 | `pusher.ingress.annotations` | `{}` | Additional annotations for the Soketi ingress |
 | `pusher.ingress.host` | `""` | Hostname for the Soketi ingress. When set, the dashboard defaults `PUSHER_HOST` to this value |
 | `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress. Also flips dashboard defaults to `https:443` |
+| `pusher.ingress.timeout` | `3600` | Websocket proxy read/send timeout in seconds for nginx ingress |
 | `soketi.fullnameOverride` | `patchworks-soketi` | Stable resource name used when opting into the upstream Soketi subchart |
 | `soketi.subchart.enabled` | `false` | Shared with the infra chart; when true, app pods target the upstream Soketi subchart service name |
 

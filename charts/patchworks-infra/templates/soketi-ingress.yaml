@@ -1,6 +1,8 @@
 {{- if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $serviceName := printf "%s-soketi" $fullname }}
+{{- $provider := .Values.pusher.ingress.provider | default "" }}
+{{- $timeout := .Values.pusher.ingress.timeout | default 3600 }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -10,8 +12,12 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: soketi
   annotations:
-    {{- if eq (.Values.pusher.ingress.provider | default "") "contour" }}
+    {{- if eq $provider "contour" }}
     projectcontour.io/websocket-routes: /app
+    {{- end }}
+    {{- if eq $provider "nginx" }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ $timeout | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ $timeout | quote }}
     {{- end }}
     {{- with .Values.pusher.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
@@ -30,7 +36,7 @@ spec:
     - host: {{ .Values.pusher.ingress.host }}
       http:
         paths:
-          - path: /
+          - path: /app
             pathType: Prefix
             backend:
               service:

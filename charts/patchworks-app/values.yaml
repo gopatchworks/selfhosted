@@ -860,6 +860,7 @@ pusher:
     annotations: {}
     host: ""
     tlsSecretName: ""
+    timeout: 3600
 
 # ── Ingress ────────────────────────────────────────────────────────────────────
 ingress:
