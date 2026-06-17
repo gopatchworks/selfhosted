@@ -3,11 +3,11 @@
 # migrations, monocore). Infrastructure images (mysql, redis, etc.) use
 # their own fully-qualified image blocks and are unaffected by this section.
 image:
-  registry: ghcr.io/patchworks
+  registry: quay.io/patchworks
   # Default image name for PHP app components (web, workers, migrations).
   # Monocore, fabric, and dashboard override this with their own repository.
   repository: core
-  tag: latest
+  tag: v0.0.3
   pullPolicy: IfNotPresent
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
@@ -704,7 +704,7 @@ kubefaas:
 
   controller:
     image:
-      repository: kubefaas
+      repository: kubefaas-controller
       registry: ""    # overrides global image.registry when set
       tag: ""         # overrides global image.tag when set
       pullPolicy: ""

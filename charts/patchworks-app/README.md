@@ -93,8 +93,8 @@ All Patchworks application images share a global registry and tag. Individual se
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `image.registry` | `ghcr.io/patchworks` | Registry prefix applied to all app images |
-| `image.tag` | `latest` | Image tag applied to all app images |
+| `image.registry` | `quay.io/patchworks` | Registry prefix applied to all app images |
+| `image.tag` | `v0.0.3` | Image tag applied to all app images |
 | `image.pullPolicy` | `IfNotPresent` | Pull policy applied to all app images |
 | `image.pullSecrets` | `[]` | Image pull secret names for all app pods |
 
