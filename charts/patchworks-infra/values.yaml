@@ -89,6 +89,8 @@ web:
   service:
     type: ClusterIP
     port: 80
+  # Controls the cookie domain for authentication.
+  sessionDomain: ""
   resources: {}
   extraEnv: []
   extraEnvFrom: []

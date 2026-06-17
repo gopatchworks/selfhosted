@@ -1158,6 +1158,7 @@ Non-sensitive app env vars as a YAML map for ConfigMap data:.
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
 APP_URL: {{ .Values.app.url | quote }}
+SESSION_DOMAIN: {{ .Values.web.sessionDomain | quote }}
 {{- with .Values.ingress.hosts.callback }}
 CALLBACK_DOMAIN: {{ . | quote }}
 {{- end }}
@@ -1917,6 +1918,8 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ .Values.app.debug | quote }}
 - name: APP_URL
   value: {{ .Values.app.url | quote }}
+- name: SESSION_DOMAIN
+  value: {{ .Values.web.sessionDomain | quote }}
 - name: DB_CONNECTION
   value: mysql
 - name: DB_HOST
