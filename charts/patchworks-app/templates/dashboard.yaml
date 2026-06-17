@@ -24,7 +24,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "dashboard" "Release" .Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ include "patchworks.dashboardConfigData" . | sha256sum }}
+        checksum/config: {{ include "patchworks.dashboardConfigJs" . | sha256sum }}
         {{- with .Values.dashboard.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -42,22 +42,17 @@ spec:
           ports:
             - name: http
               containerPort: 80
-          envFrom:
-            - configMapRef:
-                name: {{ include "patchworks.fullname" . }}-dashboard-config
-            {{- with .Values.dashboard.extraEnvFrom }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
-          {{- $dashboardSecretEnv := include "patchworks.dashboardNuxtSecretEnvRefs" . | trim }}
-          {{- if or $dashboardSecretEnv .Values.dashboard.extraEnv }}
+          {{- if .Values.dashboard.extraEnv }}
           env:
-            {{- with $dashboardSecretEnv }}
-            {{- . | nindent 12 }}
-            {{- end }}
             {{- with .Values.dashboard.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           {{- end }}
+          volumeMounts:
+            - name: dashboard-config
+              mountPath: /usr/share/nginx/html/config.js
+              subPath: config.js
+              readOnly: true
           livenessProbe:
             tcpSocket:
               port: http
@@ -76,6 +71,13 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      volumes:
+        - name: dashboard-config
+          configMap:
+            name: {{ include "patchworks.fullname" . }}-dashboard-config-js
+            items:
+              - key: config.js
+                path: config.js
       {{- with .Values.dashboard.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

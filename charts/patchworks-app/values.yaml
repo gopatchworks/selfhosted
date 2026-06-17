@@ -278,24 +278,18 @@ dashboard:
     type: ClusterIP
     port: 80
   resources: {}
-  # Public service URLs injected into the dashboard SSR container as Nuxt runtime
-  # config. When the dashboard ingress host is configured, these default to the
-  # dashboard path-routed URLs (/core-main, /core-start, /fabric). Otherwise
-  # they fall back to dedicated service ingress hosts, then in-cluster service
-  # addresses.
+  # Public service URLs injected into the static dashboard config.js at
+  # container startup. When the dashboard ingress host is configured, these
+  # default to the dashboard path-routed URLs (/core-main, /core-start,
+  # /fabric). Otherwise they fall back to dedicated service ingress hosts, then
+  # in-cluster service addresses.
   coreUrl: ""
   startUrl: ""
   fabricUrl: ""
   mcpUrl: ""
-  # Private/server-side service URLs for SSR fetches. These default to
-  # in-cluster service addresses so the dashboard pod does not need to call back
-  # through public ingress during server rendering.
-  serverCoreUrl: ""
-  serverStartUrl: ""
-  serverFabricUrl: ""
-  serverMcpUrl: ""
   # External/optional dashboard runtime config.
   inboundUrl: ""
+  webhookHandlerUrl: "https://webhook-handler.pwks.co"
   broadcasting:
     host: ""
     port: ""
@@ -303,9 +297,14 @@ dashboard:
   ga4Tag: "none"
   zendeskUrl: "none"
   forceRegistrationRequest: "false"
+  postmanImporter:
+    enabled: "true"
+    maxFileUploadSize: 50
+  links:
+    docs:
+      allowances: ""
 
   extraEnv: []
-  extraEnvFrom: []
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

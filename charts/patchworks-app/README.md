@@ -139,31 +139,31 @@ Shared configuration injected into every application pod (web, workers, migratio
 
 ## Dashboard
 
-Dashboard values are injected into the SSR container as Nuxt runtime config
-environment variables. `dashboard.*Url` controls browser/public
-`NUXT_PUBLIC_*` values. `dashboard.server*Url` controls private server-side
-`NUXT_*` values used during SSR.
+Dashboard values are rendered into a chart-managed `config.js` and mounted over
+`/usr/share/nginx/html/config.js` in the static nginx container. Because this is
+a mounted ConfigMap, browser-visible Pusher values must be supplied in values
+such as `pusher.appKey`; Secret-only/generated values are not available inside
+the static file at render time.
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `dashboard.enabled` | `false` | Deploy the dashboard |
-| `dashboard.coreUrl` | `""` | `NUXT_PUBLIC_CORE_MAIN_URL`; defaults to dashboard `/core-main`, then gateway ingress host, then the in-cluster gateway service |
-| `dashboard.startUrl` | `""` | `NUXT_PUBLIC_CORE_START_URL`; defaults to dashboard `/core-start`, then start ingress host, then the in-cluster start service |
-| `dashboard.fabricUrl` | `""` | `NUXT_PUBLIC_FABRIC_URL`; defaults to the dashboard `/fabric` route, then the dedicated Fabric host, then the in-cluster Fabric service |
-| `dashboard.mcpUrl` | `""` | `NUXT_PUBLIC_MCP_URL`; defaults to dashboard `/core-main/api/v1/mcp`, then gateway ingress host `/api/v1/mcp`, then the in-cluster gateway service |
-| `dashboard.serverCoreUrl` | `""` | `NUXT_CORE_MAIN_URL`; defaults to the in-cluster gateway service for SSR fetches |
-| `dashboard.serverStartUrl` | `""` | `NUXT_CORE_START_URL`; defaults to the in-cluster start service for SSR fetches |
-| `dashboard.serverFabricUrl` | `""` | `NUXT_FABRIC_URL`; defaults to the in-cluster Fabric service for SSR fetches |
-| `dashboard.serverMcpUrl` | `""` | `NUXT_MCP_URL`; defaults to the in-cluster gateway MCP endpoint for SSR fetches |
-| `dashboard.inboundUrl` | `""` | `NUXT_PUBLIC_INBOUND_URL` |
-| `dashboard.broadcasting.host` | `""` | `PUSHER_HOST` for the dashboard container; defaults to the shared `pusher` host |
-| `dashboard.broadcasting.port` | `""` | `PUSHER_PORT` for the dashboard container; defaults to the shared `pusher` port |
-| `dashboard.broadcasting.scheme` | `""` | `PUSHER_SCHEME` for the dashboard container; defaults to the shared `pusher` scheme |
-| `dashboard.ga4Tag` | `none` | `NUXT_PUBLIC_GA4_TAG` |
-| `dashboard.zendeskUrl` | `none` | `NUXT_PUBLIC_ZENDESK_URL` |
-| `dashboard.forceRegistrationRequest` | `false` | `NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS` |
+| `dashboard.coreUrl` | `""` | Browser `coreMainUrl`; defaults to dashboard `/core-main`, then gateway ingress host, then the in-cluster gateway service |
+| `dashboard.startUrl` | `""` | Browser `coreStartUrl`; defaults to dashboard `/core-start`, then start ingress host, then the in-cluster start service |
+| `dashboard.fabricUrl` | `""` | Browser `fabricUrl`; defaults to the dashboard `/fabric` route, then the dedicated Fabric host, then the in-cluster Fabric service |
+| `dashboard.mcpUrl` | `""` | Browser `mcpUrl`; defaults to dashboard `/core-main/api/v1/mcp`, then gateway ingress host `/api/v1/mcp`, then the in-cluster gateway service |
+| `dashboard.inboundUrl` | `""` | Browser `inboundUrl` |
+| `dashboard.webhookHandlerUrl` | `https://webhook-handler.pwks.co` | Browser `webhookHandlerUrl` |
+| `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to the shared `pusher` host |
+| `dashboard.broadcasting.port` | `""` | Browser `broadcasting.port`; defaults to the shared `pusher` port |
+| `dashboard.broadcasting.scheme` | `""` | Browser `broadcasting.scheme`; defaults to the shared `pusher` scheme |
+| `dashboard.ga4Tag` | `none` | Browser `ga4Tag` |
+| `dashboard.zendeskUrl` | `none` | Browser `zendeskUrl` |
+| `dashboard.forceRegistrationRequest` | `false` | Browser `forceRegistrationRequests` |
+| `dashboard.postmanImporter.enabled` | `true` | Browser `postmanImporter.enabled` |
+| `dashboard.postmanImporter.maxFileUploadSize` | `50` | Browser `postmanImporter.maxFileUploadSize` |
+| `dashboard.links.docs.allowances` | `""` | Browser `links.docs.allowances` |
 | `dashboard.extraEnv` | `[]` | Additional env vars injected into the dashboard pod |
-| `dashboard.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for the dashboard pod |
 
 ---
 

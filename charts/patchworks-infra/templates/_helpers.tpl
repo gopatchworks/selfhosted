@@ -1321,9 +1321,9 @@ Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 {{- end }}
 
 {{/*
-Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
+Static dashboard browser config mounted over /usr/share/nginx/html/config.js.
 */}}
-{{- define "patchworks.dashboardConfigData" -}}
+{{- define "patchworks.dashboardConfigJs" -}}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
 {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
@@ -1342,28 +1342,45 @@ Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
 {{- $startUrl := .Values.dashboard.startUrl | default (ternary (printf "%s/core-start" $dashboardBaseUrl) (ternary (printf "%s://%s" $startScheme $ingressStart) $startServiceUrl (ne $ingressStart "")) (ne $dashboardBaseUrl "")) }}
 {{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s/fabric" $dashboardBaseUrl) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) $fabricServiceUrl (ne $ingressFabric "")) (ne $dashboardBaseUrl "")) }}
 {{- $mcpUrl := .Values.dashboard.mcpUrl | default (ternary (printf "%s/core-main/api/v1/mcp" $dashboardBaseUrl) (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) $mcpServiceUrl (ne $ingressGateway "")) (ne $dashboardBaseUrl "")) }}
-{{- $serverCoreUrl := .Values.dashboard.serverCoreUrl | default $coreServiceUrl }}
-{{- $serverStartUrl := .Values.dashboard.serverStartUrl | default $startServiceUrl }}
-{{- $serverFabricUrl := .Values.dashboard.serverFabricUrl | default $fabricServiceUrl }}
-{{- $serverMcpUrl := .Values.dashboard.serverMcpUrl | default $mcpServiceUrl }}
-NUXT_PUBLIC_CORE_MAIN_URL: {{ $coreUrl | quote }}
-NUXT_PUBLIC_CORE_START_URL: {{ $startUrl | quote }}
-NUXT_PUBLIC_FABRIC_URL: {{ $fabricUrl | quote }}
-NUXT_PUBLIC_MCP_URL: {{ $mcpUrl | quote }}
-NUXT_CORE_MAIN_URL: {{ $serverCoreUrl | quote }}
-NUXT_CORE_START_URL: {{ $serverStartUrl | quote }}
-NUXT_FABRIC_URL: {{ $serverFabricUrl | quote }}
-NUXT_MCP_URL: {{ $serverMcpUrl | quote }}
-NUXT_PUBLIC_AUTH_COOKIE_DOMAIN: {{ .Values.web.sessionDomain | quote }}
-NUXT_PUBLIC_INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
-NUXT_PUBLIC_GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
-NUXT_PUBLIC_ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
-NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS: {{ .Values.dashboard.forceRegistrationRequest | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-NUXT_PUBLIC_BROADCASTING_HOST: {{ include "patchworks.pusher.host" . | quote }}
-NUXT_PUBLIC_BROADCASTING_PORT: {{ include "patchworks.pusher.port" . | quote }}
-NUXT_PUBLIC_BROADCASTING_SCHEME: {{ include "patchworks.pusher.scheme" . | quote }}
-{{- end }}
+{{- $forceRegistrationRequests := eq (toString (.Values.dashboard.forceRegistrationRequest | default "false")) "true" -}}
+{{- $postmanEnabled := eq (toString (.Values.dashboard.postmanImporter.enabled | default "true")) "true" -}}
+{{- $broadcastingHost := "" -}}
+{{- $broadcastingPort := "" -}}
+{{- $broadcastingScheme := "" -}}
+{{- if include "patchworks.pusher.isConfigured" . -}}
+{{- $broadcastingHost = .Values.dashboard.broadcasting.host | default (include "patchworks.pusher.host" .) -}}
+{{- $broadcastingPort = .Values.dashboard.broadcasting.port | default (include "patchworks.pusher.port" .) -}}
+{{- $broadcastingScheme = .Values.dashboard.broadcasting.scheme | default (include "patchworks.pusher.scheme" .) -}}
+{{- end -}}
+window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
+  appName: "Patchworks",
+  ga4Tag: {{ .Values.dashboard.ga4Tag | toJson }},
+  zendeskUrl: {{ .Values.dashboard.zendeskUrl | toJson }},
+  fabricUrl: {{ $fabricUrl | toJson }},
+  coreMainUrl: {{ $coreUrl | toJson }},
+  coreStartUrl: {{ $startUrl | toJson }},
+  authCookieDomain: {{ .Values.web.sessionDomain | toJson }},
+  inboundUrl: {{ .Values.dashboard.inboundUrl | toJson }},
+  webhookHandlerUrl: {{ .Values.dashboard.webhookHandlerUrl | toJson }},
+  mcpUrl: {{ $mcpUrl | toJson }},
+  forceRegistrationRequests: {{ $forceRegistrationRequests }},
+  postmanImporter: {
+    enabled: {{ $postmanEnabled }},
+    maxFileUploadSize: {{ .Values.dashboard.postmanImporter.maxFileUploadSize | default 50 | int }},
+  },
+  links: {
+    docs: {
+      allowances: {{ .Values.dashboard.links.docs.allowances | toJson }},
+    },
+  },
+  broadcasting: {
+    appKey: {{ .Values.pusher.appKey | toJson }},
+    host: {{ $broadcastingHost | toJson }},
+    port: {{ $broadcastingPort | toJson }},
+    scheme: {{ $broadcastingScheme | toJson }},
+    cluster: {{ .Values.pusher.appCluster | default "mt1" | toJson }},
+  },
+}
 {{- end }}
 
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}

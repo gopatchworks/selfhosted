@@ -1408,9 +1408,9 @@ Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 {{- end }}
 
 {{/*
-Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
+Static dashboard browser config mounted over /usr/share/nginx/html/config.js.
 */}}
-{{- define "patchworks.dashboardConfigData" -}}
+{{- define "patchworks.dashboardConfigJs" -}}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ingressGateway := .Values.ingress.hosts.gateway | default "" }}
 {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
@@ -1429,49 +1429,45 @@ Dashboard-specific non-sensitive env vars as a YAML map for ConfigMap data:.
 {{- $startUrl := .Values.dashboard.startUrl | default (ternary (printf "%s/core-start" $dashboardBaseUrl) (ternary (printf "%s://%s" $startScheme $ingressStart) $startServiceUrl (ne $ingressStart "")) (ne $dashboardBaseUrl "")) }}
 {{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s/fabric" $dashboardBaseUrl) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) $fabricServiceUrl (ne $ingressFabric "")) (ne $dashboardBaseUrl "")) }}
 {{- $mcpUrl := .Values.dashboard.mcpUrl | default (ternary (printf "%s/core-main/api/v1/mcp" $dashboardBaseUrl) (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) $mcpServiceUrl (ne $ingressGateway "")) (ne $dashboardBaseUrl "")) }}
-{{- $serverCoreUrl := .Values.dashboard.serverCoreUrl | default $coreServiceUrl }}
-{{- $serverStartUrl := .Values.dashboard.serverStartUrl | default $startServiceUrl }}
-{{- $serverFabricUrl := .Values.dashboard.serverFabricUrl | default $fabricServiceUrl }}
-{{- $serverMcpUrl := .Values.dashboard.serverMcpUrl | default $mcpServiceUrl }}
-NUXT_PUBLIC_CORE_MAIN_URL: {{ $coreUrl | quote }}
-NUXT_PUBLIC_CORE_START_URL: {{ $startUrl | quote }}
-NUXT_PUBLIC_FABRIC_URL: {{ $fabricUrl | quote }}
-NUXT_PUBLIC_MCP_URL: {{ $mcpUrl | quote }}
-NUXT_CORE_MAIN_URL: {{ $serverCoreUrl | quote }}
-NUXT_CORE_START_URL: {{ $serverStartUrl | quote }}
-NUXT_FABRIC_URL: {{ $serverFabricUrl | quote }}
-NUXT_MCP_URL: {{ $serverMcpUrl | quote }}
-NUXT_PUBLIC_AUTH_COOKIE_DOMAIN: {{ .Values.web.sessionDomain | quote }}
-NUXT_PUBLIC_INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
-NUXT_PUBLIC_GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
-NUXT_PUBLIC_ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
-NUXT_PUBLIC_FORCE_REGISTRATION_REQUESTS: {{ .Values.dashboard.forceRegistrationRequest | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-PUSHER_HOST: {{ include "patchworks.dashboardBroadcastingHost" . | quote }}
-PUSHER_PORT: {{ include "patchworks.dashboardBroadcastingPort" . | quote }}
-PUSHER_SCHEME: {{ include "patchworks.dashboardBroadcastingScheme" . | quote }}
-NUXT_PUBLIC_BROADCASTING_HOST: {{ include "patchworks.dashboardBroadcastingHost" . | quote }}
-NUXT_PUBLIC_BROADCASTING_PORT: {{ include "patchworks.dashboardBroadcastingPort" . | quote }}
-NUXT_PUBLIC_BROADCASTING_SCHEME: {{ include "patchworks.dashboardBroadcastingScheme" . | quote }}
-{{- end }}
-{{- end }}
-
-{{/*
-Dashboard Nuxt runtime env vars that may come from existingSecret-backed values.
-*/}}
-{{- define "patchworks.dashboardNuxtSecretEnvRefs" -}}
-{{- if include "patchworks.pusher.isConfigured" . }}
-{{- $es := .Values.pusher.existingSecret }}
-{{- $name := $es.name }}
-{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
-{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
-{{- end }}
-{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_ID" "value" .Values.pusher.appId "secret" (dict "name" $name "key" ($es.appIdKey | default "app-id"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "PUSHER_APP_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_APP_KEY" "value" .Values.pusher.appKey "secret" (dict "name" $name "key" ($es.appKeyKey | default "app-key"))) }}
-{{ include "patchworks.secretEnv" (dict "name" "NUXT_PUBLIC_BROADCASTING_CLUSTER" "value" .Values.pusher.appCluster "secret" (dict "name" $name "key" ($es.appClusterKey | default "app-cluster"))) }}
-{{- end }}
+{{- $forceRegistrationRequests := eq (toString (.Values.dashboard.forceRegistrationRequest | default "false")) "true" -}}
+{{- $postmanEnabled := eq (toString (.Values.dashboard.postmanImporter.enabled | default "true")) "true" -}}
+{{- $broadcastingHost := "" -}}
+{{- $broadcastingPort := "" -}}
+{{- $broadcastingScheme := "" -}}
+{{- if include "patchworks.pusher.isConfigured" . -}}
+{{- $broadcastingHost = include "patchworks.dashboardBroadcastingHost" . -}}
+{{- $broadcastingPort = include "patchworks.dashboardBroadcastingPort" . -}}
+{{- $broadcastingScheme = include "patchworks.dashboardBroadcastingScheme" . -}}
+{{- end -}}
+window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
+  appName: "Patchworks",
+  ga4Tag: {{ .Values.dashboard.ga4Tag | toJson }},
+  zendeskUrl: {{ .Values.dashboard.zendeskUrl | toJson }},
+  fabricUrl: {{ $fabricUrl | toJson }},
+  coreMainUrl: {{ $coreUrl | toJson }},
+  coreStartUrl: {{ $startUrl | toJson }},
+  authCookieDomain: {{ .Values.web.sessionDomain | toJson }},
+  inboundUrl: {{ .Values.dashboard.inboundUrl | toJson }},
+  webhookHandlerUrl: {{ .Values.dashboard.webhookHandlerUrl | toJson }},
+  mcpUrl: {{ $mcpUrl | toJson }},
+  forceRegistrationRequests: {{ $forceRegistrationRequests }},
+  postmanImporter: {
+    enabled: {{ $postmanEnabled }},
+    maxFileUploadSize: {{ .Values.dashboard.postmanImporter.maxFileUploadSize | default 50 | int }},
+  },
+  links: {
+    docs: {
+      allowances: {{ .Values.dashboard.links.docs.allowances | toJson }},
+    },
+  },
+  broadcasting: {
+    appKey: {{ .Values.pusher.appKey | toJson }},
+    host: {{ $broadcastingHost | toJson }},
+    port: {{ $broadcastingPort | toJson }},
+    scheme: {{ $broadcastingScheme | toJson }},
+    cluster: {{ .Values.pusher.appCluster | default "mt1" | toJson }},
+  },
+}
 {{- end }}
 
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}

@@ -1,13 +1,14 @@
 {{- if .Values.dashboard.enabled }}
 ---
-# ConfigMap for dashboard-specific environment variables.
+# Static browser config mounted over /usr/share/nginx/html/config.js.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "patchworks.fullname" . }}-dashboard-config
+  name: {{ include "patchworks.fullname" . }}-dashboard-config-js
   namespace: {{ include "patchworks.dashboard.namespace" . }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
 data:
-  {{- include "patchworks.dashboardConfigData" . | nindent 2 }}
+  config.js: |
+    {{- include "patchworks.dashboardConfigJs" . | nindent 4 }}
 {{- end }}
