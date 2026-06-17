@@ -163,7 +163,7 @@ fabric:
   namespace: ""
   image:
     repository: fabric
-    registry: quay.io/patchworks
+    registry: ""
     tag: v0.0.5
     pullPolicy: ""
   # Shell command run as an init container before the app starts.
@@ -270,7 +270,7 @@ dashboard:
   namespace: ""
   image:
     repository: dashboard
-    registry: quay.io/patchworks
+    registry: ""
     tag: v0.0.5
     pullPolicy: ""
   replicaCount: 1
@@ -584,7 +584,7 @@ workers:
     # Set tag independently from the PHP app image.tag.
     image:
       repository: monocore
-      registry: quay.io/patchworks
+      registry: ""
       tag: v0.0.5
       pullPolicy: ""
     # Queue consumed by the hub monocore deployment. This matches monocore's
@@ -707,7 +707,7 @@ kubefaas:
   controller:
     image:
       repository: kubefaas-controller
-      registry: quay.io/patchworks    # overrides global image.registry when set
+      registry: ""    # overrides global image.registry when set
       tag: v0.0.5         # overrides global image.tag when set
       pullPolicy: ""
     replicaCount: 3
@@ -719,7 +719,7 @@ kubefaas:
   builder:
     image:
       repository: kubefaas-builder
-      registry: quay.io/patchworks
+      registry: ""
       tag: v0.0.5
       pullPolicy: ""
     replicaCount: 1
