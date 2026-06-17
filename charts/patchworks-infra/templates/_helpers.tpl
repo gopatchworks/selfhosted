@@ -1354,6 +1354,7 @@ NUXT_CORE_MAIN_URL: {{ $serverCoreUrl | quote }}
 NUXT_CORE_START_URL: {{ $serverStartUrl | quote }}
 NUXT_FABRIC_URL: {{ $serverFabricUrl | quote }}
 NUXT_MCP_URL: {{ $serverMcpUrl | quote }}
+NUXT_PUBLIC_AUTH_COOKIE_DOMAIN: {{ .Values.web.sessionDomain | quote }}
 NUXT_PUBLIC_INBOUND_URL: {{ .Values.dashboard.inboundUrl | quote }}
 NUXT_PUBLIC_GA4_TAG: {{ .Values.dashboard.ga4Tag | quote }}
 NUXT_PUBLIC_ZENDESK_URL: {{ .Values.dashboard.zendeskUrl | quote }}
