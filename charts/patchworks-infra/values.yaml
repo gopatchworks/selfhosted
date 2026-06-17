@@ -7,7 +7,7 @@ image:
   # Default image name for PHP app components (web, workers, migrations).
   # Monocore, fabric, and dashboard override this with their own repository.
   repository: core
-  tag: v0.0.3
+  tag: v0.0.5
   pullPolicy: IfNotPresent
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
@@ -111,8 +111,8 @@ fabric:
   namespace: ""
   image:
     repository: fabric
-    registry: ""
-    tag: ""
+    registry: quay.io/patchworks
+    tag: v0.0.5
     pullPolicy: ""
   # Shell command run as an init container before the app starts.
   init:
@@ -218,8 +218,8 @@ dashboard:
   namespace: ""
   image:
     repository: dashboard
-    registry: ""
-    tag: ""
+    registry: quay.io/patchworks
+    tag: v0.0.5
     pullPolicy: ""
   replicaCount: 1
   service:
@@ -529,8 +529,8 @@ workers:
     # Set tag independently from the PHP app image.tag.
     image:
       repository: monocore
-      registry: ""
-      tag: ""
+      registry: quay.io/patchworks
+      tag: v0.0.5
       pullPolicy: ""
     # Queue consumed by the hub monocore deployment. This matches monocore's
     # built-in topology default.
@@ -652,8 +652,8 @@ kubefaas:
   controller:
     image:
       repository: kubefaas-controller
-      registry: ""    # overrides global image.registry when set
-      tag: ""         # overrides global image.tag when set
+      registry: quay.io/patchworks    # overrides global image.registry when set
+      tag: v0.0.5         # overrides global image.tag when set
       pullPolicy: ""
     replicaCount: 3
     resources:
@@ -664,8 +664,8 @@ kubefaas:
   builder:
     image:
       repository: kubefaas-builder
-      registry: ""
-      tag: ""
+      registry: quay.io/patchworks
+      tag: v0.0.5
       pullPolicy: ""
     replicaCount: 1
     # Registry name (from registries.yaml) used for base image operations.
