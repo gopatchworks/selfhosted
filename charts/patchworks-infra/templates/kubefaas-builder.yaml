@@ -353,6 +353,9 @@ spec:
             {{- include "patchworks.env.s3AccessKey" $root | nindent 12 | replace "AWS_ACCESS_KEY_ID" "AWS_ACCESS_KEY" }}
             {{- include "patchworks.env.s3SecretKey" $root | nindent 12 | replace "AWS_SECRET_ACCESS_KEY" "AWS_SECRET_KEY" }}
             {{- end }}
+            {{- with $kf.builder.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           volumeMounts:
             - name: registries
               mountPath: /app/config

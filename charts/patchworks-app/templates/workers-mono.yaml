@@ -193,7 +193,6 @@ spec:
 {{- $wNs := $hubNs }}
 {{- $queue := $mainQueue }}
 {{- $processes := $mono.processes }}
-{{- $otelSvcName := $mono.otel.serviceName }}
 {{- $resources := $root.Values.workers.resources }}
 {{- $configMapName := printf "%s-workers-config" $fullname }}
 {{- if not $isHub }}
@@ -201,7 +200,6 @@ spec:
   {{- $wNs = $company.namespace | default $hubNs }}
   {{- $queue = $company.queue | default $company.name }}
   {{- $processes = dig "processes" $mono.processes $company }}
-  {{- $otelSvcName = dig "otel" "serviceName" (printf "monocore-%s" $company.name) $company }}
   {{- $resources = $company.resources | default $root.Values.workers.resources }}
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
 {{- end }}
@@ -292,13 +290,6 @@ data:
         username: {{ $mappingUsername | quote }}
         {{- end }}
 
-    otel:
-      enabled: {{ $mono.otel.enabled }}
-      service:
-        name: {{ $otelSvcName | quote }}
-      {{- if $mono.otel.endpoint }}
-      endpoint: {{ $mono.otel.endpoint | quote }}
-      {{- end }}
     {{- $kfHost := include "patchworks.kubefaas.host" $root -}}
     {{- $kfBuilderHost := include "patchworks.kubefaas.builderHost" $root -}}
     {{- $kfRegistry := $root.Values.kubefaas.registry.name -}}
@@ -481,6 +472,9 @@ spec:
             {{- include "patchworks.env.pusherAppCluster" $root | nindent 12 }}
             {{- end }}
             {{- with $root.Values.workers.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $mono.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
             {{- if not $isHub }}

@@ -188,6 +188,9 @@ spec:
                   name: {{ $authSecretName }}
                   key: {{ $authPasswordKey }}
             {{- end }}
+            {{- with $kf.controller.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           {{- with $kf.controller.resources }}
           resources:
             {{- toYaml . | nindent 12 }}

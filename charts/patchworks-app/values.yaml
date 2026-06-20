@@ -589,6 +589,7 @@ workers:
     # built-in topology default.
     queue: flows
     processes: 15
+    extraEnv: []
     store:
       # Use an existing Secret containing monocore's store.yaml instead of
       # generating one from s3.* values. For cross-namespace company workers,
@@ -619,11 +620,6 @@ workers:
       addSource: true
       verbose: false
 
-    otel:
-      enabled: false
-      endpoint: ""
-      serviceName: monocore
-
   # ── Company worker deployments (type: standalone and type: mono) ─────────
   # Each entry creates a separate Deployment consuming a company-specific queue,
   # in addition to the main hub Deployment.
@@ -648,10 +644,7 @@ workers:
   #   nodeSelector: {}
   #   tolerations: []
   #   affinity: {}
-  #   # mono only:
   #   processes: 5                # mono: defaults to workers.mono.processes
-  #   otel:
-  #     serviceName: monocore-molten-core  # defaults to monocore-<name>
 
 # ── RabbitMQ ───────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy RabbitMQ in-cluster. Set to false and populate
@@ -709,6 +702,7 @@ kubefaas:
       tag: v0.0.5         # overrides global image.tag when set
       pullPolicy: ""
     replicaCount: 3
+    extraEnv: []
     resources:
       requests:
         cpu: 100m
@@ -721,6 +715,7 @@ kubefaas:
       tag: v0.0.5
       pullPolicy: ""
     replicaCount: 1
+    extraEnv: []
     # Registry name (from registries.yaml) used for base image operations.
     baseImagesRegistry: kubefaas-templates
     # S3 bucket used to cache compiled function images between builds.
