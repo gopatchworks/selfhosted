@@ -278,11 +278,10 @@ dashboard:
     type: ClusterIP
     port: 80
   resources: {}
-  # Public service URLs injected into the static dashboard config.js at
-  # container startup. When the dashboard ingress host is configured, these
-  # default to the dashboard path-routed URLs (/core-main, /core-start,
-  # /fabric). Otherwise they fall back to dedicated service ingress hosts, then
-  # in-cluster service addresses.
+  # Public service URLs rendered into the static dashboard config.js. When the
+  # dashboard ingress host is configured, these default to the dashboard
+  # path-routed URLs (/core-main, /core-start, /fabric). Otherwise they fall
+  # back to dedicated service ingress hosts, then in-cluster service addresses.
   coreUrl: ""
   startUrl: ""
   fabricUrl: ""

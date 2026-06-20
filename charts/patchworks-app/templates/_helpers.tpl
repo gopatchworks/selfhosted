@@ -1468,6 +1468,7 @@ window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
     cluster: {{ .Values.pusher.appCluster | default "mt1" | toJson }},
   },
 }
+window.__PATCHWORKS_CONFIG_LOADED__ = true
 {{- end }}
 
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}
