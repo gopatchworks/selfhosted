@@ -129,11 +129,11 @@ Shared configuration injected into every application pod (web, workers, migratio
 
 ## Dashboard
 
-Dashboard values are shared with the app chart and are rendered into a
-chart-managed `config.js` mounted over `/usr/share/nginx/html/config.js` in the
-static nginx container. Because this is a mounted ConfigMap, browser-visible
-Pusher values must be supplied in values such as `pusher.appKey`; Secret-only or
-generated values are not available inside the static file at render time.
+Dashboard values are shared with the app chart and written to
+`/usr/share/nginx/html/config.js` before the static nginx container starts. The
+config writer uses the same inline, existingSecret, or generated Soketi/Pusher
+auth values as the application pods, so dashboard broadcasting works with
+generated credentials.
 
 | Key | Default | Description |
 |-----|---------|-------------|

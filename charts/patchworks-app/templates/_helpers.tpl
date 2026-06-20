@@ -1461,14 +1461,41 @@ window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
     },
   },
   broadcasting: {
-    appKey: {{ .Values.pusher.appKey | toJson }},
+    appKey: "__DASHBOARD_PUSHER_APP_KEY__",
     host: {{ $broadcastingHost | toJson }},
     port: {{ $broadcastingPort | toJson }},
     scheme: {{ $broadcastingScheme | toJson }},
-    cluster: {{ .Values.pusher.appCluster | default "mt1" | toJson }},
+    cluster: "__DASHBOARD_PUSHER_APP_CLUSTER__",
   },
 }
 window.__PATCHWORKS_CONFIG_LOADED__ = true
+{{- end }}
+
+{{/*
+Secret-aware env vars used only by the dashboard config initContainer.
+*/}}
+{{- define "patchworks.dashboardPusherConfigEnv" -}}
+{{- $name := .Values.pusher.existingSecret.name -}}
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
+{{- $name = printf "%s-soketi-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- if $name }}
+- name: DASHBOARD_PUSHER_APP_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ $name }}
+      key: {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}
+- name: DASHBOARD_PUSHER_APP_CLUSTER
+  valueFrom:
+    secretKeyRef:
+      name: {{ $name }}
+      key: {{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}
+{{- else }}
+- name: DASHBOARD_PUSHER_APP_KEY
+  value: {{ .Values.pusher.appKey | quote }}
+- name: DASHBOARD_PUSHER_APP_CLUSTER
+  value: {{ .Values.pusher.appCluster | default "mt1" | quote }}
+{{- end }}
 {{- end }}
 
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}

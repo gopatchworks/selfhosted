@@ -35,6 +35,34 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      initContainers:
+        - name: dashboard-config
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.dashboard "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.dashboard "root" .) }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+
+              cat > /dashboard-config/config.js <<'EOF'
+              {{- include "patchworks.dashboardConfigJs" . | nindent 14 }}
+              EOF
+
+              escape_sed() {
+                printf '%s' "$1" | sed 's/[\/&|]/\\&/g'
+              }
+
+              pusher_app_key="$(escape_sed "${DASHBOARD_PUSHER_APP_KEY:-}")"
+              pusher_app_cluster="$(escape_sed "${DASHBOARD_PUSHER_APP_CLUSTER:-mt1}")"
+              sed -i \
+                -e "s|__DASHBOARD_PUSHER_APP_KEY__|${pusher_app_key}|g" \
+                -e "s|__DASHBOARD_PUSHER_APP_CLUSTER__|${pusher_app_cluster}|g" \
+                /dashboard-config/config.js
+          env:
+            {{- include "patchworks.dashboardPusherConfigEnv" . | nindent 12 }}
+          volumeMounts:
+            - name: dashboard-config
+              mountPath: /dashboard-config
       containers:
         - name: dashboard
           image: {{ include "patchworks.appImage" (dict "svc" .Values.dashboard "root" .) | quote }}
@@ -73,11 +101,7 @@ spec:
           {{- end }}
       volumes:
         - name: dashboard-config
-          configMap:
-            name: {{ include "patchworks.fullname" . }}-dashboard-config-js
-            items:
-              - key: config.js
-                path: config.js
+          emptyDir: {}
       {{- with .Values.dashboard.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

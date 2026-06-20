@@ -1374,11 +1374,11 @@ window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
     },
   },
   broadcasting: {
-    appKey: {{ .Values.pusher.appKey | toJson }},
+    appKey: "__DASHBOARD_PUSHER_APP_KEY__",
     host: {{ $broadcastingHost | toJson }},
     port: {{ $broadcastingPort | toJson }},
     scheme: {{ $broadcastingScheme | toJson }},
-    cluster: {{ .Values.pusher.appCluster | default "mt1" | toJson }},
+    cluster: "__DASHBOARD_PUSHER_APP_CLUSTER__",
   },
 }
 window.__PATCHWORKS_CONFIG_LOADED__ = true
