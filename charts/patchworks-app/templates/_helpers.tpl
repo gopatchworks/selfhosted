@@ -1251,6 +1251,7 @@ LANDLORD_DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
 LANDLORD_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
 REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
+CACHE_DRIVER: "redis"
 RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
