@@ -624,6 +624,19 @@ It uses the same S3 endpoint and credentials as Core.
 | `s3Manager.replicaCount` | `1` | Number of replicas |
 | `s3Manager.service.type` | `ClusterIP` | Kubernetes Service type |
 | `s3Manager.service.port` | `8080` | HTTP service port |
+| `s3Manager.config.http.addr` | `""` | HTTP listen address in the generated `config.yaml`; defaults to `:<s3Manager.service.port>` |
+| `s3Manager.config.log.format` | `json` | S3 Manager log format |
+| `s3Manager.config.s3.provider` | `""` | S3 provider passed to S3 Manager; defaults to `minio` for in-cluster S3 or `aws` for external S3 |
+| `s3Manager.config.s3.endpoint` | `""` | S3 endpoint in the generated `config.yaml`; defaults to the resolved chart S3 endpoint |
+| `s3Manager.config.s3.region` | `""` | S3 region in the generated `config.yaml`; defaults to the resolved chart S3 region |
+| `s3Manager.config.s3.sessionToken` | `""` | Optional S3 session token |
+| `s3Manager.config.s3.pathStyle` | `""` | S3 path-style setting; defaults to the resolved chart S3 path-style value |
+| `s3Manager.config.buckets.name` | `local-pwks-${company_id}.pwks.co` | Bucket name template used for company bucket creation |
+| `s3Manager.config.buckets.region` | `""` | Bucket region; defaults to the resolved chart S3 region |
+| `s3Manager.config.buckets.permissions` | `{ objectOwnership: BucketOwnerEnforced }` | Bucket permissions block rendered into S3 Manager `config.yaml` |
+| `s3Manager.config.buckets.lifecycle` | payload/cache expiry rules | Bucket lifecycle block rendered into S3 Manager `config.yaml` |
+| `s3Manager.config.buckets.metricFilterRules` | `AllObjects`, `Payloads`, `Caches` | Bucket metric filters rendered into S3 Manager `config.yaml` |
+| `s3Manager.config.buckets.tags` | cost-center/company/environment tags | Tags applied by S3 Manager when creating company buckets |
 | `s3Manager.extraEnv` | `[]` | Additional env vars for the S3 Manager pod |
 | `s3Manager.extraEnvFrom` | `[]` | Additional envFrom sources for the S3 Manager pod |
 | `s3Manager.podAnnotations` | `{}` | Additional pod annotations |

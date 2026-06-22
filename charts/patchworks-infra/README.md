@@ -565,6 +565,25 @@ When `s3.enabled` is `true`, a MinIO instance is deployed and a post-install/upg
 
 ---
 
+## S3 Manager Shared Values
+
+The infra chart does not render S3 Manager resources. These values are present
+so the same shared values file can be applied to both the infra and app charts.
+The app chart consumes them when deploying the bucket creation service.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `s3Manager.enabled` | `true` | Deploy S3 Manager from the app chart |
+| `s3Manager.external.endpoint` | `""` | External bucket creation service endpoint for the app chart |
+| `s3Manager.config.s3.provider` | `""` | S3 provider for S3 Manager; app chart defaults to `minio` for in-cluster S3 or `aws` for external S3 |
+| `s3Manager.config.s3.endpoint` | `""` | S3 Manager S3 endpoint override |
+| `s3Manager.config.s3.region` | `""` | S3 Manager S3 region override |
+| `s3Manager.config.s3.pathStyle` | `""` | S3 Manager path-style override |
+| `s3Manager.config.buckets.name` | `local-pwks-${company_id}.pwks.co` | Bucket name template used by S3 Manager |
+| `s3Manager.config.buckets.tags` | cost-center/company/environment tags | Tags applied by S3 Manager when creating company buckets |
+
+---
+
 ## Pusher / Soketi
 
 When `pusher.enabled=true`, the infra chart deploys a native in-cluster Soketi

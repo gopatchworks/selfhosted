@@ -782,6 +782,68 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- if .Values.s3.enabled -}}true{{- else -}}{{ .Values.s3.external.pathStyle }}{{- end -}}
 {{- end }}
 
+{{- define "patchworks.s3Manager.httpAddr" -}}
+{{- .Values.s3Manager.config.http.addr | default (printf ":%v" (.Values.s3Manager.service.port | default 8080)) -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.s3Endpoint" -}}
+{{- .Values.s3Manager.config.s3.endpoint | default (include "patchworks.s3.endpoint" .) -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.s3Provider" -}}
+{{- if .Values.s3Manager.config.s3.provider -}}
+{{- .Values.s3Manager.config.s3.provider -}}
+{{- else if .Values.s3.enabled -}}
+minio
+{{- else -}}
+aws
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.s3Region" -}}
+{{- .Values.s3Manager.config.s3.region | default (include "patchworks.s3.region" .) -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.s3PathStyle" -}}
+{{- if kindIs "bool" .Values.s3Manager.config.s3.pathStyle -}}
+{{- .Values.s3Manager.config.s3.pathStyle -}}
+{{- else if ne (toString .Values.s3Manager.config.s3.pathStyle) "" -}}
+{{- .Values.s3Manager.config.s3.pathStyle -}}
+{{- else -}}
+{{- include "patchworks.s3.pathStyle" . -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.bucketRegion" -}}
+{{- .Values.s3Manager.config.buckets.region | default (include "patchworks.s3.region" .) -}}
+{{- end }}
+
+{{- define "patchworks.s3Manager.configYaml" -}}
+http:
+  addr: {{ include "patchworks.s3Manager.httpAddr" . | quote }}
+log:
+  format: {{ .Values.s3Manager.config.log.format | quote }}
+s3:
+  provider: {{ include "patchworks.s3Manager.s3Provider" . | quote }}
+  endpoint: {{ include "patchworks.s3Manager.s3Endpoint" . | quote }}
+  region: {{ include "patchworks.s3Manager.s3Region" . | quote }}
+  {{- with .Values.s3Manager.config.s3.sessionToken }}
+  session_token: {{ . | quote }}
+  {{- end }}
+  path_style: {{ include "patchworks.s3Manager.s3PathStyle" . }}
+buckets:
+  name: {{ .Values.s3Manager.config.buckets.name | quote }}
+  region: {{ include "patchworks.s3Manager.bucketRegion" . | quote }}
+  permissions:
+    {{- toYaml .Values.s3Manager.config.buckets.permissions | nindent 4 }}
+  lifecycle:
+    {{- toYaml .Values.s3Manager.config.buckets.lifecycle | nindent 4 }}
+  metricFilterRules:
+    {{- toYaml .Values.s3Manager.config.buckets.metricFilterRules | nindent 4 }}
+  tags:
+    {{- toYaml .Values.s3Manager.config.buckets.tags | nindent 4 }}
+{{- end }}
+
 {{/* ── Supervisord helper ─────────────────────────────────────────────────────── */}}
 
 {{/*

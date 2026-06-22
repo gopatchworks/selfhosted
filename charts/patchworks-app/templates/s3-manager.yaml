@@ -1,6 +1,21 @@
 {{- if and .Values.s3Manager.enabled (not .Values.s3Manager.external.endpoint) }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.s3Manager.namespace" . }}
+{{- $s3ExistingSecret := fromJson (include "patchworks.s3.existingSecret" .) }}
+{{- $s3AccessSecret := dict "name" $s3ExistingSecret.name "key" $s3ExistingSecret.accessKeyKey }}
+{{- $s3SecretSecret := dict "name" $s3ExistingSecret.name "key" $s3ExistingSecret.secretKeyKey }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-s3-manager-config
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3-manager
+data:
+  config.yaml: |
+    {{- include "patchworks.s3Manager.configYaml" . | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -20,10 +35,11 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "s3-manager" "Release" .Release) | nindent 8 }}
-      {{- with .Values.s3Manager.podAnnotations }}
       annotations:
+        checksum/config: {{ include "patchworks.s3Manager.configYaml" . | sha256sum }}
+        {{- with .Values.s3Manager.podAnnotations }}
         {{- toYaml . | nindent 8 }}
-      {{- end }}
+        {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -34,6 +50,8 @@ spec:
         - name: s3-manager
           image: {{ include "patchworks.appImage" (dict "svc" .Values.s3Manager "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.s3Manager "root" .) }}
+          args:
+            - --config=/etc/s3manager/config.yaml
           ports:
             - name: http
               containerPort: {{ .Values.s3Manager.service.port }}
@@ -42,25 +60,16 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           env:
-            - name: PORT
-              value: {{ .Values.s3Manager.service.port | quote }}
-            - name: AWS_ENDPOINT_URL
-              value: {{ include "patchworks.s3.endpoint" . | quote }}
-            - name: AWS_ENDPOINT
-              value: {{ include "patchworks.s3.endpoint" . | quote }}
-            - name: AWS_DEFAULT_REGION
-              value: {{ include "patchworks.s3.region" . | quote }}
-            - name: AWS_REGION
-              value: {{ include "patchworks.s3.region" . | quote }}
-            - name: AWS_BUCKET
-              value: {{ include "patchworks.s3.bucket" . | quote }}
-            - name: AWS_USE_PATH_STYLE_ENDPOINT
-              value: {{ include "patchworks.s3.pathStyle" . | quote }}
-            {{- include "patchworks.env.s3AccessKey" . | nindent 12 }}
-            {{- include "patchworks.env.s3SecretKey" . | nindent 12 }}
+            {{ include "patchworks.secretEnv" (dict "name" "S3_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) | nindent 12 }}
+            {{ include "patchworks.secretEnv" (dict "name" "S3_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) | nindent 12 }}
             {{- with .Values.s3Manager.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/s3manager/config.yaml
+              subPath: config.yaml
+              readOnly: true
           livenessProbe:
             tcpSocket:
               port: http
@@ -79,6 +88,10 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+      volumes:
+        - name: config
+          configMap:
+            name: {{ $fullname }}-s3-manager-config
       {{- with .Values.s3Manager.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

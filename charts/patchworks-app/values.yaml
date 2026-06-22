@@ -1112,6 +1112,53 @@ s3Manager:
   service:
     type: ClusterIP
     port: 8080
+  config:
+    http:
+      # Defaults to :<s3Manager.service.port> when empty.
+      addr: ""
+    log:
+      format: json
+    s3:
+      # Defaults to minio for in-cluster S3, or aws for external S3.
+      provider: ""
+      # Defaults to the resolved chart S3 endpoint when empty.
+      endpoint: ""
+      # Defaults to the resolved chart S3 region when empty.
+      region: ""
+      sessionToken: ""
+      # Defaults to the resolved chart S3 path-style setting when empty.
+      pathStyle: ""
+    buckets:
+      name: "local-pwks-${company_id}.pwks.co"
+      # Defaults to the resolved chart S3 region when empty.
+      region: ""
+      permissions:
+        objectOwnership: BucketOwnerEnforced
+      lifecycle:
+        transitionDefaultMinimumObjectSize: varies_by_storage_class
+        rules:
+          expire-payloads:
+            status: Enabled
+            filterPrefix: payloads
+            expirationDays: 4
+            noncurrentVersionExpiration:
+              noncurrentDays: 4
+          expire-caches:
+            status: Enabled
+            filterPrefix: caches
+            expirationDays: 8
+            noncurrentVersionExpiration:
+              noncurrentDays: 8
+      metricFilterRules:
+        AllObjects: {}
+        Payloads:
+          prefix: payloads
+        Caches:
+          prefix: caches
+      tags:
+        cost-center: core
+        company: "${company_name}"
+        environment: local
   extraEnv: []
   extraEnvFrom: []
   podAnnotations: {}
