@@ -487,6 +487,22 @@ Resolve Fabric's Redis connection details with three fallback modes:
 {{- if .Values.redis.enabled -}}6379{{- else -}}{{ .Values.redis.external.port }}{{- end -}}
 {{- end }}
 
+{{- define "patchworks.redis.sentinelAddress" -}}
+{{- if .Values.redis.addrs -}}
+{{- first .Values.redis.addrs -}}
+{{- else -}}
+{{- printf "%s:%s" (include "patchworks.redis.host" .) (include "patchworks.redis.port" .) -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.redis.sentinelHost" -}}
+{{- first (splitList ":" (include "patchworks.redis.sentinelAddress" .)) -}}
+{{- end }}
+
+{{- define "patchworks.redis.sentinelPort" -}}
+{{- last (splitList ":" (include "patchworks.redis.sentinelAddress" .)) -}}
+{{- end }}
+
 {{- define "patchworks.redis.password" -}}
 {{- if .Values.redis.enabled -}}{{- else -}}{{ .Values.redis.external.password }}{{- end -}}
 {{- end }}
@@ -1251,6 +1267,19 @@ LANDLORD_DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
 LANDLORD_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
 REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
+REDIS_CLIENT: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
+REDIS_DB: {{ .Values.redis.db | quote }}
+{{- if eq .Values.redis.mode "sentinel" }}
+REDIS_SENTINEL_HOST: {{ include "patchworks.redis.sentinelHost" . | quote }}
+REDIS_SENTINEL_PORT: {{ include "patchworks.redis.sentinelPort" . | quote }}
+REDIS_SENTINEL_SERVICE: {{ .Values.redis.sentinel.master | quote }}
+TENANT_REDIS_SENTINEL_HOST: {{ include "patchworks.redis.sentinelHost" . | quote }}
+TENANT_REDIS_SENTINEL_PORT: {{ include "patchworks.redis.sentinelPort" . | quote }}
+TENANT_REDIS_SENTINEL_SERVICE: {{ .Values.redis.sentinel.master | quote }}
+PAYLOAD_REDIS_SENTINEL_HOST: {{ include "patchworks.redis.sentinelHost" . | quote }}
+PAYLOAD_REDIS_SENTINEL_PORT: {{ include "patchworks.redis.sentinelPort" . | quote }}
+PAYLOAD_REDIS_SENTINEL_SERVICE: {{ .Values.redis.sentinel.master | quote }}
+{{- end }}
 CACHE_DRIVER: "redis"
 RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
@@ -1292,6 +1321,9 @@ TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
 TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
 TENANT_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
 TENANT_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
+TENANT_REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
+PAYLOAD_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
+PAYLOAD_REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
 FABRIC_DB_CONNECTION: "fabric"
 FABRIC_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
 FABRIC_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
@@ -1345,6 +1377,11 @@ Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in p
 {{- if or (include "patchworks.redis.password" .) .Values.redis.external.existingSecret.name }}
 {{- $s := dict "name" .Values.redis.external.existingSecret.name "key" .Values.redis.external.existingSecret.passwordKey }}
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{- if eq .Values.redis.mode "sentinel" }}
+{{ include "patchworks.secretEnv" (dict "name" "REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOAD_REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{- end }}
 {{- end }}
 {{ include "patchworks.env.elasticSearchCloudId" . }}
 {{ include "patchworks.env.elasticSearchCloudApiKey" . }}
@@ -1596,6 +1633,11 @@ FABRIC_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
 {{- end }}
 {{- if and (not .Values.redis.enabled) (not .Values.redis.external.existingSecret.name) (include "patchworks.redis.password" .) }}
 REDIS_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
+{{- if eq .Values.redis.mode "sentinel" }}
+REDIS_SENTINEL_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
+TENANT_REDIS_SENTINEL_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
+PAYLOAD_REDIS_SENTINEL_PASSWORD: {{ include "patchworks.redis.password" . | quote }}
+{{- end }}
 {{- end }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId (not .Values.elasticsearch.external.existingSecret.name) }}
 ELASTIC_SEARCH_CLOUD_ID: {{ .Values.elasticsearch.external.cloudId | quote }}
@@ -1729,6 +1771,23 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ .Values.redis.external.existingSecret.name }}
       key: {{ .Values.redis.external.existingSecret.passwordKey }}
+{{- if eq .Values.redis.mode "sentinel" }}
+- name: REDIS_SENTINEL_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.redis.external.existingSecret.name }}
+      key: {{ .Values.redis.external.existingSecret.passwordKey }}
+- name: TENANT_REDIS_SENTINEL_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.redis.external.existingSecret.name }}
+      key: {{ .Values.redis.external.existingSecret.passwordKey }}
+- name: PAYLOAD_REDIS_SENTINEL_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.redis.external.existingSecret.name }}
+      key: {{ .Values.redis.external.existingSecret.passwordKey }}
+{{- end }}
 {{- end }}
 {{ include "patchworks.env.elasticSearchCloudId" . }}
 {{ include "patchworks.env.elasticSearchCloudApiKey" . }}
@@ -2047,9 +2106,38 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.redis.host" . | quote }}
 - name: REDIS_PORT
   value: {{ include "patchworks.redis.port" . | quote }}
+- name: REDIS_CLIENT
+  value: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
+- name: REDIS_DB
+  value: {{ .Values.redis.db | quote }}
+{{- if eq .Values.redis.mode "sentinel" }}
+- name: REDIS_SENTINEL_HOST
+  value: {{ include "patchworks.redis.sentinelHost" . | quote }}
+- name: REDIS_SENTINEL_PORT
+  value: {{ include "patchworks.redis.sentinelPort" . | quote }}
+- name: REDIS_SENTINEL_SERVICE
+  value: {{ .Values.redis.sentinel.master | quote }}
+- name: TENANT_REDIS_SENTINEL_HOST
+  value: {{ include "patchworks.redis.sentinelHost" . | quote }}
+- name: TENANT_REDIS_SENTINEL_PORT
+  value: {{ include "patchworks.redis.sentinelPort" . | quote }}
+- name: TENANT_REDIS_SENTINEL_SERVICE
+  value: {{ .Values.redis.sentinel.master | quote }}
+- name: PAYLOAD_REDIS_SENTINEL_HOST
+  value: {{ include "patchworks.redis.sentinelHost" . | quote }}
+- name: PAYLOAD_REDIS_SENTINEL_PORT
+  value: {{ include "patchworks.redis.sentinelPort" . | quote }}
+- name: PAYLOAD_REDIS_SENTINEL_SERVICE
+  value: {{ .Values.redis.sentinel.master | quote }}
+{{- end }}
 {{- if or (include "patchworks.redis.password" .) .Values.redis.external.existingSecret.name }}
 {{- $s := dict "name" .Values.redis.external.existingSecret.name "key" .Values.redis.external.existingSecret.passwordKey }}
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{- if eq .Values.redis.mode "sentinel" }}
+{{ include "patchworks.secretEnv" (dict "name" "REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{ include "patchworks.secretEnv" (dict "name" "TENANT_REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{ include "patchworks.secretEnv" (dict "name" "PAYLOAD_REDIS_SENTINEL_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
+{{- end }}
 {{- end }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
 {{ include "patchworks.env.rabbitmqUrl" . }}
@@ -2119,6 +2207,12 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{- end }}
 - name: TENANT_REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
+- name: TENANT_REDIS_PORT
+  value: {{ include "patchworks.redis.port" . | quote }}
+- name: PAYLOAD_REDIS_HOST
+  value: {{ include "patchworks.redis.host" . | quote }}
+- name: PAYLOAD_REDIS_PORT
+  value: {{ include "patchworks.redis.port" . | quote }}
 {{- if .Values.s3.enabled }}
 - name: TENANT_CACHE_AWS_ENDPOINT_URL
   value: {{ include "patchworks.s3.endpoint" . | quote }}
