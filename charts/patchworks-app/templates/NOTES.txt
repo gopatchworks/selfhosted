@@ -90,6 +90,15 @@ To enable ingress, set:
 {{- else }}
   S3:            external    ({{ .Values.s3.external.endpoint }})
 {{- end }}
+{{- if .Values.s3.bucketCreationEndpoint }}
+  S3 Manager:    explicit    ({{ .Values.s3.bucketCreationEndpoint }})
+{{- else if .Values.s3Manager.external.endpoint }}
+  S3 Manager:    external    ({{ .Values.s3Manager.external.endpoint }})
+{{- else if .Values.s3Manager.enabled }}
+  S3 Manager:    in-cluster  ({{ include "patchworks.fullname" . }}-s3-manager:{{ .Values.s3Manager.service.port }})
+{{- else }}
+  S3 Manager:    disabled    (bucket creation falls back to S3 endpoint)
+{{- end }}
 
 ── Next steps ────────────────────────────────────────────────────────────────
 

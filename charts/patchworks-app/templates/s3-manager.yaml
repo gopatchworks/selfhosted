@@ -1,0 +1,111 @@
+{{- if and .Values.s3Manager.enabled (not .Values.s3Manager.external.endpoint) }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.s3Manager.namespace" . }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-s3-manager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3-manager
+spec:
+  replicas: {{ .Values.s3Manager.replicaCount }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "s3-manager" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "s3-manager" "Release" .Release) | nindent 8 }}
+      {{- with .Values.s3Manager.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: s3-manager
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.s3Manager "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.s3Manager "root" .) }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.s3Manager.service.port }}
+          {{- with .Values.s3Manager.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: PORT
+              value: {{ .Values.s3Manager.service.port | quote }}
+            - name: AWS_ENDPOINT_URL
+              value: {{ include "patchworks.s3.endpoint" . | quote }}
+            - name: AWS_ENDPOINT
+              value: {{ include "patchworks.s3.endpoint" . | quote }}
+            - name: AWS_DEFAULT_REGION
+              value: {{ include "patchworks.s3.region" . | quote }}
+            - name: AWS_REGION
+              value: {{ include "patchworks.s3.region" . | quote }}
+            - name: AWS_BUCKET
+              value: {{ include "patchworks.s3.bucket" . | quote }}
+            - name: AWS_USE_PATH_STYLE_ENDPOINT
+              value: {{ include "patchworks.s3.pathStyle" . | quote }}
+            {{- include "patchworks.env.s3AccessKey" . | nindent 12 }}
+            {{- include "patchworks.env.s3SecretKey" . | nindent 12 }}
+            {{- with .Values.s3Manager.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 5
+          {{- with .Values.s3Manager.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with .Values.s3Manager.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.s3Manager.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.s3Manager.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-s3-manager
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: s3-manager
+spec:
+  type: {{ .Values.s3Manager.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "s3-manager" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.s3Manager.service.port }}
+      targetPort: http
+{{- end }}

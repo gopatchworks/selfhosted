@@ -1093,6 +1093,33 @@ s3:
     spec: {}
   resources: {}
 
+# ── S3 Manager ─────────────────────────────────────────────────────────────────
+# Bucket creation service deployed by the app chart. Core web pods and non-mono
+# workers use it via S3_BUCKET_CREATION_ENDPOINT.
+s3Manager:
+  namespace: ""
+  enabled: true
+  external:
+    # Use an externally managed bucket creation service instead of the app chart
+    # managed in-cluster service. Takes precedence over enabled=true.
+    endpoint: ""
+  image:
+    repository: s3manager
+    registry: ""
+    tag: v0.0.5
+    pullPolicy: ""
+  replicaCount: 1
+  service:
+    type: ClusterIP
+    port: 8080
+  extraEnv: []
+  extraEnvFrom: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  resources: {}
+
 # ── Soketi ─────────────────────────────────────────────────────────────────────
 # Shared values for the infra chart's native in-cluster Pusher-compatible
 # WebSocket server. The app chart does not render Soketi resources.

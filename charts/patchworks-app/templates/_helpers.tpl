@@ -162,6 +162,10 @@ Usage: include "patchworks.componentNamespace" (dict "ns" .Values.web.namespace 
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.s3.namespace "root" .) -}}
 {{- end }}
 
+{{- define "patchworks.s3Manager.namespace" -}}
+{{- include "patchworks.componentNamespace" (dict "ns" .Values.s3Manager.namespace "root" .) -}}
+{{- end }}
+
 {{/* KubeFaaS control-plane namespace — defaults to "kubefaas", not the release namespace. */}}
 {{- define "patchworks.kubefaas.namespace" -}}
 {{- .Values.kubefaas.namespace | default "kubefaas" -}}
@@ -759,7 +763,15 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- end }}
 
 {{- define "patchworks.s3.bucketCreationEndpoint" -}}
-{{- .Values.s3.bucketCreationEndpoint | default (include "patchworks.s3.endpoint" .) -}}
+{{- if .Values.s3.bucketCreationEndpoint -}}
+{{- .Values.s3.bucketCreationEndpoint -}}
+{{- else if .Values.s3Manager.external.endpoint -}}
+{{- .Values.s3Manager.external.endpoint -}}
+{{- else if .Values.s3Manager.enabled -}}
+{{- printf "http://%s-s3-manager.%s.svc.cluster.local:%v" (include "patchworks.fullname" .) (include "patchworks.s3Manager.namespace" .) (.Values.s3Manager.service.port | default 8080) -}}
+{{- else -}}
+{{- include "patchworks.s3.endpoint" . -}}
+{{- end -}}
 {{- end }}
 
 {{- define "patchworks.s3.region" -}}

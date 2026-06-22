@@ -10,7 +10,7 @@ charts:
   RabbitMQ, Elasticsearch, S3/MinIO, Soketi, KubeFaaS, and generated infra
   credentials.
 - `charts/patchworks-app`: Patchworks application resources, migrations,
-  seeders, workers, and ingress.
+  seeders, workers, S3 Manager, and ingress.
 
 For GitOps/Argo installs, use the split charts with one shared values file.
 
@@ -30,7 +30,7 @@ For GitOps/Argo installs, use the split charts with one shared values file.
 
 ## Getting started
 
-Stand up a complete local environment with [kind](https://kind.sigs.k8s.io) (Kubernetes in Docker). Everything runs in-cluster — MySQL, Redis, RabbitMQ, Elasticsearch, MinIO, and the Patchworks application itself.
+Stand up a complete local environment with [kind](https://kind.sigs.k8s.io) (Kubernetes in Docker). Everything runs in-cluster — MySQL, Redis, RabbitMQ, Elasticsearch, MinIO, S3 Manager, and the Patchworks application itself.
 
 Total time: ~10 minutes.
 
@@ -117,6 +117,7 @@ patchworks-mysql-xxxx             1/1     Running     0
 patchworks-rabbitmq-xxxx          1/1     Running     0
 patchworks-redis-xxxx             1/1     Running     0
 patchworks-s3-xxxx                1/1     Running     0
+patchworks-s3-manager-xxxx        1/1     Running     0
 patchworks-gateway-xxxx           1/1     Running     0
 patchworks-start-xxxx             1/1     Running     0
 patchworks-workers-xxxx           1/1     Running     0

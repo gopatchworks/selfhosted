@@ -19,6 +19,7 @@ application: Application {
 
   web: "Core Web\nPHP Laravel" { shape: rectangle }
   scheduler: "Core Scheduler\nCronJob × gateway/start" { shape: rectangle }
+  s3manager: "S3 Manager\n(S3_BUCKET_CREATION_ENDPOINT)" { shape: rectangle }
 
   workers: Workers {
     standalone:   "standalone\nPHP via supervisord" { shape: rectangle }
@@ -67,3 +68,6 @@ optional: "Optional Integrations" {
 
 application.web -> optional.soketi: PUSHER_*
 application.workers -> optional.soketi: PUSHER_*
+application.web -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
+application.workers -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
+application.s3manager -> infra.s3: AWS_*
