@@ -465,6 +465,8 @@ spec:
             {{- include "patchworks.env.mappingElasticsearchApiKey" $root | nindent 12 }}
             {{- include "patchworks.env.mappingElasticsearchUsername" $root | nindent 12 }}
             {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
+            - name: REDIS_PREFIX
+              value: "laravel_database_"
             {{- if include "patchworks.pusher.isConfigured" $root }}
             {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
             {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}
