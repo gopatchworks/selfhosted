@@ -449,7 +449,7 @@ spec:
             {{- . | nindent 12 }}
             {{- end }}
             {{- include "patchworks.env.rabbitmqPassword" $root | nindent 12 }}
-            {{- include "patchworks.env.rabbitmqUrl" $root | nindent 12 }}
+            {{- include "patchworks.env.rabbitmq" $root | nindent 12 }}
             {{- if or $root.Values.redis.external.password $root.Values.redis.external.existingSecret.name }}
             {{- $rs := dict "name" $root.Values.redis.external.existingSecret.name "key" $root.Values.redis.external.existingSecret.passwordKey }}
             {{- include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" $root) "secret" $rs) | nindent 12 }}

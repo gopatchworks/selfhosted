@@ -186,19 +186,19 @@ For cases where the right `existingSecret` depends on `enabled` vs `external` (e
 
 ## Passwords in connection strings — `$(VAR)` substitution
 
-When a connection string (DSN, AMQP URL) embeds a password, **never** put the password inline as plaintext. Use Kubernetes env var substitution:
+When a connection string (DSN, URL) embeds a password, **never** put the password inline as plaintext. Use Kubernetes env var substitution:
 
-1. Emit the password as its own env var first (`DB_PASSWORD`, `RABBITMQ_PASSWORD`).
+1. Emit the password as its own env var first (`DB_PASSWORD`, etc.).
 2. Reference it with `$(VAR_NAME)` in the URL value.
 
 ```yaml
-- name: RABBITMQ_PASSWORD
+- name: DB_PASSWORD
   value: "secret"            # or secretKeyRef
-- name: RABBITMQ_URL
-  value: "amqp://user:$(RABBITMQ_PASSWORD)@host:5672/vhost"
+- name: DB_DSN
+  value: "user:$(DB_PASSWORD)@tcp(mysql:3306)/database"
 ```
 
-The template helper `patchworks.env.rabbitmqUrl` relies on `patchworks.env.rabbitmqPassword` being emitted in the same `env:` block first.
+RabbitMQ is intentionally configured with component env vars (`RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST`) rather than a full DSN so vhosts and credentials do not need URL encoding in the chart.
 
 ---
 
@@ -217,7 +217,7 @@ Infrastructure images (MySQL, Redis, RabbitMQ, etc.) use their own fully-qualifi
 - `APP_KEY`, `APP_ENV`, `APP_DEBUG`, `APP_URL`, `APP_NAME`
 - `DB_HOST/PORT/DATABASE/USERNAME/PASSWORD`
 - `REDIS_HOST/PORT/PASSWORD`
-- `RABBITMQ_PASSWORD`, `RABBITMQ_URL`
+- `RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST`
 - `AWS_*` (S3)
 - `ELASTICSEARCH_HOST/PORT`
 - Pusher vars (when configured)

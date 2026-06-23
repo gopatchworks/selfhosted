@@ -642,7 +642,7 @@ workers:
 # ── RabbitMQ ───────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy RabbitMQ in-cluster. Set to false and populate
 # external.* to use an existing RabbitMQ instance.
-# RABBITMQ_URL is injected into all app pods and monocore workers.
+# RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST are injected into app pods and monocore workers.
 rabbitmq:
   namespace: ""  # overrides global namespace for RabbitMQ resources
   enabled: true

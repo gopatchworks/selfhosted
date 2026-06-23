@@ -36,7 +36,7 @@ infra: "Infrastructure (in-cluster or external)" {
 
   mysql:         "MySQL 8.0\n(DB_*)"                     { shape: cylinder }
   redis:         "Redis / Valkey\n(REDIS_*)"              { shape: cylinder }
-  rabbitmq:      "RabbitMQ 3\n(RABBITMQ_URL)"             { shape: queue    }
+  rabbitmq:      "RabbitMQ 3\n(RABBITMQ_*)"               { shape: queue    }
   elasticsearch: "Elasticsearch 8\n(ELASTICSEARCH_HOST)"  { shape: cylinder }
   s3:            "MinIO / S3\n(AWS_*)"                    { shape: cylinder }
   credentials:   "Credential Generator\n(pre-install / pre-upgrade)" { shape: rectangle }

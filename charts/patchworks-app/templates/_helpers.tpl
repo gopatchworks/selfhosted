@@ -997,30 +997,10 @@ LARAVEL_APP_KEY — mirrors APP_KEY under the monocore env var name.
 {{- include "patchworks.secretEnv" (dict "name" "RABBITMQ_PASSWORD" "value" (include "patchworks.rabbitmq.password" .) "secret" $secret) -}}
 {{- end }}
 
-{{/* RABBITMQ_URL only, for env lists that already define RABBITMQ_* component vars. */}}
-{{- define "patchworks.env.rabbitmqUrlOnly" -}}
-{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
-{{- if $rmqSecret.name -}}
-- name: RABBITMQ_URL
-  value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/$(RABBITMQ_VHOST)"
-{{- else -}}
-- name: RABBITMQ_URL
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "patchworks.fullname" . }}-secret
-      key: RABBITMQ_URL
-{{- end -}}
-{{- end }}
-
 {{/*
-RABBITMQ_URL — self-contained helper usable in any container, with or without appSecretEnvRefs.
-  - Literal password: references the pre-built, URL-encoded value from the managed Secret.
-  - existingSecret:   emits inline RABBITMQ_HOST/PORT/USER/VHOST entries (required for $(VAR)
-                      substitution to work) followed by the $(VAR)-templated URL.
+RabbitMQ component env vars for pods that do not consume patchworks.appConfigData.
 */}}
-{{- define "patchworks.env.rabbitmqUrl" -}}
-{{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
-{{- if $rmqSecret.name -}}
+{{- define "patchworks.env.rabbitmq" -}}
 - name: RABBITMQ_HOST
   value: {{ include "patchworks.rabbitmq.host" . | quote }}
 - name: RABBITMQ_PORT
@@ -1028,16 +1008,7 @@ RABBITMQ_URL — self-contained helper usable in any container, with or without 
 - name: RABBITMQ_USER
   value: {{ include "patchworks.rabbitmq.username" . | quote }}
 - name: RABBITMQ_VHOST
-  value: {{ trimPrefix "/" (include "patchworks.rabbitmq.vhost" .) | quote }}
-- name: RABBITMQ_URL
-  value: "amqp://$(RABBITMQ_USER):$(RABBITMQ_PASSWORD)@$(RABBITMQ_HOST):$(RABBITMQ_PORT)/$(RABBITMQ_VHOST)"
-{{- else -}}
-- name: RABBITMQ_URL
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "patchworks.fullname" . }}-secret
-      key: RABBITMQ_URL
-{{- end -}}
+  value: {{ include "patchworks.rabbitmq.vhost" . | quote }}
 {{- end }}
 
 {{/* PUSHER_APP_ID */}}
@@ -1285,7 +1256,7 @@ CACHE_DRIVER: "redis"
 RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
-RABBITMQ_VHOST: {{ trimPrefix "/" (include "patchworks.rabbitmq.vhost" .) | quote }}
+RABBITMQ_VHOST: {{ include "patchworks.rabbitmq.vhost" . | quote }}
 ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}
@@ -1363,10 +1334,7 @@ KUBEFAAS_FUNCTION_BUILDER_HOST: {{ . | quote }}
 KUBEFAAS_FUNCTION_REGISTRY: {{ .Values.kubefaas.registry.name | quote }}
 {{- end }}
 
-{{/*
-Sensitive app env vars as a YAML list for pod spec env:.
-Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in pod env).
-*/}}
+{{/* Sensitive app env vars as a YAML list for pod spec env:. */}}
 {{- define "patchworks.appSecretEnv" -}}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
@@ -1398,7 +1366,7 @@ Includes RABBITMQ_URL (uses $(RABBITMQ_PASSWORD) substitution — must stay in p
 {{- $s3SecretSecret := dict "name" $s3Secret.name "key" $s3Secret.secretKeyKey }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
-{{ include "patchworks.env.rabbitmqUrl" . }}
+{{ include "patchworks.env.rabbitmq" . }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{ include "patchworks.env.pusherAppId" . }}
 {{ include "patchworks.env.pusherAppKey" . }}
@@ -1511,7 +1479,7 @@ Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 {{- $s3SecretSecret := dict "name" $s3Secret.name "key" $s3Secret.secretKeyKey }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
-{{ include "patchworks.env.rabbitmqUrl" . }}
+{{ include "patchworks.env.rabbitmq" . }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{ include "patchworks.env.pusherAppId" . }}
 {{ include "patchworks.env.pusherAppKey" . }}
@@ -1672,13 +1640,6 @@ FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | q
 {{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) }}
 {{- if not $rmqSecret.name }}
 RABBITMQ_PASSWORD: {{ include "patchworks.rabbitmq.password" . | quote }}
-{{- /* Pre-build the URL with urlquery-encoded password so special chars (@, :, etc.) don't break URL parsing at runtime. */}}
-RABBITMQ_URL: {{ printf "amqp://%s:%s@%s:%s/%s"
-  (include "patchworks.rabbitmq.username" .)
-  (urlquery (include "patchworks.rabbitmq.password" .))
-  (include "patchworks.rabbitmq.host" .)
-  (include "patchworks.rabbitmq.port" .)
-  (trimPrefix "/" (include "patchworks.rabbitmq.vhost" .)) | quote }}
 {{- end }}
 {{- if include "patchworks.pusher.isConfigured" . }}
 {{- if and (not .Values.pusher.existingSecret.name) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)))) }}
@@ -1698,11 +1659,7 @@ KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
 {{- if (include "patchworks.appSecretData" . | trim) -}}true{{- end -}}
 {{- end }}
 
-{{/*
-env list items for managed app Secret: RABBITMQ component vars (from ConfigMap, for $(VAR)
-substitution), RABBITMQ_PASSWORD (secretKeyRef), RABBITMQ_URL (full substitution), and
-existingSecret overrides.
-*/}}
+{{/* env list items for managed app Secret and existingSecret overrides. */}}
 {{- define "patchworks.appSecretEnvRefs" -}}
 {{- $fullname := include "patchworks.fullname" . -}}
 {{- $rmqSecret := fromJson (include "patchworks.rabbitmq.passwordSecret" .) -}}
@@ -1731,7 +1688,6 @@ existingSecret overrides.
     secretKeyRef:
       name: {{ if $rmqSecret.name }}{{ $rmqSecret.name }}{{ else }}{{ $fullname }}-secret{{ end }}
       key: {{ if $rmqSecret.name }}{{ $rmqSecret.key }}{{ else }}RABBITMQ_PASSWORD{{ end }}
-{{ include "patchworks.env.rabbitmqUrlOnly" . }}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{- if $appKeySecret.name }}
 - name: APP_KEY
@@ -2143,7 +2099,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{- end }}
 {{- end }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
-{{ include "patchworks.env.rabbitmqUrl" . }}
+{{ include "patchworks.env.rabbitmq" . }}
 - name: ELASTIC_SEARCH_HOSTS
   value: {{ include "patchworks.elasticsearch.url" . | quote }}
 - name: ELASTICSEARCH_HOST
@@ -2308,7 +2264,7 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.fabric.redis.password" .) "secret" $s) }}
 {{- end }}
 {{ include "patchworks.env.rabbitmqPassword" . }}
-{{ include "patchworks.env.rabbitmqUrl" . }}
+{{ include "patchworks.env.rabbitmq" . }}
 - name: ELASTIC_SEARCH_HOSTS
   value: {{ include "patchworks.elasticsearch.url" . | quote }}
 - name: ELASTICSEARCH_HOST
