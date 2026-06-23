@@ -107,7 +107,7 @@ web:
     queue: start
 
 # ── Core Scheduler ─────────────────────────────────────────────────────────────
-# Runs Laravel's scheduler for the gateway and start domains.
+# Shared defaults for processor scheduler CronJobs.
 scheduler:
   enabled: true
   schedule: "*/1 * * * *"
@@ -135,27 +135,36 @@ scheduler:
   tolerations: []
   affinity: {}
 
-  gateway:
+# ── Core Processors ────────────────────────────────────────────────────────────
+# Processor queues are always handled by PHP Core workers, even when
+# workers.type=mono for the main flow worker.
+#
+# Any field from scheduler.* can be overridden per processor with:
+#   scheduler:
+#     schedule: "*/5 * * * *"
+#     activeDeadlineSeconds: 7500
+# The top-level scheduler.enabled remains the global on/off switch.
+processors:
+  # Used to schedule flows.
+  - name: Start
+    queue: start
     enabled: true
-    schedule: ""
-    resources: {}
-    extraEnv: []
-    extraEnvFrom: []
-    podAnnotations: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
-
-  start:
+  # Used to process gateway background jobs.
+  - name: Gateway
+    queue: gateway
     enabled: true
-    schedule: ""
-    resources: {}
-    extraEnv: []
-    extraEnvFrom: []
-    podAnnotations: {}
-    nodeSelector: {}
-    tolerations: []
-    affinity: {}
+  # Used for short background jobs.
+  - name: Short Processor
+    queue: short-processor
+    enabled: true
+  # Used for medium background jobs.
+  - name: Medium Processor
+    queue: medium-processor
+    enabled: true
+  # Used to run long background jobs.
+  - name: Long Processor
+    queue: long-processor
+    enabled: true
 
 # ── Fabric ─────────────────────────────────────────────────────────────────────
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
@@ -520,25 +529,13 @@ workers:
       name: Filter
       domain: filter
 
-    gateway:
-      name: Core-Gateway
-      domain: gateway
-
     logging:
       name: Logging
       domain: logging
 
-    long-processor:
-      name: Long Processor
-      domain: long-processor
-
     manual-input:
       name: Manual Input
       domain: manual-input
-
-    medium-processor:
-      name: Medium Processor
-      domain: medium-processor
 
     notify:
       name: Notify
@@ -559,10 +556,6 @@ workers:
     split:
       name: Split
       domain: split
-
-    start:
-      name: Start
-      domain: start
 
     track:
       name: Track

@@ -33,6 +33,7 @@ infra workloads start. Existing Secrets are left untouched on upgrades.
 - [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
 - [Workers](#workers)
+- [Scheduler shared values](#scheduler-shared-values)
 - [Mapping documents](#mapping-documents)
 - [Migrations](#migrations)
 - [Ingress](#ingress)
@@ -43,6 +44,7 @@ infra workloads start. Existing Secrets are left untouched on upgrades.
 - [S3 / MinIO](#s3--minio)
 - [Pusher / Soketi](#pusher--soketi)
 - [KubeFaaS](#kubefaas)
+- [Processor queues](#processor-queues)
 - [Existing secrets](#existing-secrets)
 - [Example configurations](#example-configurations)
 
@@ -324,6 +326,15 @@ hub monocore Service.
 `workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.
 
 > **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually — topology automation only applies to `type: mono` via the `topology.yaml` startup assertion.
+
+---
+
+## Scheduler Shared Values
+
+The infra chart does not render scheduler resources, but it keeps the
+`scheduler.*` values next to `processors[]` so one shared values file can be
+used for both chart releases. The app chart consumes these values when creating
+processor scheduler CronJobs.
 
 ---
 
@@ -670,6 +681,21 @@ When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate`
 | `kubefaas.auth.existingSecret.usernameKey` | `username` | Key for the username |
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `kubefaas.registry.name` | `""` | Container registry for built function images |
+
+---
+
+## Processor Queues
+
+The infra chart consumes the shared `processors[]` values to configure bundled
+RabbitMQ. Each enabled processor creates a durable quorum queue in the generated
+RabbitMQ definitions file. The app chart uses the same list to create PHP Core
+worker Deployments and scheduler CronJobs.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name consumed by the app chart |
+| `queue` | RabbitMQ queue name |
+| `enabled` | Set `false` to skip queue creation and app resources |
 
 ---
 

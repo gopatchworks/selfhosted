@@ -14,6 +14,29 @@ title: Patchworks Worker Modes {
   style.font-size: 20
 }
 
+# ── processors[] ────────────────────────────────────────────────────────────
+
+processors: "processors[] (always PHP Core)" {
+  style.fill: "#FFF8E6"
+  direction: down
+
+  desc: "Background processor queues are independent of workers.type.\nEach enabled processor creates a PHP worker Deployment and scheduler CronJob." {
+    shape: text
+  }
+
+  processor: "Per Processor" {
+    style.stroke-dash: 4
+    direction: right
+    cm: "{name}-processor-{queue}-supervisord\nqueue: processors[].queue" { shape: document }
+    dep: "Deployment\n{name}-processor-{queue}" { shape: rectangle }
+    cron: "CronJob\n{name}-{queue}-scheduler" { shape: rectangle }
+    queue: "RabbitMQ queue\nquorum durable" { shape: queue }
+    cm -> dep: mounts
+    dep -> queue: consumes
+    cron -> queue: APP_DOMAIN
+  }
+}
+
 # ── type: standalone ────────────────────────────────────────────────────────
 
 standalone: "type: standalone" {

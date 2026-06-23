@@ -1,20 +1,26 @@
 {{- if .Values.scheduler.enabled }}
 {{- $root := . }}
-{{- range $name, $component := dict "gateway" .Values.scheduler.gateway "start" .Values.scheduler.start }}
-{{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) $component -}}
+{{- range $processor := .Values.processors }}
+{{- if not $processor }}{{- continue }}{{- end }}
+{{- $enabled := true }}
+{{- if hasKey $processor "enabled" }}{{- $enabled = $processor.enabled }}{{- end }}
+{{- if $enabled }}
+{{- $queue := required "processors[].queue is required" $processor.queue }}
+{{- $processorName := $processor.name | default $queue }}
+{{- $slug := regexReplaceAll "[^a-z0-9-]" (lower $queue) "-" | trimAll "-" }}
+{{- $processorScheduler := $processor.scheduler | default dict }}
+{{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) $processorScheduler -}}
 {{- if $sched.enabled }}
-{{- $web := ternary $root.Values.web.gateway $root.Values.web.start (eq $name "gateway") -}}
-{{- $svc := mergeOverwrite (deepCopy $root.Values.web) $web -}}
-{{- $namespace := ternary (include "patchworks.gateway.namespace" $root) (include "patchworks.start.namespace" $root) (eq $name "gateway") -}}
+{{- $namespace := $processor.namespace | default (include "patchworks.workers.namespace" $root) -}}
 ---
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: {{ include "patchworks.fullname" $root }}-{{ $name }}-scheduler
+  name: {{ include "patchworks.fullname" $root }}-{{ $slug }}-scheduler
   namespace: {{ $namespace }}
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
-    app.kubernetes.io/component: {{ $name }}-scheduler
+    app.kubernetes.io/component: {{ $slug }}-scheduler
 spec:
   schedule: {{ $sched.schedule | default $root.Values.scheduler.schedule | quote }}
   suspend: {{ $sched.suspend }}
@@ -27,7 +33,7 @@ spec:
       template:
         metadata:
           labels:
-            {{- include "patchworks.selectorLabels" (dict "component" (printf "%s-scheduler" $name) "Release" $root.Release) | nindent 12 }}
+            {{- include "patchworks.selectorLabels" (dict "component" (printf "%s-scheduler" $slug) "Release" $root.Release) | nindent 12 }}
           annotations:
             checksum/config: {{ include "patchworks.appConfigData" $root | sha256sum }}
             {{- with $sched.podAnnotations }}
@@ -44,9 +50,9 @@ spec:
           initContainers:
             {{- include "patchworks.waitForDeps" $root | nindent 12 }}
           containers:
-            - name: {{ $name }}-scheduler
-              image: {{ include "patchworks.appImage" (dict "svc" $svc "root" $root) | quote }}
-              imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" $root) }}
+            - name: {{ $slug }}-scheduler
+              image: {{ include "patchworks.appImage" (dict "svc" $root.Values.workers "root" $root) | quote }}
+              imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $root.Values.workers "root" $root) }}
               command:
                 {{- toYaml $sched.command | nindent 16 }}
               args:
@@ -60,19 +66,24 @@ spec:
                 {{- end }}
                 - secretRef:
                     name: {{ include "patchworks.passportSecretName" $root }}
-                {{- with (concat $root.Values.app.extraEnvFrom $svc.extraEnvFrom $root.Values.scheduler.extraEnvFrom $sched.extraEnvFrom) }}
+                {{- with (concat $root.Values.app.extraEnvFrom $root.Values.workers.extraEnvFrom ($processor.extraEnvFrom | default (list)) $root.Values.scheduler.extraEnvFrom ($sched.extraEnvFrom | default (list))) }}
                 {{- toYaml . | nindent 16 }}
                 {{- end }}
               env:
                 {{- include "patchworks.appSecretEnvRefs" $root | nindent 16 }}
+                - name: APP_NAME
+                  value: {{ $processorName | quote }}
                 - name: APP_DOMAIN
-                  value: {{ $name | quote }}
+                  value: {{ $queue | quote }}
                 - name: RABBITMQ_QUEUE
-                  value: {{ $svc.queue | quote }}
+                  value: {{ $queue | quote }}
                 {{- with $root.Values.app.extraEnv }}
                 {{- toYaml . | nindent 16 }}
                 {{- end }}
-                {{- with $svc.extraEnv }}
+                {{- with $root.Values.workers.extraEnv }}
+                {{- toYaml . | nindent 16 }}
+                {{- end }}
+                {{- with $processor.extraEnv }}
                 {{- toYaml . | nindent 16 }}
                 {{- end }}
                 {{- with $root.Values.scheduler.extraEnv }}
@@ -97,6 +108,7 @@ spec:
           affinity:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+{{ end }}
 {{ end }}
 {{ end }}
 {{ end }}

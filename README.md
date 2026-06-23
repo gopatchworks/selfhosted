@@ -121,6 +121,11 @@ patchworks-s3-manager-xxxx        1/1     Running     0
 patchworks-gateway-xxxx           1/1     Running     0
 patchworks-start-xxxx             1/1     Running     0
 patchworks-workers-xxxx           1/1     Running     0
+patchworks-processor-start-xxxx   1/1     Running     0
+patchworks-processor-gateway-xxxx 1/1     Running     0
+patchworks-processor-short-processor-xxxx   1/1     Running     0
+patchworks-processor-medium-processor-xxxx  1/1     Running     0
+patchworks-processor-long-processor-xxxx    1/1     Running     0
 ```
 
 ### 6. Access the application

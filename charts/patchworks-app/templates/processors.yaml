@@ -1,0 +1,127 @@
+{{- $root := . }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- range $processor := .Values.processors }}
+{{- if not $processor }}{{- continue }}{{- end }}
+{{- $enabled := true }}
+{{- if hasKey $processor "enabled" }}{{- $enabled = $processor.enabled }}{{- end }}
+{{- if $enabled }}
+{{- $queue := required "processors[].queue is required" $processor.queue }}
+{{- $processorName := $processor.name | default $queue }}
+{{- $slug := regexReplaceAll "[^a-z0-9-]" (lower $queue) "-" | trimAll "-" }}
+{{- $namespace := $processor.namespace | default (include "patchworks.workers.namespace" $root) }}
+{{- $replicas := $processor.replicas | default $root.Values.workers.replicaCount }}
+{{- $processes := $processor.processes | default ($root.Values.workers.processes | default 15) }}
+{{- $resources := $processor.resources | default $root.Values.workers.resources }}
+{{- $podAnnotations := $processor.podAnnotations | default $root.Values.workers.podAnnotations }}
+{{- $nodeSelector := $processor.nodeSelector | default $root.Values.workers.nodeSelector }}
+{{- $tolerations := $processor.tolerations | default $root.Values.workers.tolerations }}
+{{- $affinity := $processor.affinity | default $root.Values.workers.affinity }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-processor-{{ $slug }}-supervisord
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: processor-{{ $slug }}
+data:
+  supervisord.conf: |
+    {{- include "patchworks.supervisordConf" (dict "connection" $root.Values.workers.queue.connection "queue" $queue "processes" $processes) | nindent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-processor-{{ $slug }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: processor-{{ $slug }}
+spec:
+  replicas: {{ $replicas }}
+  revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" (printf "processor-%s" $slug) "Release" $root.Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" (printf "processor-%s" $slug) "Release" $root.Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "patchworks.appConfigData" $root | sha256sum }}
+        {{- with $podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
+      {{- with $root.Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "patchworks.waitForDeps" $root | nindent 8 }}
+      containers:
+        - name: processor
+          image: {{ include "patchworks.appImage" (dict "svc" $root.Values.workers "root" $root) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $root.Values.workers "root" $root) }}
+          command:
+            - supervisord
+            - -c
+            - /etc/supervisor/conf.d/supervisord.conf
+          envFrom:
+            - configMapRef:
+                name: {{ include "patchworks.fullname" $root }}-config
+            {{- if include "patchworks.appSecretHasData" $root }}
+            - secretRef:
+                name: {{ include "patchworks.fullname" $root }}-secret
+            {{- end }}
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" $root }}
+            {{- with (concat $root.Values.app.extraEnvFrom $root.Values.workers.extraEnvFrom ($processor.extraEnvFrom | default (list))) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "patchworks.appSecretEnvRefs" $root | nindent 12 }}
+            - name: APP_NAME
+              value: {{ $processorName | quote }}
+            - name: APP_DOMAIN
+              value: {{ $queue | quote }}
+            - name: RABBITMQ_QUEUE
+              value: {{ $queue | quote }}
+            - name: QUEUE_CONNECTION
+              value: {{ $root.Values.workers.queue.connection | quote }}
+            {{- with $root.Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $root.Values.workers.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $processor.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: supervisord-conf
+              mountPath: /etc/supervisor/conf.d/supervisord.conf
+              subPath: supervisord.conf
+          {{- with $resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: supervisord-conf
+          configMap:
+            name: {{ $fullname }}-processor-{{ $slug }}-supervisord
+      {{- with $nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

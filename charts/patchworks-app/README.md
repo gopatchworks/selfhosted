@@ -45,6 +45,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 - [Passport OAuth keys](#passport-oauth-keys)
 - [Web](#web)
 - [Scheduler](#scheduler)
+- [Processors](#processors)
 - [Workers](#workers)
 - [Mapping documents](#mapping-documents)
 - [Migrations](#migrations)
@@ -243,13 +244,14 @@ The main Laravel web application. Always deployed.
 
 ## Scheduler
 
-Laravel scheduler CronJobs for the Core gateway and start domains. They use the
-same image resolution and application environment as the corresponding web
-deployment, but run `php artisan schedule:run` on a cron schedule.
+Shared defaults for processor scheduler CronJobs. Each enabled entry in
+`processors[]` creates one scheduler CronJob which runs
+`php artisan schedule:run` with `APP_DOMAIN` and `RABBITMQ_QUEUE` set to the
+processor queue.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `scheduler.enabled` | `true` | Create Core scheduler CronJobs |
+| `scheduler.enabled` | `true` | Create processor scheduler CronJobs |
 | `scheduler.schedule` | `*/1 * * * *` | Default cron schedule for scheduler jobs |
 | `scheduler.suspend` | `false` | Suspend scheduler CronJobs |
 | `scheduler.concurrencyPolicy` | `Forbid` | CronJob concurrency policy |
@@ -263,10 +265,35 @@ deployment, but run `php artisan schedule:run` on a cron schedule.
 | `scheduler.resources` | requests `150m` / `300M` | Default scheduler resources |
 | `scheduler.extraEnv` | `[]` | Additional env vars injected into scheduler pods |
 | `scheduler.extraEnvFrom` | `[]` | Additional envFrom sources injected into scheduler pods |
-| `scheduler.gateway.enabled` | `true` | Create the gateway scheduler CronJob |
-| `scheduler.gateway.schedule` | `""` | Gateway scheduler schedule override |
-| `scheduler.start.enabled` | `true` | Create the start scheduler CronJob |
-| `scheduler.start.schedule` | `""` | Start scheduler schedule override |
+
+---
+
+## Processors
+
+`processors[]` defines the PHP Core background processor queues. These are
+separate from `workers.type`: even when `workers.type=mono`, processor queues
+are still handled by PHP Core worker Deployments because Monocore does not run
+these jobs.
+
+The default list creates `start`, `gateway`, `short-processor`,
+`medium-processor`, and `long-processor` workers and scheduler CronJobs. The
+infra chart uses the same list to configure in-cluster RabbitMQ queues.
+
+| Field | Description |
+|-------|-------------|
+| `name` | Display name and `APP_NAME` value for the processor |
+| `queue` | Queue name; also used for `APP_DOMAIN`, `RABBITMQ_QUEUE`, resource slugs, and RabbitMQ queue creation |
+| `enabled` | Set `false` to suppress the processor worker, scheduler, and RabbitMQ queue |
+| `namespace` | Namespace override for the processor worker and scheduler |
+| `replicas` | Worker Deployment replicas; defaults to `workers.replicaCount` |
+| `processes` | Worker concurrency; defaults to `workers.processes` |
+| `resources` | Worker resources; defaults to `workers.resources` |
+| `extraEnv` / `extraEnvFrom` | Additional env/envFrom for processor worker and scheduler pods |
+| `scheduler.*` | Per-processor overrides for any `scheduler.*` field, such as `schedule`, `activeDeadlineSeconds`, `resources`, `extraEnv`, `nodeSelector`, `tolerations`, or `affinity` |
+
+`scheduler.enabled=false` is still a global kill switch. If it is `false`, no
+processor scheduler CronJobs are rendered, even if an individual processor sets
+`scheduler.enabled=true`.
 
 ---
 
@@ -296,7 +323,7 @@ deployment, but run `php artisan schedule:run` on a cron schedule.
 
 **`type: microservice` — per-service configuration**
 
-Each key in `workers.microservices` (except `_default`) creates one Deployment. `_default` provides fallback values.
+Each key in `workers.microservices` (except `_default`) creates one Deployment. `_default` provides fallback values. Gateway, start, and the short/medium/long processor queues are configured through `processors[]`, not `workers.microservices`.
 
 | Field | Description |
 |-------|-------------|

@@ -3,6 +3,19 @@
 {{- $ns := include "patchworks.rabbitmq.namespace" . }}
 {{- $rmq := .Values.rabbitmq }}
 {{- $p := $rmq.persistence }}
+{{- $processorQueues := list }}
+{{- range .Values.processors }}
+{{- if not . }}{{- continue }}{{- end }}
+{{- $enabled := true }}
+{{- if hasKey . "enabled" }}{{- $enabled = .enabled }}{{- end }}
+{{- if and $enabled .queue }}
+{{- $processorQueues = append $processorQueues .queue }}
+{{- end }}
+{{- end }}
+{{- $queueDefinitions := list }}
+{{- range $processorQueues }}
+{{- $queueDefinitions = append $queueDefinitions (dict "name" . "vhost" (include "patchworks.rabbitmq.vhost" $) "durable" true "auto_delete" false "arguments" (dict "x-queue-type" "quorum")) }}
+{{- end }}
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -16,6 +29,20 @@ metadata:
 spec:
   {{- include "patchworks.pvcSpec" $p | nindent 2 }}
 {{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-rabbitmq-definitions
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq
+data:
+  definitions.conf: |
+    management.load_definitions = /etc/rabbitmq/definitions.json
+  definitions.json: |
+    {{- dict "queues" $queueDefinitions | toPrettyJson | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -35,6 +62,8 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/definitions: {{ dict "queues" $queueDefinitions | toJson | sha256sum }}
     spec:
       containers:
         - name: rabbitmq
@@ -71,6 +100,14 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /var/lib/rabbitmq
+            - name: definitions
+              mountPath: /etc/rabbitmq/conf.d/20-load-definitions.conf
+              subPath: definitions.conf
+              readOnly: true
+            - name: definitions
+              mountPath: /etc/rabbitmq/definitions.json
+              subPath: definitions.json
+              readOnly: true
           {{- with $rmq.resources }}
           resources:
             {{- toYaml . | nindent 12 }}
@@ -79,6 +116,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: {{ $p.existingClaim | default (printf "%s-rabbitmq" $fullname) }}
+        - name: definitions
+          configMap:
+            name: {{ $fullname }}-rabbitmq-definitions
 ---
 apiVersion: v1
 kind: Service

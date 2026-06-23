@@ -107,6 +107,69 @@ web:
   start:
     queue: start
 
+# ── Core Scheduler (app chart passthrough) ─────────────────────────────────────
+# Shared defaults for processor scheduler CronJobs. The infra chart keeps these
+# values so one shared values file can be used for both charts; it does not
+# render scheduler resources.
+scheduler:
+  enabled: true
+  schedule: "*/1 * * * *"
+  suspend: false
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  restartPolicy: Never
+  command:
+    - /usr/local/bin/php
+  args:
+    - artisan
+    - schedule:run
+  resources:
+    requests:
+      cpu: 150m
+      memory: 300M
+    limits: {}
+  extraEnv: []
+  extraEnvFrom: []
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# ── Core Processors ────────────────────────────────────────────────────────────
+# Processor queues are always handled by PHP Core workers, even when
+# workers.type=mono for the main flow worker. The infra chart uses this list to
+# configure in-cluster RabbitMQ queues.
+#
+# The app chart also accepts per-processor scheduler overrides under:
+#   scheduler:
+#     schedule: "*/5 * * * *"
+#     activeDeadlineSeconds: 7500
+# Keep these values in the shared values file when applying both charts.
+processors:
+  # Used to schedule flows.
+  - name: Start
+    queue: start
+    enabled: true
+  # Used to process gateway background jobs.
+  - name: Gateway
+    queue: gateway
+    enabled: true
+  # Used for short background jobs.
+  - name: Short Processor
+    queue: short-processor
+    enabled: true
+  # Used for medium background jobs.
+  - name: Medium Processor
+    queue: medium-processor
+    enabled: true
+  # Used to run long background jobs.
+  - name: Long Processor
+    queue: long-processor
+    enabled: true
+
 # ── Fabric ─────────────────────────────────────────────────────────────────────
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
 fabric:
@@ -471,25 +534,13 @@ workers:
       name: Filter
       domain: filter
 
-    gateway:
-      name: Core-Gateway
-      domain: gateway
-
     logging:
       name: Logging
       domain: logging
 
-    long-processor:
-      name: Long Processor
-      domain: long-processor
-
     manual-input:
       name: Manual Input
       domain: manual-input
-
-    medium-processor:
-      name: Medium Processor
-      domain: medium-processor
 
     notify:
       name: Notify
@@ -510,10 +561,6 @@ workers:
     split:
       name: Split
       domain: split
-
-    start:
-      name: Start
-      domain: start
 
     track:
       name: Track

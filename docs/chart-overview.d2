@@ -18,7 +18,8 @@ application: Application {
   style.fill: "#EDF2FF"
 
   web: "Core Web\nPHP Laravel" { shape: rectangle }
-  scheduler: "Core Scheduler\nCronJob × gateway/start" { shape: rectangle }
+  scheduler: "Processor Schedulers\nCronJob × processors[]" { shape: rectangle }
+  processors: "Core Processors\nPHP workers × processors[]" { shape: rectangle }
   s3manager: "S3 Manager\n(S3_BUCKET_CREATION_ENDPOINT)" { shape: rectangle }
 
   workers: Workers {
@@ -68,6 +69,8 @@ optional: "Optional Integrations" {
 
 application.web -> optional.soketi: PUSHER_*
 application.workers -> optional.soketi: PUSHER_*
+application.processors -> infra.rabbitmq: RABBITMQ_QUEUE
+application.scheduler -> infra.rabbitmq: RABBITMQ_QUEUE
 application.web -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
 application.workers -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
 application.s3manager -> infra.s3: AWS_*
