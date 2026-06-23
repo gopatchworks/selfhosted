@@ -1269,6 +1269,7 @@ REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
 REDIS_CLIENT: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
 REDIS_DB: {{ .Values.redis.db | quote }}
+REDIS_PREFIX: {{ .Values.redis.prefix | quote }}
 {{- if eq .Values.redis.mode "sentinel" }}
 REDIS_SENTINEL_HOST: {{ include "patchworks.redis.sentinelHost" . | quote }}
 REDIS_SENTINEL_PORT: {{ include "patchworks.redis.sentinelPort" . | quote }}
@@ -2110,6 +2111,8 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
 - name: REDIS_DB
   value: {{ .Values.redis.db | quote }}
+- name: REDIS_PREFIX
+  value: {{ .Values.redis.prefix | quote }}
 {{- if eq .Values.redis.mode "sentinel" }}
 - name: REDIS_SENTINEL_HOST
   value: {{ include "patchworks.redis.sentinelHost" . | quote }}

@@ -969,6 +969,8 @@ redis:
   sentinel:
     master: mymaster
   db: 0
+  # Prefix used by Core for Redis keys.
+  prefix: core
   external:
     host: ""
     port: 6379

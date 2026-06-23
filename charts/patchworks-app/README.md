@@ -516,6 +516,7 @@ ingress:
 | `redis.external.password` | `""` | Password (or use `existingSecret`) |
 | `redis.external.existingSecret.name` | `""` | Secret name for external password |
 | `redis.external.existingSecret.passwordKey` | `password` | Key for the password |
+| `redis.prefix` | `core` | Redis key prefix injected as `REDIS_PREFIX` for Core web and workers |
 | `redis.persistence.size` | `1Gi` | PVC size |
 | `redis.persistence.existingClaim` | `""` | Use a pre-existing PVC |
 
