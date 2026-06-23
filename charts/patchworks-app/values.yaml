@@ -648,19 +648,17 @@ rabbitmq:
   enabled: true
   topology:
     enabled: true
-    image:
-      repository: curlimages/curl
-      tag: 8.11.1
-      pullPolicy: IfNotPresent
-    scheme: http
-    managementPort: 15672
+    command:
+      - monocore
+    args:
+      - apply-rabbitmq-topology
+      - --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml
+    queueType: quorum
     backoffLimit: 3
     activeDeadlineSeconds: 300
   external:
     host: ""
     port: 5672
-    managementPort: 15672
-    managementScheme: http
     username: patchworks
     password: ""
     vhost: /

@@ -497,8 +497,6 @@ ingress:
 | `rabbitmq.enabled` | `true` | Deploy RabbitMQ in-cluster. Set `false` to use an external instance |
 | `rabbitmq.external.host` | `""` | External RabbitMQ hostname |
 | `rabbitmq.external.port` | `5672` | External AMQP port |
-| `rabbitmq.external.managementPort` | `15672` | Shared app-chart value for the RabbitMQ management API port |
-| `rabbitmq.external.managementScheme` | `http` | Shared app-chart value for the RabbitMQ management API scheme |
 | `rabbitmq.external.username` | `patchworks` | Username |
 | `rabbitmq.external.vhost` | `/` | Virtual host |
 | `rabbitmq.external.password` | `""` | Password (or use `existingSecret`) |
@@ -512,10 +510,9 @@ ingress:
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
 | `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor queue creation |
-| `rabbitmq.topology.image.repository` | `curlimages/curl` | Shared app-chart value for the queue topology hook image |
-| `rabbitmq.topology.image.tag` | `8.11.1` | Shared app-chart value for the queue topology hook image tag |
-| `rabbitmq.topology.scheme` | `http` | Shared app-chart value for bundled RabbitMQ management API scheme |
-| `rabbitmq.topology.managementPort` | `15672` | Shared app-chart value for bundled RabbitMQ management API port |
+| `rabbitmq.topology.command` | `[monocore]` | Shared app-chart value for the queue topology hook command. Image comes from `workers.mono.image` |
+| `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Shared app-chart value for the queue topology hook arguments |
+| `rabbitmq.topology.queueType` | `quorum` | Shared app-chart value for processor queue type |
 | `rabbitmq.topology.backoffLimit` | `3` | Shared app-chart value for the topology Job retry limit |
 | `rabbitmq.topology.activeDeadlineSeconds` | `300` | Shared app-chart value for the topology Job maximum runtime |
 

@@ -281,8 +281,12 @@ pre-install/pre-upgrade hook also asserts these RabbitMQ queues, so queue
 creation works with either the bundled broker or a user-provided external
 RabbitMQ instance.
 
-For external RabbitMQ, the management API must be reachable from the cluster and
+For external RabbitMQ, the AMQP endpoint must be reachable from the cluster and
 the configured user must be allowed to declare queues in the configured vhost.
+The topology hook runs Monocore's `apply-rabbitmq-topology` command using the
+`workers.mono.image` image, not the Core PHP image. The command receives
+`RABBITMQ_*` environment variables and a mounted
+`/etc/patchworks/rabbitmq/topology.yaml`.
 
 | Field | Description |
 |-------|-------------|
@@ -561,8 +565,6 @@ ingress:
 | `rabbitmq.enabled` | `true` | Deploy RabbitMQ in-cluster. Set `false` to use an external instance |
 | `rabbitmq.external.host` | `""` | External RabbitMQ hostname |
 | `rabbitmq.external.port` | `5672` | External AMQP port |
-| `rabbitmq.external.managementPort` | `15672` | External RabbitMQ management API port used by the queue topology hook |
-| `rabbitmq.external.managementScheme` | `http` | External RabbitMQ management API scheme used by the queue topology hook |
 | `rabbitmq.external.username` | `patchworks` | Username |
 | `rabbitmq.external.vhost` | `/` | Virtual host |
 | `rabbitmq.external.password` | `""` | Password (or use `existingSecret`) |
@@ -575,11 +577,10 @@ ingress:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
-| `rabbitmq.topology.enabled` | `true` | Create processor queues through RabbitMQ's management API |
-| `rabbitmq.topology.image.repository` | `curlimages/curl` | Image used by the queue topology hook |
-| `rabbitmq.topology.image.tag` | `8.11.1` | Queue topology hook image tag |
-| `rabbitmq.topology.scheme` | `http` | Management API scheme for bundled RabbitMQ |
-| `rabbitmq.topology.managementPort` | `15672` | Management API port for bundled RabbitMQ |
+| `rabbitmq.topology.enabled` | `true` | Create processor queues through AMQP `queue.declare` |
+| `rabbitmq.topology.command` | `[monocore]` | Command for the queue topology hook. Image comes from `workers.mono.image` |
+| `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Arguments for the queue topology hook |
+| `rabbitmq.topology.queueType` | `quorum` | Queue type declared for processor queues |
 | `rabbitmq.topology.backoffLimit` | `3` | Retry limit for the topology Job |
 | `rabbitmq.topology.activeDeadlineSeconds` | `300` | Maximum runtime for the topology Job |
 

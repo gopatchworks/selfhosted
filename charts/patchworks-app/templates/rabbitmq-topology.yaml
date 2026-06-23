@@ -13,6 +13,31 @@
 {{- end }}
 {{- if $queues }}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-rabbitmq-topology
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq-topology
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-5"
+data:
+  topology.yaml: |
+    vhost: {{ include "patchworks.rabbitmq.vhost" . | quote }}
+    queues:
+      {{- range $queue := $queues }}
+      - name: {{ $queue | quote }}
+        type: {{ $.Values.rabbitmq.topology.queueType | quote }}
+        durable: true
+      {{- end }}
+---
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -39,30 +64,26 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: rabbitmq-topology
-          image: "{{ .Values.rabbitmq.topology.image.repository }}:{{ .Values.rabbitmq.topology.image.tag }}"
-          imagePullPolicy: {{ .Values.rabbitmq.topology.image.pullPolicy }}
+          image: {{ include "patchworks.appImage" (dict "svc" .Values.workers.mono "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.workers.mono "root" .) }}
           env:
             {{- include "patchworks.env.rabbitmqPassword" . | nindent 12 }}
+            {{- include "patchworks.env.rabbitmq" . | nindent 12 }}
+          {{- with .Values.rabbitmq.topology.command }}
           command:
-            - sh
-            - -c
-            - |
-              set -eu
-
-              base_url={{ printf "%s://%s:%s" (include "patchworks.rabbitmq.managementScheme" .) (include "patchworks.rabbitmq.host" .) (include "patchworks.rabbitmq.managementPort" .) | quote }}
-              username={{ include "patchworks.rabbitmq.username" . | quote }}
-              vhost={{ include "patchworks.rabbitmq.vhost" . | quote }}
-              vhost_path={{ include "patchworks.rabbitmq.vhost" . | urlquery | quote }}
-
-              echo "Waiting for RabbitMQ management API at ${base_url}..."
-              {{- range $queue := $queues }}
-              echo "Ensuring RabbitMQ queue {{ $queue }} exists..."
-              until curl -fsS -u "${username}:${RABBITMQ_PASSWORD}" \
-                  -X PUT "${base_url}/api/queues/${vhost_path}/{{ $queue | urlquery }}" \
-                  -H "content-type: application/json" \
-                  -d '{"durable":true,"auto_delete":false,"arguments":{"x-queue-type":"quorum"}}'; do
-                sleep 2
-              done
-              {{- end }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.rabbitmq.topology.args }}
+          args:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: topology
+              mountPath: /etc/patchworks/rabbitmq
+              readOnly: true
+      volumes:
+        - name: topology
+          configMap:
+            name: {{ $fullname }}-rabbitmq-topology
 {{- end }}
 {{- end }}
