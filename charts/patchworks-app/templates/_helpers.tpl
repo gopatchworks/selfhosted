@@ -521,6 +521,14 @@ Resolve Fabric's Redis connection details with three fallback modes:
 {{- if .Values.rabbitmq.enabled -}}5672{{- else -}}{{ .Values.rabbitmq.external.port }}{{- end -}}
 {{- end }}
 
+{{- define "patchworks.rabbitmq.managementPort" -}}
+{{- if .Values.rabbitmq.enabled -}}{{ .Values.rabbitmq.topology.managementPort }}{{- else -}}{{ .Values.rabbitmq.external.managementPort | default .Values.rabbitmq.topology.managementPort }}{{- end -}}
+{{- end }}
+
+{{- define "patchworks.rabbitmq.managementScheme" -}}
+{{- if .Values.rabbitmq.enabled -}}{{ .Values.rabbitmq.topology.scheme }}{{- else -}}{{ .Values.rabbitmq.external.managementScheme | default .Values.rabbitmq.topology.scheme }}{{- end -}}
+{{- end }}
+
 {{- define "patchworks.rabbitmq.username" -}}
 {{- if .Values.rabbitmq.enabled -}}{{ .Values.rabbitmq.auth.username }}{{- else -}}{{ .Values.rabbitmq.external.username }}{{- end -}}
 {{- end }}
