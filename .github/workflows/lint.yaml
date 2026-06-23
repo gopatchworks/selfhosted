@@ -17,24 +17,38 @@ jobs:
       - name: Install Helm
         uses: azure/setup-helm@v4
 
-      - name: Update dependencies
-        run: helm dependency update charts/patchworks
+      - name: Update app dependencies
+        run: helm dependency update charts/patchworks-app
 
-      - name: Lint
-        run: helm lint charts/patchworks
+      - name: Update infra dependencies
+        run: helm dependency update charts/patchworks-infra
+
+      - name: Lint app chart
+        run: helm lint charts/patchworks-app
+
+      - name: Lint infra chart
+        run: helm lint charts/patchworks-infra
 
       - name: Template (standalone workers)
-        run: helm template test charts/patchworks > /dev/null
+        run: helm template test charts/patchworks-app > /dev/null
 
       - name: Template (mono workers)
-        run: helm template test charts/patchworks --set workers.type=mono > /dev/null
+        run: helm template test charts/patchworks-app --set workers.type=mono > /dev/null
 
       - name: Template (microservice workers)
-        run: helm template test charts/patchworks --set workers.type=microservice > /dev/null
+        run: helm template test charts/patchworks-app --set workers.type=microservice > /dev/null
 
-      - name: Template (all optionals enabled)
+      - name: Template app chart (all optionals enabled)
         run: |
-          helm template test charts/patchworks \
+          helm template test charts/patchworks-app \
+            --set pusher.enabled=true \
+            --set kubefaas.enabled=true \
+            --set dashboard.enabled=true \
+            > /dev/null
+
+      - name: Template infra chart (all optionals enabled)
+        run: |
+          helm template test charts/patchworks-infra \
             --set pusher.enabled=true \
             --set kubefaas.enabled=true \
             --set dashboard.enabled=true \

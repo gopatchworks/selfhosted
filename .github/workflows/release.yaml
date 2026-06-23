@@ -1,11 +1,11 @@
 name: Release Chart
 
-# Triggered by pushing a tag matching the version in Chart.yaml.
+# Triggered by pushing a tag matching the version in both Chart.yaml files.
 # Process:
-#   1. Update image tags in values.yaml and bump Chart.yaml version in a PR
+#   1. Update image tags in values.yaml and bump both Chart.yaml versions in a PR
 #   2. Merge to main
 #   3. git tag chart/v<version> && git push --tags
-#   4. This workflow packages and publishes the chart
+#   4. This workflow packages and publishes both charts
 
 on:
   push:
@@ -31,22 +31,36 @@ jobs:
         id: version
         run: echo "version=${GITHUB_REF_NAME#chart/v}" >> "$GITHUB_OUTPUT"
 
-      - name: Validate tag matches Chart.yaml
+      - name: Validate tag matches Chart.yaml files
         run: |
-          chart_version=$(yq '.version' charts/patchworks/Chart.yaml)
-          if [ "$chart_version" != "${{ steps.version.outputs.version }}" ]; then
-            echo "Chart.yaml version ($chart_version) does not match tag (${{ steps.version.outputs.version }})"
+          app_version=$(yq '.version' charts/patchworks-app/Chart.yaml)
+          infra_version=$(yq '.version' charts/patchworks-infra/Chart.yaml)
+          if [ "$app_version" != "${{ steps.version.outputs.version }}" ]; then
+            echo "patchworks-app Chart.yaml version ($app_version) does not match tag (${{ steps.version.outputs.version }})"
+            exit 1
+          fi
+          if [ "$infra_version" != "${{ steps.version.outputs.version }}" ]; then
+            echo "patchworks-infra Chart.yaml version ($infra_version) does not match tag (${{ steps.version.outputs.version }})"
             exit 1
           fi
 
-      - name: Update dependencies
-        run: helm dependency update charts/patchworks
+      - name: Update app dependencies
+        run: helm dependency update charts/patchworks-app
 
-      - name: Lint
-        run: helm lint charts/patchworks
+      - name: Update infra dependencies
+        run: helm dependency update charts/patchworks-infra
 
-      - name: Package
-        run: helm package charts/patchworks --destination .
+      - name: Lint app chart
+        run: helm lint charts/patchworks-app
+
+      - name: Lint infra chart
+        run: helm lint charts/patchworks-infra
+
+      - name: Package app chart
+        run: helm package charts/patchworks-app --destination .
+
+      - name: Package infra chart
+        run: helm package charts/patchworks-infra --destination .
 
       - name: Push to OCI registry
         run: |
@@ -54,16 +68,18 @@ jobs:
             helm registry login ghcr.io \
               --username "${{ github.actor }}" \
               --password-stdin
-          helm push "patchworks-${{ steps.version.outputs.version }}.tgz" \
+          helm push "patchworks-app-${{ steps.version.outputs.version }}.tgz" \
+            "oci://ghcr.io/${{ github.repository_owner }}/charts"
+          helm push "patchworks-infra-${{ steps.version.outputs.version }}.tgz" \
             "oci://ghcr.io/${{ github.repository_owner }}/charts"
 
       - name: Build release notes
         id: notes
         run: |
-          core=$(yq '.image.tag'                 charts/patchworks/values.yaml)
-          mono=$(yq '.workers.mono.image.tag'    charts/patchworks/values.yaml)
-          fabric=$(yq '.fabric.image.tag'        charts/patchworks/values.yaml)
-          dashboard=$(yq '.dashboard.image.tag'  charts/patchworks/values.yaml)
+          core=$(yq '.image.tag'                 charts/patchworks-app/values.yaml)
+          mono=$(yq '.workers.mono.image.tag'    charts/patchworks-app/values.yaml)
+          fabric=$(yq '.fabric.image.tag'        charts/patchworks-app/values.yaml)
+          dashboard=$(yq '.dashboard.image.tag'  charts/patchworks-app/values.yaml)
 
           cat >> "$GITHUB_OUTPUT" <<EOF
           body<<NOTES
@@ -79,8 +95,12 @@ jobs:
           ## Install
 
           \`\`\`bash
-          helm install patchworks \\
-            oci://ghcr.io/${{ github.repository_owner }}/charts/patchworks \\
+          helm install patchworks-infra \\
+            oci://ghcr.io/${{ github.repository_owner }}/charts/patchworks-infra \\
+            --version ${{ steps.version.outputs.version }}
+
+          helm install patchworks-app \\
+            oci://ghcr.io/${{ github.repository_owner }}/charts/patchworks-app \\
             --version ${{ steps.version.outputs.version }}
           \`\`\`
           NOTES
@@ -93,4 +113,5 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "Chart v${{ steps.version.outputs.version }}" \
             --notes "${{ steps.notes.outputs.body }}" \
-            "patchworks-${{ steps.version.outputs.version }}.tgz"
+            "patchworks-app-${{ steps.version.outputs.version }}.tgz" \
+            "patchworks-infra-${{ steps.version.outputs.version }}.tgz"
