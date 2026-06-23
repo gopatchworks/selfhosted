@@ -3,6 +3,7 @@
 {{- $ns := include "patchworks.rabbitmq.namespace" . }}
 {{- $rmq := .Values.rabbitmq }}
 {{- $p := $rmq.persistence }}
+{{- $vhost := include "patchworks.rabbitmq.vhost" . }}
 {{- $processorQueues := list }}
 {{- range .Values.processors }}
 {{- if not . }}{{- continue }}{{- end }}
@@ -14,8 +15,9 @@
 {{- end }}
 {{- $queueDefinitions := list }}
 {{- range $processorQueues }}
-{{- $queueDefinitions = append $queueDefinitions (dict "name" . "vhost" (include "patchworks.rabbitmq.vhost" $) "durable" true "auto_delete" false "arguments" (dict "x-queue-type" "quorum")) }}
+{{- $queueDefinitions = append $queueDefinitions (dict "name" . "vhost" $vhost "durable" true "auto_delete" false "arguments" (dict "x-queue-type" "quorum")) }}
 {{- end }}
+{{- $definitions := dict "vhosts" (list (dict "name" $vhost)) "queues" $queueDefinitions }}
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -42,7 +44,7 @@ data:
   definitions.conf: |
     management.load_definitions = /etc/rabbitmq/definitions.json
   definitions.json: |
-    {{- dict "queues" $queueDefinitions | toPrettyJson | nindent 4 }}
+    {{- $definitions | toPrettyJson | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -63,7 +65,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 8 }}
       annotations:
-        checksum/definitions: {{ dict "queues" $queueDefinitions | toJson | sha256sum }}
+        checksum/definitions: {{ $definitions | toJson | sha256sum }}
     spec:
       containers:
         - name: rabbitmq
