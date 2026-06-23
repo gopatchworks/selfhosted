@@ -134,6 +134,7 @@ scheduler:
   nodeSelector: {}
   tolerations: []
   affinity: {}
+  processes: 15
 
 # ── Core Processors ────────────────────────────────────────────────────────────
 # Processor queues are always handled by PHP Core workers, even when
