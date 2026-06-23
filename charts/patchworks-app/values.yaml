@@ -649,7 +649,7 @@ rabbitmq:
   topology:
     enabled: true
     command:
-      - monocore
+      - /monocore
     args:
       - apply-rabbitmq-topology
       - --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml
