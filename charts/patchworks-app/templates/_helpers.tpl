@@ -1497,19 +1497,22 @@ Static dashboard browser config mounted over /usr/share/nginx/html/config.js.
 {{- $ingressStart   := .Values.ingress.hosts.start   | default "" }}
 {{- $ingressFabric := .Values.ingress.hosts.fabric | default "" }}
 {{- $ingressDashboard := .Values.ingress.hosts.dashboard | default "" }}
-{{- $gatewayScheme := ternary "https" "http" (ne (dig "gateway" "secretName" "" .Values.ingress.tls) "") }}
-{{- $startScheme := ternary "https" "http" (ne (dig "start" "secretName" "" .Values.ingress.tls) "") }}
-{{- $fabricScheme := ternary "https" "http" (ne (dig "fabric" "secretName" "" .Values.ingress.tls) "") }}
-{{- $dashboardScheme := ternary "https" "http" (ne (dig "dashboard" "secretName" "" .Values.ingress.tls) "") }}
+{{- $defaultScheme := .Values.ingress.scheme | default "http" }}
+{{- $gatewayScheme := ternary "https" $defaultScheme (ne (dig "gateway" "secretName" "" .Values.ingress.tls) "") }}
+{{- $startScheme := ternary "https" $defaultScheme (ne (dig "start" "secretName" "" .Values.ingress.tls) "") }}
+{{- $fabricScheme := ternary "https" $defaultScheme (ne (dig "fabric" "secretName" "" .Values.ingress.tls) "") }}
+{{- $dashboardScheme := ternary "https" $defaultScheme (ne (dig "dashboard" "secretName" "" .Values.ingress.tls) "") }}
 {{- $coreServiceUrl := printf "http://%s-gateway.%s.svc.cluster.local" $fullname (include "patchworks.gateway.namespace" .) }}
 {{- $startServiceUrl := printf "http://%s-start.%s.svc.cluster.local" $fullname (include "patchworks.start.namespace" .) }}
 {{- $fabricServiceUrl := printf "http://%s-fabric.%s.svc.cluster.local" $fullname (include "patchworks.fabric.namespace" .) }}
 {{- $mcpServiceUrl := printf "%s/api/v1/mcp" $coreServiceUrl }}
 {{- $dashboardBaseUrl := ternary (printf "%s://%s" $dashboardScheme $ingressDashboard) "" (ne $ingressDashboard "") }}
-{{- $coreUrl := .Values.dashboard.coreUrl | default (ternary (printf "%s/core-main" $dashboardBaseUrl) (ternary (printf "%s://%s" $gatewayScheme $ingressGateway) $coreServiceUrl (ne $ingressGateway "")) (ne $dashboardBaseUrl "")) }}
-{{- $startUrl := .Values.dashboard.startUrl | default (ternary (printf "%s/core-start" $dashboardBaseUrl) (ternary (printf "%s://%s" $startScheme $ingressStart) $startServiceUrl (ne $ingressStart "")) (ne $dashboardBaseUrl "")) }}
-{{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s/fabric" $dashboardBaseUrl) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) $fabricServiceUrl (ne $ingressFabric "")) (ne $dashboardBaseUrl "")) }}
-{{- $mcpUrl := .Values.dashboard.mcpUrl | default (ternary (printf "%s/core-main/api/v1/mcp" $dashboardBaseUrl) (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) $mcpServiceUrl (ne $ingressGateway "")) (ne $dashboardBaseUrl "")) }}
+{{- $useDashboardRoutes := and (eq (.Values.dashboard.routingMode | default "path") "path") (ne $dashboardBaseUrl "") }}
+{{- $coreUrl := .Values.dashboard.coreUrl | default (ternary (printf "%s/core-main" $dashboardBaseUrl) (ternary (printf "%s://%s" $gatewayScheme $ingressGateway) $coreServiceUrl (ne $ingressGateway "")) $useDashboardRoutes) }}
+{{- $startUrl := .Values.dashboard.startUrl | default (ternary (printf "%s/core-start" $dashboardBaseUrl) (ternary (printf "%s://%s" $startScheme $ingressStart) $startServiceUrl (ne $ingressStart "")) $useDashboardRoutes) }}
+{{- $fabricUrl := .Values.dashboard.fabricUrl | default (ternary (printf "%s/fabric" $dashboardBaseUrl) (ternary (printf "%s://%s" $fabricScheme $ingressFabric) $fabricServiceUrl (ne $ingressFabric "")) $useDashboardRoutes) }}
+{{- $mcpUrl := .Values.dashboard.mcpUrl | default (ternary (printf "%s/core-main/api/v1/mcp" $dashboardBaseUrl) (ternary (printf "%s://%s/api/v1/mcp" $gatewayScheme $ingressGateway) $mcpServiceUrl (ne $ingressGateway "")) $useDashboardRoutes) }}
+{{- $authCookieDomain := .Values.dashboard.authCookieDomain | default .Values.web.sessionDomain }}
 {{- $forceRegistrationRequests := eq (toString (.Values.dashboard.forceRegistrationRequest | default "false")) "true" -}}
 {{- $postmanEnabled := eq (toString (.Values.dashboard.postmanImporter.enabled | default "true")) "true" -}}
 {{- $broadcastingHost := "" -}}
@@ -1527,7 +1530,7 @@ window.__PATCHWORKS_CONFIG__ = window.__PATCHWORKS_CONFIG__ || {
   fabricUrl: {{ $fabricUrl | toJson }},
   coreMainUrl: {{ $coreUrl | toJson }},
   coreStartUrl: {{ $startUrl | toJson }},
-  authCookieDomain: {{ .Values.web.sessionDomain | toJson }},
+  authCookieDomain: {{ $authCookieDomain | toJson }},
   inboundUrl: {{ .Values.dashboard.inboundUrl | toJson }},
   webhookHandlerUrl: {{ .Values.dashboard.webhookHandlerUrl | toJson }},
   mcpUrl: {{ $mcpUrl | toJson }},

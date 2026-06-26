@@ -290,13 +290,17 @@ dashboard:
     port: 80
   resources: {}
   # Public service URLs rendered into the static dashboard config.js. When the
-  # dashboard ingress host is configured, these default to the dashboard
-  # path-routed URLs (/core-main, /core-start, /fabric). Otherwise they fall
-  # back to dedicated service ingress hosts, then in-cluster service addresses.
+  # dashboard ingress host is configured and routingMode=path, these default to
+  # the dashboard path-routed URLs (/core-main, /core-start, /fabric). Set
+  # routingMode=host to prefer the dedicated service ingress hosts instead.
+  # Valid values: path, host.
+  routingMode: path
   coreUrl: ""
   startUrl: ""
   fabricUrl: ""
   mcpUrl: ""
+  # Dashboard auth cookie domain. Defaults to web.sessionDomain when empty.
+  authCookieDomain: ""
   # External/optional dashboard runtime config.
   inboundUrl: ""
   webhookHandlerUrl: "https://webhook-handler.pwks.co"
@@ -873,6 +877,9 @@ ingress:
   #   nginx    — renders a standard Ingress with rewriteAnnotations.
   #   other    — renders a standard Ingress with rewriteAnnotations.
   provider: contour
+  # Public URL scheme used when rendering dashboard/browser-facing URLs.
+  # Set to "https" when TLS is terminated outside this chart.
+  scheme: http
   className: ""
   annotations: {}
   # TLS secret names per service. When set, a TLS entry is added to that

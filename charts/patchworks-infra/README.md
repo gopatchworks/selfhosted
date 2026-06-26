@@ -139,10 +139,12 @@ generated credentials.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `dashboard.enabled` | `false` | Deploy the dashboard from the app chart |
-| `dashboard.coreUrl` | `""` | Browser `coreMainUrl`; defaults to dashboard `/core-main`, then gateway ingress host, then the in-cluster gateway service |
-| `dashboard.startUrl` | `""` | Browser `coreStartUrl`; defaults to dashboard `/core-start`, then start ingress host, then the in-cluster start service |
-| `dashboard.fabricUrl` | `""` | Browser `fabricUrl`; defaults to the dashboard `/fabric` route, then the dedicated Fabric host, then the in-cluster Fabric service |
-| `dashboard.mcpUrl` | `""` | Browser `mcpUrl`; defaults to dashboard `/core-main/api/v1/mcp`, then gateway ingress host `/api/v1/mcp`, then the in-cluster gateway service |
+| `dashboard.routingMode` | `path` | Browser URL defaulting mode: `path` uses dashboard `/core-main`, `/core-start`, and `/fabric`; `host` uses dedicated service hostnames |
+| `dashboard.coreUrl` | `""` | Browser `coreMainUrl`; default depends on `dashboard.routingMode`, then falls back to the in-cluster gateway service |
+| `dashboard.startUrl` | `""` | Browser `coreStartUrl`; default depends on `dashboard.routingMode`, then falls back to the in-cluster start service |
+| `dashboard.fabricUrl` | `""` | Browser `fabricUrl`; default depends on `dashboard.routingMode`, then falls back to the in-cluster Fabric service |
+| `dashboard.mcpUrl` | `""` | Browser `mcpUrl`; default depends on `dashboard.routingMode`, then falls back to the in-cluster gateway service |
+| `dashboard.authCookieDomain` | `""` | Browser `authCookieDomain`; defaults to `web.sessionDomain` |
 | `dashboard.inboundUrl` | `""` | Browser `inboundUrl` |
 | `dashboard.webhookHandlerUrl` | `https://webhook-handler.pwks.co` | Browser `webhookHandlerUrl` |
 | `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to the shared `pusher` host |
@@ -372,6 +374,7 @@ Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ingress.enabled` | `false` | Create Ingress resources |
+| `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs. Set to `https` when TLS is terminated outside this chart |
 | `ingress.className` | `""` | `ingressClassName` |
 | `ingress.annotations` | `{}` | Annotations applied to every Ingress resource |
 | `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |
@@ -390,9 +393,10 @@ When `ingress.hosts.dashboard` is set, two Ingress resources are created on that
 - **`patchworks-dashboard`** — routes `/` to the dashboard service (no rewrite).
 - **`patchworks-dashboard-routes`** — routes `/fabric`, `/core-main`, and `/core-start` to their respective services with the prefix stripped before forwarding.
 
-When `dashboard.fabricUrl` is left empty, the dashboard uses this same-origin
-`/fabric` route by default. If `ingress.hosts.dashboard` is not set, it falls
-back to the dedicated `ingress.hosts.fabric` URL when configured.
+When `dashboard.routingMode=path`, empty dashboard service URLs use these
+same-origin routes by default. When `dashboard.routingMode=host`, empty
+dashboard service URLs use the dedicated `ingress.hosts.*` hostnames when
+configured.
 
 `ingress.hosts.webhook` and `ingress.hosts.callback` create dedicated Ingresses
 that route `/` to the Core start service. This matches the production
