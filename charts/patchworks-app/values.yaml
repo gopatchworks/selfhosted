@@ -1154,12 +1154,7 @@ s3Manager:
             expirationDays: 8
             noncurrentVersionExpiration:
               noncurrentDays: 8
-      metricFilterRules:
-        AllObjects: {}
-        Payloads:
-          prefix: payloads
-        Caches:
-          prefix: caches
+      metricFilterRules: {}
       tags:
         cost-center: core
         company: "${company_name}"
