@@ -277,9 +277,11 @@ these jobs.
 
 The default list creates `start`, `gateway`, `short-processor`,
 `medium-processor`, and `long-processor` workers and scheduler CronJobs. A
-pre-install/pre-upgrade hook also asserts these RabbitMQ queues, so queue
-creation works with either the bundled broker or a user-provided external
-RabbitMQ instance.
+pre-install/pre-upgrade hook also asserts these RabbitMQ queues, plus the active
+PHP worker hub queues: `workers.queue.name` for `workers.type=standalone`, or
+each enabled `workers.microservices[*].domain` for
+`workers.type=microservice`. Queue creation works with either the bundled broker
+or a user-provided external RabbitMQ instance.
 
 For external RabbitMQ, the AMQP endpoint must be reachable from the cluster and
 the configured user must be allowed to declare queues in the configured vhost.
@@ -396,7 +398,7 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 
 `workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.
 
-> **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually — topology automation only applies to `type: mono` via the `topology.yaml` startup assertion.
+> **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually. The app-chart topology hook creates processor queues and hub standalone/microservice queues only.
 
 ---
 
@@ -577,10 +579,10 @@ ingress:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
-| `rabbitmq.topology.enabled` | `true` | Create processor queues through AMQP `queue.declare` |
+| `rabbitmq.topology.enabled` | `true` | Create processor and PHP worker hub queues through AMQP `queue.declare` |
 | `rabbitmq.topology.command` | `[monocore]` | Command for the queue topology hook. Image comes from `workers.mono.image` |
 | `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Arguments for the queue topology hook |
-| `rabbitmq.topology.queueType` | `quorum` | Queue type declared for processor queues |
+| `rabbitmq.topology.queueType` | `quorum` | Queue type declared for generated queues |
 | `rabbitmq.topology.backoffLimit` | `3` | Retry limit for the topology Job |
 | `rabbitmq.topology.activeDeadlineSeconds` | `300` | Maximum runtime for the topology Job |
 

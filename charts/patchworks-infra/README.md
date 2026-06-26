@@ -324,7 +324,7 @@ hub monocore Service.
 
 `workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.
 
-> **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually — topology automation only applies to `type: mono` via the `topology.yaml` startup assertion.
+> **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually. The app-chart topology hook creates processor queues and hub standalone/microservice queues only.
 
 ---
 
@@ -509,10 +509,10 @@ ingress:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
-| `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor queue creation |
+| `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor and PHP worker hub queue creation |
 | `rabbitmq.topology.command` | `[monocore]` | Shared app-chart value for the queue topology hook command. Image comes from `workers.mono.image` |
 | `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Shared app-chart value for the queue topology hook arguments |
-| `rabbitmq.topology.queueType` | `quorum` | Shared app-chart value for processor queue type |
+| `rabbitmq.topology.queueType` | `quorum` | Shared app-chart value for generated queue type |
 | `rabbitmq.topology.backoffLimit` | `3` | Shared app-chart value for the topology Job retry limit |
 | `rabbitmq.topology.activeDeadlineSeconds` | `300` | Shared app-chart value for the topology Job maximum runtime |
 

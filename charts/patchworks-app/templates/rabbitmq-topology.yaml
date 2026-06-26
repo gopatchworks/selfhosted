@@ -3,12 +3,35 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := .Release.Namespace }}
 {{- $queues := list }}
+{{- $queueSet := dict }}
 {{- range .Values.processors }}
 {{- if not . }}{{- continue }}{{- end }}
 {{- $enabled := true }}
 {{- if hasKey . "enabled" }}{{- $enabled = .enabled }}{{- end }}
 {{- if and $enabled .queue }}
+{{- if not (hasKey $queueSet .queue) }}
 {{- $queues = append $queues .queue }}
+{{- $_ := set $queueSet .queue true }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if eq .Values.workers.type "standalone" }}
+{{- $queue := .Values.workers.queue.name | default "default" }}
+{{- if not (hasKey $queueSet $queue) }}
+{{- $queues = append $queues $queue }}
+{{- $_ := set $queueSet $queue true }}
+{{- end }}
+{{- else if eq .Values.workers.type "microservice" }}
+{{- $default := .Values.workers.microservices._default }}
+{{- range $msKey, $ms := .Values.workers.microservices }}
+{{- if eq $msKey "_default" }}{{- continue }}{{- end }}
+{{- $enabled := dig "enabled" (dig "enabled" true $default) $ms }}
+{{- if not $enabled }}{{- continue }}{{- end }}
+{{- $queue := dig "domain" $msKey $ms }}
+{{- if not (hasKey $queueSet $queue) }}
+{{- $queues = append $queues $queue }}
+{{- $_ := set $queueSet $queue true }}
+{{- end }}
 {{- end }}
 {{- end }}
 {{- if $queues }}

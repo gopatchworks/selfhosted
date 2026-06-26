@@ -480,8 +480,8 @@ workers:
   # processes → numprocs in generated supervisord.conf (worker concurrency)
   #
   # Company workers (workers.companies) consume company.queue | default
-  # company.name instead of the domain queue. RabbitMQ queues must be created
-  # manually — see the workers.companies note above.
+  # company.name instead of the domain queue. Company-specific RabbitMQ queues
+  # must be created manually — see the workers.companies note above.
   microservices:
     _default:
       enabled: true
@@ -617,10 +617,9 @@ workers:
   # Each entry creates a separate Deployment consuming a company-specific queue,
   # in addition to the main hub Deployment.
   #
-  # NOTE (type: standalone): RabbitMQ queues and any bindings must be created
-  # manually before deploying. The chart has no way to assert RabbitMQ topology
-  # for standalone workers — this is only automated for type: mono via
-  # monocore's topology.yaml startup assertion.
+  # NOTE (type: standalone/microservice): the chart creates hub worker queues
+  # through rabbitmq.topology. Company-specific queues and bindings must be
+  # created manually before deploying company workers.
   #
   # NOTE (type: mono): workers.mono.rabbitmq.companyFlows.enabled creates the
   # configured workers.mono.rabbitmq.flowExchange and binds company queues to it.
