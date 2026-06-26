@@ -109,6 +109,7 @@ spec:
       services:
         - name: {{ $fullname }}-start
           port: 80
+    {{- if .Values.dashboard.enabled }}
     - conditions:
         - prefix: /
       {{- with $timeoutPolicy }}
@@ -118,6 +119,7 @@ spec:
       services:
         - name: {{ $fullname }}-dashboard
           port: 80
+    {{- end }}
 {{- else }}
 ---
 # Path-rewriting Ingress — strips /fabric, /core-main, /core-start prefixes
@@ -180,6 +182,7 @@ spec:
                 name: {{ $fullname }}-start
                 port:
                   name: http
+{{- if .Values.dashboard.enabled }}
 ---
 # Dashboard Ingress — serves the dashboard at /.
 apiVersion: networking.k8s.io/v1
@@ -222,6 +225,7 @@ spec:
                 name: {{ $fullname }}-dashboard
                 port:
                   name: http
+{{- end }}
 {{- end }}
 {{- end }}
 {{- end }}
