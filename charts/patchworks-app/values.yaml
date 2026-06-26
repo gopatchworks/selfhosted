@@ -1111,7 +1111,7 @@ s3Manager:
   image:
     repository: s3manager
     registry: ""
-    tag: v0.0.5
+    tag: v0.0.8
     pullPolicy: ""
   replicaCount: 1
   service:
