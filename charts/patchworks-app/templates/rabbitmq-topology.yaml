@@ -62,6 +62,10 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq-topology" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: OnFailure
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
         - name: rabbitmq-topology
           image: {{ include "patchworks.appImage" (dict "svc" .Values.workers.mono "root" .) | quote }}
