@@ -223,7 +223,7 @@ The main Laravel web application. Always deployed.
 | `web.service.type` | `ClusterIP` | Kubernetes service type |
 | `web.service.port` | `80` | Service port |
 | `web.sessionDomain` | `""` | `SESSION_DOMAIN`; controls the cookie domain for authentication |
-| `web.resources` | `{}` | Resource requests and limits |
+| `web.resources` | requests memory `900Mi` | Resource requests and limits |
 | `web.extraEnv` | `[]` | Additional env vars for web pods only |
 | `web.extraEnvFrom` | `[]` | Additional env sources for web pods only |
 | `web.podAnnotations` | `{}` | Pod annotations |

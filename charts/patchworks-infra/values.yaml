@@ -91,7 +91,9 @@ web:
     port: 80
   # Controls the cookie domain for authentication.
   sessionDomain: ""
-  resources: {}
+  resources:
+    requests:
+      memory: 900Mi
   extraEnv: []
   extraEnvFrom: []
   podAnnotations: {}
