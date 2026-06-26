@@ -23,9 +23,10 @@ echo "base64:$(openssl rand -base64 32)"
 ```
 
 Migrations run as `pre-install,pre-upgrade` hooks. Seeders run as `pre-install`
-hooks only. Fabric seeders run before Core migrations; Core seeders run after
-Core migrations. The hook jobs render their required environment directly
-instead of depending on app ConfigMaps/Secrets that Helm has not created yet.
+hooks only. The first-install order is: Fabric migrations, Fabric seeders,
+Fabric company seeder, Core migrations, Core seeders, then application startup.
+The hook jobs render their required environment directly instead of depending
+on app ConfigMaps/Secrets that Helm has not created yet.
 
 When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 `seeds.tenant.existingSecret.name` is provided, the app chart creates a stable
@@ -406,11 +407,14 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 
 ## Migrations
 
-Runs `php artisan migrate --force` as a pre-install/pre-upgrade hook. On first
-install, Fabric seeders run before this job.
+Fabric migrations run before Core migrations as pre-install/pre-upgrade hooks.
+Core migrations default to `php artisan migrate --force`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `fabric.migrations.enabled` | `true` | Run Fabric migrations before Core migrations |
+| `fabric.migrations.command` | `php artisan migrate --force` | Fabric migration command |
+| `migrations.command` | `php artisan migrate --force` | Core migration command; include extra flags here |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
 
@@ -418,13 +422,16 @@ install, Fabric seeders run before this job.
 
 ## Seeds
 
-Fabric seeders run before Core migrations. Core seeders run after Fabric
-seeders and Core migrations.
+Fabric seeders run after Fabric migrations and before Core migrations. The
+Fabric company seeder runs separately after Fabric seeders. Core seeders run
+after Core migrations.
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
+| `seeds.fabric.command` | `php artisan app:install` | Fabric install seed command |
 | `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
+| `seeds.core.command` | `php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction` | Core first-install seed and tenant migration command |
 | `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
 | `seeds.tenant.database` | `""` | Initial tenant database name. Defaults to `companyName` lowercased with non-alphanumeric characters removed |
 | `seeds.tenant.createDatabase` | `true` | Create the initial tenant database before Core tenant migrations run |

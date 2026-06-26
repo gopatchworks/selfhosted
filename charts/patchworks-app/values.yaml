@@ -177,9 +177,13 @@ fabric:
     registry: quay.io/patchworks
     tag: v0.0.8
     pullPolicy: ""
+  # Fabric migrations run before Core migrations as Helm hooks.
+  migrations:
+    enabled: true
+    command: "php artisan migrate --force"
   # Shell command run as an init container before the app starts.
   init:
-    command: "php artisan optimize && php artisan migrate --force && php artisan db:seed --class=PermissionSeeder --force"
+    command: "php artisan optimize"
   replicaCount: 1
   service:
     type: ClusterIP
@@ -358,11 +362,11 @@ seeds:
   tolerations: []
 
   # Fabric seeder — runs on pre-install only (not upgrade).
-  # Runs: migrate → app:install (reference data + passport clients) →
-  #       app:create-tenant (creates initial company + admin user).
+  # Runs before the Fabric company seeder, Core migrations, and Core seeds.
   # Must complete before core migrations and core seeds run.
   fabric:
     enabled: false
+    command: "php artisan app:install"
     image:
       registry: ""
       repository: fabric
@@ -392,11 +396,10 @@ seeds:
       name: ""
       passwordKey: adminPassword
 
-  # Core seeder — runs on pre-install only (not upgrade).
-  # Runs: migrate → migrate:tenants --create --no-interaction.
-  # Runs after fabric seeds (hook weight 2).
+  # Core seeder — runs on pre-install only (not upgrade), after Core migrations.
   core:
     enabled: false
+    command: "php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction"
     image:
       registry: ""
       tag: ""
