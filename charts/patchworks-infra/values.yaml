@@ -447,7 +447,9 @@ workers:
 
   replicaCount: 1
   processes: 15
-  resources: {}
+  resources:
+    requests:
+      memory: 900Mi
   extraEnv: []
   extraEnvFrom: []
   podAnnotations: {}

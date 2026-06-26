@@ -253,7 +253,7 @@ The main Laravel web application. Always deployed.
 | `workers.processes` | `15` | Worker concurrency — `numprocs` in supervisord.conf (standalone/microservice) |
 | `workers.queue.connection` | `rabbitmq` | Laravel queue connection |
 | `workers.queue.name` | `default` | Hub queue name for standalone workers |
-| `workers.resources` | `{}` | Resource requests and limits |
+| `workers.resources` | requests memory `900Mi` | Resource requests and limits |
 | `workers.extraEnv` | `[]` | Additional env vars for all worker pods |
 | `workers.extraEnvFrom` | `[]` | Additional env sources for all worker pods |
 
