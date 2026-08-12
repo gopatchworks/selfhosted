@@ -39,10 +39,11 @@ spec:
               until mysqladmin ping -h {{ include "patchworks.fabric.mysql.host" . }} -P {{ include "patchworks.fabric.mysql.port" . }} --silent; do sleep 2; done
               echo "Fabric MySQL ready."
       containers:
+        {{- $fabricMigrationSvc := mergeOverwrite (deepCopy .Values.fabric) .Values.fabric.migrations }}
         - name: fabric-migrations
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
-          command: ["/bin/sh", "-c", {{ .Values.fabric.migrations.command | quote }}]
+          command: ["/bin/sh", "-c", {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $fabricMigrationSvc "command" .Values.fabric.migrations.command) | quote }}]
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
@@ -118,7 +119,7 @@ spec:
         - name: core-migrations
           image: {{ include "patchworks.appImage" (dict "svc" .Values.migrations "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.migrations "root" .) }}
-          command: ["/bin/sh", "-c", {{ .Values.migrations.command | quote }}]
+          command: ["/bin/sh", "-c", {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" .Values.migrations "command" .Values.migrations.command) | quote }}]
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}

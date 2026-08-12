@@ -48,7 +48,7 @@ spec:
           command:
             - /bin/sh
             - -c
-            - {{ .Values.seeds.fabric.command | quote }}
+            - {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $fabricSeedSvc "command" .Values.seeds.fabric.command) | quote }}
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
@@ -131,7 +131,7 @@ spec:
             - -c
             - |
               set -e
-              php artisan app:create-tenant \
+              {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $fabricSeedSvc "command" "php artisan app:create-tenant") }} \
                 --company-name={{ .Values.seeds.tenant.companyName | quote }} \
                 --tier={{ .Values.seeds.tenant.tier | quote }} \
                 --user-name={{ .Values.seeds.tenant.adminName | quote }} \
@@ -290,7 +290,7 @@ spec:
           command:
             - /bin/sh
             - -c
-            - {{ .Values.seeds.core.command | quote }}
+            - {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $coreSeedSvc "command" .Values.seeds.core.command) | quote }}
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}

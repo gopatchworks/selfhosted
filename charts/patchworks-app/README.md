@@ -225,6 +225,42 @@ The generated Secret lives in the Helm release namespace (where Core runs). Fabr
 
 ---
 
+## Runtime
+
+By default the chart renders the encoded embedded FrankenPHP command shape:
+
+```yaml
+runtime:
+  frankenphp:
+    enabled: true
+```
+
+Service-level `frankenphp.enabled` values override the global default. For
+example, this keeps Fabric on the standard PHP-FPM runtime:
+
+```yaml
+fabric:
+  frankenphp:
+    enabled: false
+```
+
+When enabled, web pods start `frankenphp php-server`, and rendered Artisan
+commands use `/usr/local/bin/frankenphp php-cli artisan ...`.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `runtime.frankenphp.enabled` | `true` | Global default for PHP app runtime mode |
+| `web.frankenphp.enabled` | unset | Override runtime mode for Core web defaults |
+| `web.gateway.frankenphp.enabled` | unset | Override runtime mode for gateway only |
+| `web.start.frankenphp.enabled` | unset | Override runtime mode for start only |
+| `fabric.frankenphp.enabled` | unset | Override runtime mode for Fabric web, init, and migrations |
+| `workers.frankenphp.enabled` | unset | Override runtime mode for PHP worker/scheduler images |
+| `migrations.frankenphp.enabled` | unset | Override runtime mode for Core migrations |
+| `seeds.fabric.frankenphp.enabled` | unset | Override runtime mode for Fabric seed jobs |
+| `seeds.core.frankenphp.enabled` | unset | Override runtime mode for Core seed jobs |
+
+---
+
 ## Web
 
 The main Laravel web application. Always deployed.
@@ -232,6 +268,7 @@ The main Laravel web application. Always deployed.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `web.replicaCount` | `1` | Number of web replicas |
+| `web.frankenphp.enabled` | unset | Override global FrankenPHP runtime for both Core web services |
 | `web.service.type` | `ClusterIP` | Kubernetes service type |
 | `web.service.port` | `80` | Service port |
 | `web.sessionDomain` | `""` | `SESSION_DOMAIN`; controls the cookie domain for authentication |
@@ -249,12 +286,13 @@ The main Laravel web application. Always deployed.
 
 Shared defaults for processor scheduler CronJobs. Each enabled entry in
 `processors[]` creates one scheduler CronJob which runs
-`php artisan schedule:run` with `APP_DOMAIN` and `RABBITMQ_QUEUE` set to the
-processor queue.
+`/usr/local/bin/frankenphp php-cli artisan schedule:run` with `APP_DOMAIN` and
+`RABBITMQ_QUEUE` set to the processor queue.
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `scheduler.enabled` | `true` | Create processor scheduler CronJobs |
+| `scheduler.frankenphp.enabled` | unset | Override FrankenPHP runtime for scheduler CronJobs |
 | `scheduler.schedule` | `*/1 * * * *` | Default cron schedule for scheduler jobs |
 | `scheduler.suspend` | `false` | Suspend scheduler CronJobs |
 | `scheduler.concurrencyPolicy` | `Forbid` | CronJob concurrency policy |
@@ -263,8 +301,8 @@ processor queue.
 | `scheduler.backoffLimit` | `2` | Job retry backoff limit |
 | `scheduler.activeDeadlineSeconds` | `300` | Maximum runtime for a scheduler Job |
 | `scheduler.restartPolicy` | `Never` | Scheduler pod restart policy |
-| `scheduler.command` | `[/usr/local/bin/php]` | Container command |
-| `scheduler.args` | `[artisan, schedule:run]` | Container args |
+| `scheduler.command` | `[/usr/local/bin/frankenphp]` | Container command |
+| `scheduler.args` | `[php-cli, artisan, schedule:run]` | Container args |
 | `scheduler.resources` | requests `150m` / `300M` | Default scheduler resources |
 | `scheduler.extraEnv` | `[]` | Additional env vars injected into scheduler pods |
 | `scheduler.extraEnvFrom` | `[]` | Additional envFrom sources injected into scheduler pods |
@@ -298,6 +336,7 @@ The topology hook runs Monocore's `apply-rabbitmq-topology` command using the
 | `name` | Display name and `APP_NAME` value for the processor |
 | `queue` | Queue name; also used for `APP_DOMAIN`, `RABBITMQ_QUEUE`, resource slugs, and RabbitMQ queue creation |
 | `enabled` | Set `false` to suppress the processor worker, scheduler, and RabbitMQ queue |
+| `frankenphp.enabled` | Runtime override for this processor's worker and scheduler |
 | `namespace` | Namespace override for the processor worker and scheduler |
 | `replicas` | Worker Deployment replicas; defaults to `workers.replicaCount` |
 | `processes` | Worker concurrency; defaults to `workers.processes` |
@@ -327,6 +366,7 @@ processor scheduler CronJobs are rendered, even if an individual processor sets
 |-----|---------|-------------|
 | `workers.type` | `standalone` | Worker deployment type |
 | `workers.namespace` | `""` | Namespace for worker resources (defaults to release namespace) |
+| `workers.frankenphp.enabled` | unset | Override FrankenPHP runtime for PHP workers |
 | `workers.replicaCount` | `1` | Replica count (standalone only) |
 | `workers.processes` | `15` | Worker concurrency — `numprocs` in supervisord.conf (standalone/microservice) |
 | `workers.queue.connection` | `rabbitmq` | Laravel queue connection |
@@ -408,13 +448,15 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 ## Migrations
 
 Fabric migrations run before Core migrations as pre-install/pre-upgrade hooks.
-Core migrations default to `php artisan migrate --force`.
+Core migrations default to `/usr/local/bin/frankenphp php-cli artisan migrate --force`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `fabric.migrations.enabled` | `true` | Run Fabric migrations before Core migrations |
-| `fabric.migrations.command` | `php artisan migrate --force` | Fabric migration command |
-| `migrations.command` | `php artisan migrate --force` | Core migration command; include extra flags here |
+| `fabric.migrations.frankenphp.enabled` | unset | Override FrankenPHP runtime for Fabric migrations |
+| `fabric.migrations.command` | `/usr/local/bin/frankenphp php-cli artisan migrate --force` | Fabric migration command |
+| `migrations.frankenphp.enabled` | unset | Override FrankenPHP runtime for Core migrations |
+| `migrations.command` | `/usr/local/bin/frankenphp php-cli artisan migrate --force` | Core migration command; include extra flags here |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
 
@@ -429,9 +471,11 @@ after Core migrations.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
-| `seeds.fabric.command` | `php artisan app:install` | Fabric install seed command |
+| `seeds.fabric.frankenphp.enabled` | unset | Override FrankenPHP runtime for Fabric seed jobs |
+| `seeds.fabric.command` | `/usr/local/bin/frankenphp php-cli artisan app:install` | Fabric install seed command |
 | `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
-| `seeds.core.command` | `php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction` | Core first-install seed and tenant migration command |
+| `seeds.core.frankenphp.enabled` | unset | Override FrankenPHP runtime for Core seed jobs |
+| `seeds.core.command` | `/usr/local/bin/frankenphp php-cli artisan db:seed --force && /usr/local/bin/frankenphp php-cli artisan migrate:tenants --create --no-interaction` | Core first-install seed and tenant migration command |
 | `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
 | `seeds.tenant.database` | `""` | Initial tenant database name. Defaults to `companyName` lowercased with non-alphanumeric characters removed |
 | `seeds.tenant.createDatabase` | `true` | Create the initial tenant database before Core tenant migrations run |

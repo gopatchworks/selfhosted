@@ -12,6 +12,14 @@ image:
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
 
+# ── Application runtime ────────────────────────────────────────────────────────
+# Controls how PHP app images are started. The default uses encoded embedded
+# FrankenPHP images. Individual services can override this with
+# frankenphp.enabled under their own values block.
+runtime:
+  frankenphp:
+    enabled: true
+
 # Number of old ReplicaSets retained for chart-managed Deployments.
 revisionHistoryLimit: 3
 
@@ -80,6 +88,7 @@ credentials:
 # web.* default for that sub-component only.
 web:
   namespace: ""
+  frankenphp: {}
   image:
     registry: ""
     tag: ""
@@ -103,15 +112,18 @@ web:
   # Gateway — primary API / MCP-facing service.
   gateway:
     queue: gateway
+    frankenphp: {}
 
   # Start — webhook, callback, and start-trigger service.
   start:
     queue: start
+    frankenphp: {}
 
 # ── Core Scheduler ─────────────────────────────────────────────────────────────
 # Shared defaults for processor scheduler CronJobs.
 scheduler:
   enabled: true
+  frankenphp: {}
   schedule: "*/1 * * * *"
   suspend: false
   concurrencyPolicy: Forbid
@@ -121,8 +133,9 @@ scheduler:
   activeDeadlineSeconds: 300
   restartPolicy: Never
   command:
-    - /usr/local/bin/php
+    - /usr/local/bin/frankenphp
   args:
+    - php-cli
     - artisan
     - schedule:run
   resources:
@@ -172,6 +185,7 @@ processors:
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
 fabric:
   namespace: ""
+  frankenphp: {}
   image:
     repository: fabric
     registry: quay.io/patchworks
@@ -180,10 +194,12 @@ fabric:
   # Fabric migrations run before Core migrations as Helm hooks.
   migrations:
     enabled: true
-    command: "php artisan migrate --force"
+    frankenphp: {}
+    command: "/usr/local/bin/frankenphp php-cli artisan migrate --force"
   # Shell command run as an init container before the app starts.
   init:
-    command: "php artisan optimize"
+    frankenphp: {}
+    command: "/usr/local/bin/frankenphp php-cli artisan optimize"
   replicaCount: 1
   service:
     type: ClusterIP
@@ -334,12 +350,13 @@ dashboard:
 migrations:
   enabled: true
   namespace: ""  # overrides global namespace for migration jobs
+  frankenphp: {}
   image:
     registry: ""
     tag: ""
     pullPolicy: ""
-  # Shell command to run. Supports chaining, e.g. "php artisan migrate --force && php artisan db:seed"
-  command: "php artisan migrate --force"
+  # Shell command to run. Supports chaining, e.g. "/usr/local/bin/frankenphp php-cli artisan migrate --force && /usr/local/bin/frankenphp php-cli artisan db:seed"
+  command: "/usr/local/bin/frankenphp php-cli artisan migrate --force"
   restartPolicy: OnFailure
   # backoffLimit controls how many times the Job retries on failure.
   backoffLimit: 3
@@ -366,7 +383,8 @@ seeds:
   # Must complete before core migrations and core seeds run.
   fabric:
     enabled: false
-    command: "php artisan app:install"
+    frankenphp: {}
+    command: "/usr/local/bin/frankenphp php-cli artisan app:install"
     image:
       registry: ""
       repository: fabric
@@ -399,7 +417,8 @@ seeds:
   # Core seeder — runs on pre-install only (not upgrade), after Core migrations.
   core:
     enabled: false
-    command: "php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction"
+    frankenphp: {}
+    command: "/usr/local/bin/frankenphp php-cli artisan db:seed --force && /usr/local/bin/frankenphp php-cli artisan migrate:tenants --create --no-interaction"
     image:
       registry: ""
       tag: ""
@@ -435,6 +454,7 @@ monocore:
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
   namespace: ""  # overrides global namespace for worker resources
+  frankenphp: {}
   # Deployment type:
   #   standalone   — PHP queue worker via supervisord
   #   mono         — Monocore Go-based worker

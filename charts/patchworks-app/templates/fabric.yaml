@@ -1,3 +1,6 @@
+{{- $fabricUsesFrankenphp := eq (include "patchworks.usesFrankenphp" (dict "root" . "svc" .Values.fabric)) "true" -}}
+{{- $fabricInitSvc := mergeOverwrite (deepCopy .Values.fabric) .Values.fabric.init -}}
+{{- if not $fabricUsesFrankenphp }}
 ---
 # ConfigMap — default Nginx config proxying to PHP-FPM on localhost:9000.
 apiVersion: v1
@@ -11,6 +14,7 @@ metadata:
 data:
   site.conf: |
     {{- .Files.Get "files/fabric-nginx.conf" | nindent 4 }}
+{{- end }}
 ---
 # Deployment
 apiVersion: apps/v1
@@ -37,7 +41,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 8 }}
       annotations:
         checksum/config: {{ include "patchworks.fabricConfigData" . | sha256sum }}
+        {{- if not $fabricUsesFrankenphp }}
         checksum/nginx: {{ .Files.Get "files/fabric-nginx.conf" | sha256sum }}
+        {{- end }}
         {{- with .Values.fabric.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -47,6 +53,7 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if not $fabricUsesFrankenphp }}
       volumes:
         - name: nginx-config
           configMap:
@@ -54,11 +61,12 @@ spec:
             items:
               - key: site.conf
                 path: site.conf
+      {{- end }}
       initContainers:
         - name: fabric-init
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
-          command: ["/bin/sh", "-c", {{ .Values.fabric.init.command | quote }}]
+          command: ["/bin/sh", "-c", {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $fabricInitSvc "command" .Values.fabric.init.command) | quote }}]
           envFrom:
             - configMapRef:
                 name: {{ include "patchworks.fullname" . }}-fabric-config
@@ -83,9 +91,17 @@ spec:
         - name: fabric
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
+          {{- if $fabricUsesFrankenphp }}
+          {{- include "patchworks.frankenphpCommand" . | nindent 10 }}
+          {{- end }}
           ports:
+            {{- if $fabricUsesFrankenphp }}
+            - name: http
+              containerPort: 80
+            {{- else }}
             - name: fpm
               containerPort: 9000
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "patchworks.fullname" . }}-fabric-config
@@ -111,6 +127,7 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if not $fabricUsesFrankenphp }}
         - name: fabric-nginx
           image: nginx:stable-alpine
           imagePullPolicy: IfNotPresent
@@ -120,6 +137,7 @@ spec:
           volumeMounts:
             - name: nginx-config
               mountPath: /etc/nginx/conf.d
+        {{- end }}
       {{- with .Values.fabric.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

@@ -101,7 +101,7 @@ metadata:
     app.kubernetes.io/component: {{ $slug }}
 data:
   supervisord.conf: |
-    {{- include "patchworks.supervisordConf" (dict "connection" $root.Values.workers.queue.connection "queue" $queue "processes" $processes) | nindent 4 }}
+    {{- include "patchworks.supervisordConf" (dict "root" $root "svc" $root.Values.workers "connection" $root.Values.workers.queue.connection "queue" $queue "processes" $processes) | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -27,7 +27,8 @@ metadata:
     app.kubernetes.io/component: processor-{{ $slug }}
 data:
   supervisord.conf: |
-    {{- include "patchworks.supervisordConf" (dict "connection" $root.Values.workers.queue.connection "queue" $queue "processes" $processes) | nindent 4 }}
+    {{- $processorSvc := mergeOverwrite (deepCopy $root.Values.workers) $processor -}}
+    {{- include "patchworks.supervisordConf" (dict "root" $root "svc" $processorSvc "connection" $root.Values.workers.queue.connection "queue" $queue "processes" $processes) | nindent 4 }}
 ---
 apiVersion: apps/v1
 kind: Deployment

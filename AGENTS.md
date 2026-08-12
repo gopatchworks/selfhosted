@@ -208,6 +208,12 @@ Use `patchworks.appImage` / `patchworks.appPullPolicy` for all Patchworks applic
 
 Infrastructure images (MySQL, Redis, RabbitMQ, etc.) use their own fully-qualified `image.repository:image.tag` blocks directly — they don't use these helpers.
 
+## Runtime resolution
+
+Use `patchworks.usesFrankenphp`, `patchworks.artisanShellCommand`, and `patchworks.phpCliCommandArgs` for PHP runtime decisions. Do not hard-code new Artisan template commands without passing them through the runtime helpers.
+
+`runtime.frankenphp.enabled` defaults to `true`. Service-level `frankenphp.enabled` values override it. When enabled, web pods run `frankenphp php-server` and Artisan commands render as `/usr/local/bin/frankenphp php-cli artisan ...`. When disabled, the helpers normalize back to the standard PHP command shape.
+
 ---
 
 ## `patchworks.appEnv` — shared app env
@@ -240,12 +246,14 @@ If a new service needs its credentials in app pods, add helpers here rather than
 
 ### supervisord.conf pattern (standalone and microservice)
 
-Both types generate a **ConfigMap** per Deployment containing a `supervisord.conf`, then run `supervisord -c /etc/supervisor/conf.d/supervisord.conf` as the container command. The `processes` field maps to `numprocs` in the conf. The artisan command embedded in each conf is:
+Both types generate a **ConfigMap** per Deployment containing a `supervisord.conf`, then run `supervisord -c /etc/supervisor/conf.d/supervisord.conf` as the container command. The `processes` field maps to `numprocs` in the conf. The standard PHP artisan command embedded in each conf is:
 
 ```
 /usr/local/bin/php /var/www/html/artisan queue:work <connection> --queue=<queue> \
   --backoff=0 --max-jobs=0 --memory=256 --sleep=3 --timeout=21600 --tries=1 --rest=0
 ```
+
+Because FrankenPHP is the default runtime, the rendered default uses `/usr/local/bin/frankenphp php-cli artisan`. When a service opts out, the helper renders the standard PHP command above.
 
 ConfigMap naming: `{fullname}-{slug}-supervisord` (same slug as the Deployment).
 

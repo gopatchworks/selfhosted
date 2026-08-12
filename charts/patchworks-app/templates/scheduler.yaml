@@ -10,6 +10,7 @@
 {{- $slug := regexReplaceAll "[^a-z0-9-]" (lower $queue) "-" | trimAll "-" }}
 {{- $processorScheduler := $processor.scheduler | default dict }}
 {{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) $processorScheduler -}}
+{{- $schedSvc := mergeOverwrite (deepCopy $root.Values.workers) $sched -}}
 {{- if $sched.enabled }}
 {{- $namespace := $processor.namespace | default (include "patchworks.workers.namespace" $root) -}}
 ---
@@ -53,10 +54,7 @@ spec:
             - name: {{ $slug }}-scheduler
               image: {{ include "patchworks.appImage" (dict "svc" $root.Values.workers "root" $root) | quote }}
               imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $root.Values.workers "root" $root) }}
-              command:
-                {{- toYaml $sched.command | nindent 16 }}
-              args:
-                {{- toYaml $sched.args | nindent 16 }}
+              {{- include "patchworks.phpCliCommandArgs" (dict "root" $root "svc" $schedSvc "command" $sched.command "args" $sched.args) | nindent 14 }}
               envFrom:
                 - configMapRef:
                     name: {{ include "patchworks.fullname" $root }}-config

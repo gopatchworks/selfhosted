@@ -335,6 +335,75 @@ Falls back to global image.pullPolicy.
 {{- .svc.image.pullPolicy | default .root.Values.image.pullPolicy -}}
 {{- end }}
 
+{{/* ── Runtime helpers ───────────────────────────────────────────────────────── */}}
+
+{{/*
+Return true when a service should run as an embedded FrankenPHP image.
+Service-level frankenphp.enabled overrides runtime.frankenphp.enabled.
+*/}}
+{{- define "patchworks.usesFrankenphp" -}}
+{{- $root := .root -}}
+{{- $svc := .svc | default dict -}}
+{{- $enabled := true -}}
+{{- if and (hasKey $root.Values "runtime") (hasKey $root.Values.runtime "frankenphp") (hasKey $root.Values.runtime.frankenphp "enabled") -}}
+  {{- $enabled = $root.Values.runtime.frankenphp.enabled -}}
+{{- end -}}
+{{- if hasKey $svc "frankenphp" -}}
+  {{- if kindIs "bool" $svc.frankenphp -}}
+    {{- $enabled = $svc.frankenphp -}}
+  {{- else if and (kindIs "map" $svc.frankenphp) (hasKey $svc.frankenphp "enabled") -}}
+    {{- $enabled = $svc.frankenphp.enabled -}}
+  {{- end -}}
+{{- end -}}
+{{- if $enabled -}}true{{- else -}}false{{- end -}}
+{{- end }}
+
+{{- define "patchworks.frankenphpCommand" -}}
+command: ["/usr/local/bin/frankenphp"]
+args: ["php-server", "--root", "public", "--listen", ":80"]
+{{- end }}
+
+{{/*
+Translate shell commands that invoke artisan for the resolved PHP runtime.
+*/}}
+{{- define "patchworks.artisanShellCommand" -}}
+{{- $command := .command -}}
+{{- if eq (include "patchworks.usesFrankenphp" (dict "root" .root "svc" .svc)) "true" -}}
+  {{- $command = replace "/usr/local/bin/php /var/www/html/artisan" "/usr/local/bin/frankenphp php-cli artisan" $command -}}
+  {{- $command = replace "/usr/local/bin/php artisan" "/usr/local/bin/frankenphp php-cli artisan" $command -}}
+  {{- $command = replace "php artisan" "/usr/local/bin/frankenphp php-cli artisan" $command -}}
+{{- else -}}
+  {{- $command = replace "/usr/local/bin/frankenphp php-cli artisan" "php artisan" $command -}}
+{{- end -}}
+{{- $command -}}
+{{- end }}
+
+{{/*
+Render command/args for direct PHP CLI invocations such as scheduler CronJobs.
+*/}}
+{{- define "patchworks.phpCliCommandArgs" -}}
+{{- if eq (include "patchworks.usesFrankenphp" (dict "root" .root "svc" .svc)) "true" }}
+command:
+  - /usr/local/bin/frankenphp
+args:
+  - php-cli
+  {{- $args := .args | default (list) -}}
+  {{- if and (gt (len $args) 0) (eq (first $args) "php-cli") -}}
+    {{- $args = rest $args -}}
+  {{- end }}
+  {{- toYaml $args | nindent 2 }}
+{{- else }}
+command:
+  - /usr/local/bin/php
+args:
+  {{- $args := .args | default (list) -}}
+  {{- if and (gt (len $args) 0) (eq (first $args) "php-cli") -}}
+    {{- $args = rest $args -}}
+  {{- end }}
+  {{- toYaml $args | nindent 2 }}
+{{- end }}
+{{- end }}
+
 {{/* ── MySQL helpers ──────────────────────────────────────────────────────────── */}}
 
 {{- define "patchworks.mysql.host" -}}
@@ -864,11 +933,15 @@ buckets:
 
 {{/*
 Render a supervisord.conf for a PHP queue worker.
-Usage: {{ include "patchworks.supervisordConf" (dict "connection" "rabbitmq" "queue" "default" "processes" 15) }}
+Usage: {{ include "patchworks.supervisordConf" (dict "root" . "svc" .Values.workers "connection" "rabbitmq" "queue" "default" "processes" 15) }}
 Mount the result at /etc/supervisor/conf.d/supervisord.conf and run:
   command: [supervisord, -c, /etc/supervisor/conf.d/supervisord.conf]
 */}}
 {{- define "patchworks.supervisordConf" -}}
+{{- $artisan := "/usr/local/bin/php /var/www/html/artisan" -}}
+{{- if and .root (eq (include "patchworks.usesFrankenphp" (dict "root" .root "svc" .svc)) "true") -}}
+{{- $artisan = "/usr/local/bin/frankenphp php-cli artisan" -}}
+{{- end -}}
 [supervisord]
 nodaemon=true
 loglevel=info
@@ -876,7 +949,7 @@ logfile=/dev/null
 pidfile=/tmp/supervisord.pid
 
 [program:worker]
-command=/usr/local/bin/php /var/www/html/artisan queue:work {{ .connection }} --queue={{ .queue }} --backoff=0 --max-jobs=0 --memory=256 --sleep=3 --timeout=21600 --tries=1 --rest=0
+command={{ $artisan }} queue:work {{ .connection }} --queue={{ .queue }} --backoff=0 --max-jobs=0 --memory=256 --sleep=3 --timeout=21600 --tries=1 --rest=0
 process_name=%(program_name)s_%(process_num)02d
 numprocs={{ .processes }}
 stopwaitsecs=21600
