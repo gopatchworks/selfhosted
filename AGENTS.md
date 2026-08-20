@@ -212,7 +212,7 @@ Infrastructure images (MySQL, Redis, RabbitMQ, etc.) use their own fully-qualifi
 
 Use `patchworks.usesFrankenphp`, `patchworks.artisanShellCommand`, and `patchworks.phpCliCommandArgs` for PHP runtime decisions. Do not hard-code new Artisan template commands without passing them through the runtime helpers.
 
-`runtime.frankenphp.enabled` defaults to `true`. Service-level `frankenphp.enabled` values override it. When enabled, web pods run `frankenphp php-server` and Artisan commands render as `/usr/local/bin/frankenphp php-cli artisan ...`. When disabled, the helpers normalize back to the standard PHP command shape.
+`runtime.frankenphp.enabled` defaults to `false`. Service-level `frankenphp.enabled` values override it. When enabled, web pods run `frankenphp php-server` and Artisan commands render as `/usr/local/bin/frankenphp php-cli artisan ...`. When disabled, the helpers normalize back to the standard PHP command shape.
 
 ---
 
@@ -253,7 +253,7 @@ Both types generate a **ConfigMap** per Deployment containing a `supervisord.con
   --backoff=0 --max-jobs=0 --memory=256 --sleep=3 --timeout=21600 --tries=1 --rest=0
 ```
 
-Because FrankenPHP is the default runtime, the rendered default uses `/usr/local/bin/frankenphp php-cli artisan`. When a service opts out, the helper renders the standard PHP command above.
+Because standard PHP is the default runtime, the rendered default uses the standard PHP command above. When a service opts into FrankenPHP, the helper renders `/usr/local/bin/frankenphp php-cli artisan`.
 
 ConfigMap naming: `{fullname}-{slug}-supervisord` (same slug as the Deployment).
 

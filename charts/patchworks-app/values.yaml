@@ -13,12 +13,12 @@ image:
   pullSecrets: []
 
 # ── Application runtime ────────────────────────────────────────────────────────
-# Controls how PHP app images are started. The default uses encoded embedded
-# FrankenPHP images. Individual services can override this with
+# Controls how PHP app images are started. The default uses standard PHP
+# runtime images. Individual services can opt into FrankenPHP with
 # frankenphp.enabled under their own values block.
 runtime:
   frankenphp:
-    enabled: true
+    enabled: false
 
 # Number of old ReplicaSets retained for chart-managed Deployments.
 revisionHistoryLimit: 3
@@ -133,9 +133,8 @@ scheduler:
   activeDeadlineSeconds: 300
   restartPolicy: Never
   command:
-    - /usr/local/bin/frankenphp
+    - /usr/local/bin/php
   args:
-    - php-cli
     - artisan
     - schedule:run
   resources:
@@ -195,11 +194,11 @@ fabric:
   migrations:
     enabled: true
     frankenphp: {}
-    command: "/usr/local/bin/frankenphp php-cli artisan migrate --force"
+    command: "php artisan migrate --force"
   # Shell command run as an init container before the app starts.
   init:
     frankenphp: {}
-    command: "/usr/local/bin/frankenphp php-cli artisan optimize"
+    command: "php artisan optimize"
   replicaCount: 1
   service:
     type: ClusterIP
@@ -355,8 +354,8 @@ migrations:
     registry: ""
     tag: ""
     pullPolicy: ""
-  # Shell command to run. Supports chaining, e.g. "/usr/local/bin/frankenphp php-cli artisan migrate --force && /usr/local/bin/frankenphp php-cli artisan db:seed"
-  command: "/usr/local/bin/frankenphp php-cli artisan migrate --force"
+  # Shell command to run. Supports chaining, e.g. "php artisan migrate --force && php artisan db:seed"
+  command: "php artisan migrate --force"
   restartPolicy: OnFailure
   # backoffLimit controls how many times the Job retries on failure.
   backoffLimit: 3
@@ -384,7 +383,7 @@ seeds:
   fabric:
     enabled: false
     frankenphp: {}
-    command: "/usr/local/bin/frankenphp php-cli artisan app:install"
+    command: "php artisan app:install"
     image:
       registry: ""
       repository: fabric
@@ -418,7 +417,7 @@ seeds:
   core:
     enabled: false
     frankenphp: {}
-    command: "/usr/local/bin/frankenphp php-cli artisan db:seed --force && /usr/local/bin/frankenphp php-cli artisan migrate:tenants --create --no-interaction"
+    command: "php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction"
     image:
       registry: ""
       tag: ""

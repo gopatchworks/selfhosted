@@ -338,13 +338,13 @@ Falls back to global image.pullPolicy.
 {{/* ── Runtime helpers ───────────────────────────────────────────────────────── */}}
 
 {{/*
-Return true when a service should run as an embedded FrankenPHP image.
+Return true when a service should run with FrankenPHP.
 Service-level frankenphp.enabled overrides runtime.frankenphp.enabled.
 */}}
 {{- define "patchworks.usesFrankenphp" -}}
 {{- $root := .root -}}
 {{- $svc := .svc | default dict -}}
-{{- $enabled := true -}}
+{{- $enabled := false -}}
 {{- if and (hasKey $root.Values "runtime") (hasKey $root.Values.runtime "frankenphp") (hasKey $root.Values.runtime.frankenphp "enabled") -}}
   {{- $enabled = $root.Values.runtime.frankenphp.enabled -}}
 {{- end -}}
