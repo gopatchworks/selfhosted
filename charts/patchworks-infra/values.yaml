@@ -48,6 +48,16 @@ app:
   env: production
   debug: "false"
   url: "http://localhost"
+  # License values required by encoded Core and Fabric images.
+  # Use existingSecret for production so the license key is not stored in values.
+  license:
+    active: "true"
+    key: ""
+    serverUrl: ""
+    existingSecret:
+      name: ""
+      keyKey: LICENSE_KEY
+      serverUrlKey: ""
   # Extra env vars injected into every app pod.
   extraEnv: []
   # Extra envFrom (secretRef / configMapRef) injected into every app pod.

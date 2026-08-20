@@ -1292,6 +1292,7 @@ Non-sensitive app env vars as a YAML map for ConfigMap data:.
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
 APP_URL: {{ .Values.app.url | quote }}
+{{ include "patchworks.licenseConfigData" . }}
 SESSION_DOMAIN: {{ .Values.web.sessionDomain | quote }}
 {{- with .Values.ingress.hosts.callback }}
 CALLBACK_DOMAIN: {{ . | quote }}
@@ -1456,6 +1457,7 @@ Like appConfigData but uses fabric MySQL/Redis helpers.
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
 APP_URL: {{ .Values.app.url | quote }}
+{{ include "patchworks.licenseConfigData" . }}
 DB_CONNECTION: "mysql"
 DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
 DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
@@ -1655,6 +1657,64 @@ Secret-aware env vars used only by the dashboard config initContainer.
 {{- end }}
 {{- end }}
 
+{{/*
+License env vars shared by Core and Fabric. Encoded images validate this at runtime.
+*/}}
+{{- define "patchworks.licenseConfigData" -}}
+LICENSE_ACTIVE: {{ .Values.app.license.active | quote }}
+{{- if not (and .Values.app.license.existingSecret.name .Values.app.license.existingSecret.serverUrlKey) }}
+LICENSE_SERVER_URL: {{ .Values.app.license.serverUrl | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "patchworks.licenseSecretData" -}}
+{{- if and (not .Values.app.license.existingSecret.name) .Values.app.license.key }}
+LICENSE_KEY: {{ .Values.app.license.key | quote }}
+{{- end }}
+{{- end }}
+
+{{- define "patchworks.licenseSecretEnvRefs" -}}
+{{- if .Values.app.license.existingSecret.name }}
+- name: LICENSE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.keyKey | default "LICENSE_KEY" }}
+{{- if .Values.app.license.existingSecret.serverUrlKey }}
+- name: LICENSE_SERVER_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.serverUrlKey }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- define "patchworks.licenseEnv" -}}
+- name: LICENSE_ACTIVE
+  value: {{ .Values.app.license.active | quote }}
+{{- if and .Values.app.license.existingSecret.name .Values.app.license.existingSecret.serverUrlKey }}
+- name: LICENSE_SERVER_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.serverUrlKey }}
+{{- else }}
+- name: LICENSE_SERVER_URL
+  value: {{ .Values.app.license.serverUrl | quote }}
+{{- end }}
+{{- if .Values.app.license.existingSecret.name }}
+- name: LICENSE_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.keyKey | default "LICENSE_KEY" }}
+{{- else if .Values.app.license.key }}
+- name: LICENSE_KEY
+  value: {{ .Values.app.license.key | quote }}
+{{- end }}
+{{- end }}
+
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}
 
 {{/*
@@ -1666,6 +1726,7 @@ Each key is only included when NOT backed by an existingSecret.
 {{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
+{{ include "patchworks.licenseSecretData" . }}
 {{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
 {{- if not $dbSecret.name }}
 DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
@@ -1772,6 +1833,7 @@ KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
       name: {{ $appKeySecret.name }}
       key: {{ $appKeySecret.key }}
 {{- end }}
+{{ include "patchworks.licenseSecretEnvRefs" . }}
 {{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
 {{- if $dbSecret.name }}
 - name: DB_PASSWORD
@@ -1925,6 +1987,7 @@ Same as appSecretData but uses Fabric MySQL/Redis password helpers.
 {{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
+{{ include "patchworks.licenseSecretData" . }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if not $dbSecret.name }}
 DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
@@ -1991,6 +2054,7 @@ Fabric does not connect to RabbitMQ.
       name: {{ $appKeySecret.name }}
       key: {{ $appKeySecret.key }}
 {{- end }}
+{{ include "patchworks.licenseSecretEnvRefs" . }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if $dbSecret.name }}
 - name: DB_PASSWORD
@@ -2110,6 +2174,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ .Values.app.debug | quote }}
 - name: APP_URL
   value: {{ .Values.app.url | quote }}
+{{ include "patchworks.licenseEnv" . }}
 - name: SESSION_DOMAIN
   value: {{ .Values.web.sessionDomain | quote }}
 - name: DB_CONNECTION
@@ -2306,6 +2371,7 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
   value: {{ .Values.app.debug | quote }}
 - name: APP_URL
   value: {{ .Values.app.url | quote }}
+{{ include "patchworks.licenseEnv" . }}
 - name: DB_CONNECTION
   value: mysql
 - name: DB_HOST
