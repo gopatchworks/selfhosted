@@ -370,7 +370,7 @@ migrations:
     pullPolicy: ""
   # Shell command to run. Supports chaining, e.g. "php artisan migrate --force && php artisan db:seed"
   command: "php artisan migrate --force"
-  restartPolicy: OnFailure
+  restartPolicy: Never
   # backoffLimit controls how many times the Job retries on failure.
   backoffLimit: 3
   resources: {}
@@ -383,11 +383,11 @@ migrations:
 # Run by the app chart as pre-install hooks only (not upgrade). Fabric seeders
 # run before core migrations; core seeders run after Fabric seeders and core
 # migrations.
-# Seeders are idempotent (upsert-based), so re-enabling and upgrading is safe.
+# Seed Jobs can have side effects before failing, so they do not retry by default.
 seeds:
   namespace: ""  # overrides global namespace; defaults to migrations namespace
-  restartPolicy: OnFailure
-  backoffLimit: 3
+  restartPolicy: Never
+  backoffLimit: 0
   nodeSelector: {}
   affinity: {}
   tolerations: []
@@ -398,7 +398,9 @@ seeds:
   fabric:
     enabled: false
     frankenphp: {}
-    command: "php artisan app:install"
+    command: >-
+      php -r 'require "vendor/autoload.php"; if (! class_exists("Faker\\Factory")) { fwrite(STDERR, "Fabric seeders require fakerphp/faker. Rebuild the Fabric image with Composer dev dependencies installed; the encoded image build must not use --no-dev for the vendor stage.\n"); exit(1); }'
+      && php artisan app:install
     image:
       registry: ""
       repository: fabric
@@ -693,7 +695,7 @@ rabbitmq:
   topology:
     enabled: true
     command:
-      - /monocore
+      - monocore
     args:
       - apply-rabbitmq-topology
       - --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml

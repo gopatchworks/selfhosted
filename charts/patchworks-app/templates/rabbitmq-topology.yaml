@@ -84,7 +84,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq-topology" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

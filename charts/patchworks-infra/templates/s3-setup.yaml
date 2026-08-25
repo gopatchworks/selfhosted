@@ -22,7 +22,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "s3-setup" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       initContainers:
         - name: wait-for-minio
           image: busybox:1.37

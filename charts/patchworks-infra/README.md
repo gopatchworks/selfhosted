@@ -359,6 +359,7 @@ pre-install/pre-upgrade hooks. Core migrations default to
 | `fabric.migrations.enabled` | `true` | Run Fabric migrations before Core migrations |
 | `fabric.migrations.command` | `php artisan migrate --force` | Fabric migration command |
 | `migrations.command` | `php artisan migrate --force` | Core migration command; include extra flags here |
+| `migrations.restartPolicy` | `Never` | Shared app-chart value for migration Job pod restart policy |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
 
@@ -373,9 +374,11 @@ startup.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
-| `seeds.fabric.command` | `php artisan app:install` | Fabric install seed command |
+| `seeds.fabric.command` | Faker preflight + `php artisan app:install` | Shared app-chart Fabric install seed command |
 | `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
 | `seeds.core.command` | `php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction` | Core first-install seed and tenant migration command |
+| `seeds.restartPolicy` | `Never` | Shared app-chart value for seed Job pod restart policy |
+| `seeds.backoffLimit` | `0` | Shared app-chart value for seed Job retry limit |
 | `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
 | `seeds.tenant.database` | `""` | Initial tenant database name. Defaults to `companyName` lowercased with non-alphanumeric characters removed |
 | `seeds.tenant.createDatabase` | `true` | Create the initial tenant database before Core tenant migrations run |

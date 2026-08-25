@@ -463,6 +463,7 @@ Core migrations default to `php artisan migrate --force`.
 | `fabric.migrations.command` | `php artisan migrate --force` | Fabric migration command |
 | `migrations.frankenphp.enabled` | unset | Override FrankenPHP runtime for Core migrations |
 | `migrations.command` | `php artisan migrate --force` | Core migration command; include extra flags here |
+| `migrations.restartPolicy` | `Never` | Job pod restart policy. `Never` preserves failed Pods for diagnostics |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
 
@@ -478,10 +479,12 @@ after Core migrations.
 |-----|---------|-------------|
 | `seeds.fabric.enabled` | `false` | Run the Fabric install seeder Job |
 | `seeds.fabric.frankenphp.enabled` | unset | Override FrankenPHP runtime for Fabric seed jobs |
-| `seeds.fabric.command` | `php artisan app:install` | Fabric install seed command |
+| `seeds.fabric.command` | Faker preflight + `php artisan app:install` | Fabric install seed command. The preflight fails before Passport clients are created if the Fabric image is missing `fakerphp/faker` |
 | `seeds.core.enabled` | `false` | Run the Core tenant seeder Job |
 | `seeds.core.frankenphp.enabled` | unset | Override FrankenPHP runtime for Core seed jobs |
 | `seeds.core.command` | `php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction` | Core first-install seed and tenant migration command |
+| `seeds.restartPolicy` | `Never` | Job pod restart policy. `Never` preserves failed Pods for diagnostics |
+| `seeds.backoffLimit` | `0` | Job retry limit. Defaults to no retries because seed commands can have side effects before failing |
 | `seeds.tenant.companyName` | `""` | Initial tenant company name passed to `app:create-tenant` |
 | `seeds.tenant.database` | `""` | Initial tenant database name. Defaults to `companyName` lowercased with non-alphanumeric characters removed |
 | `seeds.tenant.createDatabase` | `true` | Create the initial tenant database before Core tenant migrations run |

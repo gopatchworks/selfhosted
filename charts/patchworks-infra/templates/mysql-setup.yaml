@@ -26,7 +26,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "mysql-setup" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       initContainers:
         - name: wait-for-mysql
           image: mysql:8.0

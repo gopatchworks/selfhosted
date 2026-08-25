@@ -108,7 +108,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "workers-storegen" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       serviceAccountName: {{ $fullname }}-workers-storegen
       containers:
         - name: kubectl

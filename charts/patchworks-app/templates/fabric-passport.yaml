@@ -109,7 +109,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "passport-keygen" "Release" .Release) | nindent 8 }}
     spec:
-      restartPolicy: OnFailure
+      restartPolicy: Never
       serviceAccountName: {{ $saName }}
       containers:
         - name: keygen
