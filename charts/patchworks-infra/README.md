@@ -118,10 +118,10 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
 | `app.license.active` | `"true"` | `LICENSE_ACTIVE` for encoded application images |
 | `app.license.key` | `""` | Inline `LICENSE_KEY`. Prefer `app.license.existingSecret.name` for production |
-| `app.license.serverUrl` | `""` | `LICENSE_SERVER_URL` used to validate the license |
+| `app.license.serverUrl` | `""` | License server URL rendered as `LICENSE_SERVER_URL` for Core and `LICENSE_URL` for Fabric |
 | `app.license.existingSecret.name` | `""` | Existing Secret containing license values |
 | `app.license.existingSecret.keyKey` | `LICENSE_KEY` | Key containing `LICENSE_KEY` in the existing Secret |
-| `app.license.existingSecret.serverUrlKey` | `""` | Optional key containing `LICENSE_SERVER_URL` in the existing Secret |
+| `app.license.existingSecret.serverUrlKey` | `""` | Optional key containing the license server URL in the existing Secret |
 | `app.extraEnv` | `[]` | Additional env vars injected into all app pods |
 | `app.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for all app pods |
 

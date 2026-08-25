@@ -1664,6 +1664,7 @@ License env vars shared by Core and Fabric. Encoded images validate this at runt
 LICENSE_ACTIVE: {{ .Values.app.license.active | quote }}
 {{- if not (and .Values.app.license.existingSecret.name .Values.app.license.existingSecret.serverUrlKey) }}
 LICENSE_SERVER_URL: {{ .Values.app.license.serverUrl | quote }}
+LICENSE_URL: {{ .Values.app.license.serverUrl | quote }}
 {{- end }}
 {{- end }}
 
@@ -1686,6 +1687,11 @@ LICENSE_KEY: {{ .Values.app.license.key | quote }}
     secretKeyRef:
       name: {{ .Values.app.license.existingSecret.name }}
       key: {{ .Values.app.license.existingSecret.serverUrlKey }}
+- name: LICENSE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.serverUrlKey }}
 {{- end }}
 {{- end }}
 {{- end }}
@@ -1699,8 +1705,15 @@ LICENSE_KEY: {{ .Values.app.license.key | quote }}
     secretKeyRef:
       name: {{ .Values.app.license.existingSecret.name }}
       key: {{ .Values.app.license.existingSecret.serverUrlKey }}
+- name: LICENSE_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.app.license.existingSecret.name }}
+      key: {{ .Values.app.license.existingSecret.serverUrlKey }}
 {{- else }}
 - name: LICENSE_SERVER_URL
+  value: {{ .Values.app.license.serverUrl | quote }}
+- name: LICENSE_URL
   value: {{ .Values.app.license.serverUrl | quote }}
 {{- end }}
 {{- if .Values.app.license.existingSecret.name }}

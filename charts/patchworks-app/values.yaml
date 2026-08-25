@@ -53,10 +53,12 @@ app:
   license:
     active: "true"
     key: ""
+    # License server URL. Rendered as LICENSE_SERVER_URL for Core and LICENSE_URL for Fabric.
     serverUrl: ""
     existingSecret:
       name: ""
       keyKey: LICENSE_KEY
+      # Optional key containing the license server URL. Used for both LICENSE_SERVER_URL and LICENSE_URL.
       serverUrlKey: ""
   # Extra env vars injected into every app pod.
   extraEnv: []
