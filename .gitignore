@@ -2,3 +2,6 @@
 .claude
 local/
 .DS_Store
+/patchworks-installer
+/patchworks.values.yaml
+/config.yaml

@@ -31,8 +31,8 @@ Before installing the charts, make sure the cluster has:
   `quay.io/patchworks/*`.
 
 If Argo CD or another GitOps system already owns cluster-level services such as
-the ingress controller, cert-manager, Kyverno, or image-pull-secret replication,
-do not install those again manually. Let GitOps manage them and install only the
+the ingress controller, cert-manager, or image-pull-secret replication, do not
+install those again manually. Let GitOps manage them and install only the
 Patchworks charts.
 
 ## 1. Create a Values File
@@ -108,16 +108,17 @@ kubectl create secret docker-registry quay-credentials \
   --docker-email='unused@example.com'
 ```
 
-If your cluster uses a pull-secret replication system, create the source secret
-in the namespace that system expects instead.
+If your cluster uses a pull-secret replication system, such as Kyverno generate
+rules, create the source secret in the namespace that system expects instead.
 
 ## 3. Install Chart Dependencies
 
-Run this once before installing or whenever `charts/patchworks-infra/Chart.yaml`
+Run this once before installing or whenever either chart's `Chart.yaml`
 changes:
 
 ```bash
 helm dependency update charts/patchworks-infra
+helm dependency update charts/patchworks-app
 ```
 
 ## 4. Install Infrastructure
@@ -215,8 +216,8 @@ For Argo CD, create two applications or two sources:
 2. `patchworks-app`
 
 Point both at the same values file and sync infra before app. If Argo already
-manages ingress, Kyverno, cert-manager, pull-secret replication, or monitoring,
-keep those outside the Patchworks bootstrap scripts.
+manages ingress, cert-manager, pull-secret replication, or monitoring, keep
+those outside the Patchworks bootstrap scripts.
 
 ## Local Kind Install
 

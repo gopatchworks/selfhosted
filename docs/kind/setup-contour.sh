@@ -10,18 +10,17 @@
 
 set -euo pipefail
 
-CONTOUR_VERSION="${CONTOUR_VERSION:-22.1.2}"
 NAMESPACE="projectcontour"
 
-echo "Adding projectcontour Helm repo..."
-helm repo add projectcontour https://charts.projectcontour.io
-helm repo update projectcontour
+echo "Adding Contour Helm repo..."
+helm repo add contour https://projectcontour.github.io/helm-charts/ --force-update
+helm repo update contour
 
-echo "Installing Contour ${CONTOUR_VERSION}..."
-helm upgrade --install contour projectcontour/contour \
+echo "Installing Contour..."
+helm upgrade --install contour contour/contour \
   --namespace "${NAMESPACE}" \
   --create-namespace \
-  --version "${CONTOUR_VERSION}" \
+  --set 'commonLabels.selfhosted\.patchworks\.io/installed-by=patchworks-installer' \
   --set envoy.hostPorts.enabled=true \
   --set envoy.hostPorts.http=80 \
   --set envoy.hostPorts.https=443 \
