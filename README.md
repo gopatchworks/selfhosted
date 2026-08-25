@@ -30,6 +30,9 @@ For GitOps/Argo installs, use the split charts with one shared values file.
 
 ## Getting started
 
+For an existing Kubernetes cluster, see the standalone
+[self-hosted getting started guide](docs/getting-started.md).
+
 Stand up a complete local environment with [kind](https://kind.sigs.k8s.io) (Kubernetes in Docker). Everything runs in-cluster — MySQL, Redis, RabbitMQ, Elasticsearch, MinIO, S3 Manager, and the Patchworks application itself.
 
 Total time: ~10 minutes.
