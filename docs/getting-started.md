@@ -18,8 +18,11 @@ Before installing the charts, make sure the cluster has:
 - A default `StorageClass` if using the chart-managed MySQL, Redis,
   RabbitMQ, Elasticsearch, and S3/MinIO services.
 - An ingress controller if the application will be exposed publicly. Contour is
-  the reference setup in this repo, but another controller can be used if it
-  supports the configured ingress resources.
+  the reference setup in this repo; see the
+  [Contour installation guide](https://projectcontour.io/getting-started/) for
+  cluster installs, or use [`docs/kind/setup-contour.sh`](kind/setup-contour.sh)
+  for the local kind setup. Another controller can be used if it supports the
+  configured ingress resources.
 - DNS records pointing at the ingress/load balancer for the dashboard, gateway,
   start, Fabric, webhook, callback, and websocket hosts you plan to use.
 - TLS certificates for HTTPS, usually through cert-manager, manually created
