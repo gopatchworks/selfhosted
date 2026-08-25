@@ -54,7 +54,7 @@ app:
     active: "true"
     key: ""
     # License server URL. Rendered as LICENSE_SERVER_URL for Core and LICENSE_URL for Fabric.
-    serverUrl: ""
+    serverUrl: "https://license.wearepatchworks.com"
     existingSecret:
       name: ""
       keyKey: LICENSE_KEY
