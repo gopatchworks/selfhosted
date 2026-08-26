@@ -133,6 +133,9 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.extraEnv` | `[]` | Additional env vars injected into all app pods |
 | `app.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for all app pods |
 
+Core web, Gateway, Start, scheduler, and worker pods receive
+`QUEUE_CONNECTION` from `workers.queue.connection`.
+
 ---
 
 ## Fabric

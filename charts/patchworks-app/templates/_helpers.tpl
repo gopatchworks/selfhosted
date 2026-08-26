@@ -1327,6 +1327,7 @@ PAYLOAD_REDIS_SENTINEL_PORT: {{ include "patchworks.redis.sentinelPort" . | quot
 PAYLOAD_REDIS_SENTINEL_SERVICE: {{ .Values.redis.sentinel.master | quote }}
 {{- end }}
 CACHE_DRIVER: "redis"
+QUEUE_CONNECTION: {{ .Values.workers.queue.connection | quote }}
 RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
