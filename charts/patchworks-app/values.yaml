@@ -906,12 +906,12 @@ pusher:
 # ── Ingress ────────────────────────────────────────────────────────────────────
 ingress:
   enabled: false
-  # Ingress controller type. Controls how path prefix stripping is implemented
-  # for /fabric, /core-main, and /core-start on the dashboard host.
-  #   contour  — renders a Contour HTTPProxy (projectcontour.io/v1) which supports
-  #              native prefix rewriting via pathRewritePolicy. (default)
-  #   nginx    — renders a standard Ingress with rewriteAnnotations.
-  #   other    — renders a standard Ingress with rewriteAnnotations.
+  # Ingress controller type. When set to contour, all configured public hosts
+  # render as Contour HTTPProxy resources. nginx/other render standard Ingress
+  # resources, with rewriteAnnotations used for dashboard path prefix stripping.
+  #   contour  — renders Contour HTTPProxy resources (projectcontour.io/v1).
+  #   nginx    — renders standard Ingress resources.
+  #   other    — renders standard Ingress resources.
   provider: contour
   # Public URL scheme used when rendering dashboard/browser-facing URLs.
   # Set to "https" when TLS is terminated outside this chart.

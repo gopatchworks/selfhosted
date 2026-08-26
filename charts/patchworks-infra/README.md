@@ -396,10 +396,10 @@ startup.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `ingress.enabled` | `false` | Create Ingress resources |
+| `ingress.enabled` | `false` | Create public ingress resources |
 | `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs. Set to `https` when TLS is terminated outside this chart |
-| `ingress.className` | `""` | `ingressClassName` |
-| `ingress.annotations` | `{}` | Annotations applied to every Ingress resource |
+| `ingress.className` | `""` | `ingressClassName` for standard Ingress resources |
+| `ingress.annotations` | `{}` | Annotations applied to every generated Ingress or HTTPProxy resource |
 | `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |
 | `ingress.hosts.gateway` | `""` | Hostname for the Core gateway service (`/`) |
 | `ingress.hosts.start` | `""` | Hostname for the Core start service (`/`) |
@@ -411,33 +411,38 @@ startup.
 
 ### Path-based routing and prefix stripping
 
-When `ingress.hosts.dashboard` is set, two Ingress resources are created on that host:
+When `ingress.provider=contour`, each configured public host is rendered as a
+Contour `HTTPProxy`. The dashboard host uses one `HTTPProxy` containing:
 
-- **`patchworks-dashboard`** — routes `/` to the dashboard service (no rewrite).
-- **`patchworks-dashboard-routes`** — routes `/fabric`, `/core-main`, and `/core-start` to their respective services with the prefix stripped before forwarding.
+- `/` routed to the dashboard service.
+- `/fabric`, `/core-main`, and `/core-start` routed to their respective services
+  with the prefix stripped before forwarding.
+
+When `ingress.provider=nginx` or `other`, the dashboard host creates two
+standard Ingress resources:
+
+- **`patchworks-dashboard`** — routes `/` to the dashboard service.
+- **`patchworks-dashboard-routes`** — routes `/fabric`, `/core-main`, and
+  `/core-start` to their respective services.
 
 When `dashboard.routingMode=path`, empty dashboard service URLs use these
 same-origin routes by default. When `dashboard.routingMode=host`, empty
 dashboard service URLs use the dedicated `ingress.hosts.*` hostnames when
 configured.
 
-`ingress.hosts.webhook` and `ingress.hosts.callback` create dedicated Ingresses
-that route `/` to the Core start service. This matches the production
-Haberdashery layout where `webhooks.*` and `callbacks.*` are separate public
-hosts handled by Core Start. The same host values are also injected into Core
-application pods as `WEBHOOK_DOMAIN` and `CALLBACK_DOMAIN`.
+`ingress.hosts.webhook` and `ingress.hosts.callback` create dedicated public
+routes to the Core start service. This matches the production Haberdashery
+layout where `webhooks.*` and `callbacks.*` are separate public hosts handled by
+Core Start. The same host values are also injected into Core application pods as
+`WEBHOOK_DOMAIN` and `CALLBACK_DOMAIN`.
 
-> ⚠️ **`ingress.rewriteAnnotations` is required** for prefix stripping to work. The default is configured for Contour. If you use a different ingress controller you must override this value — see the examples below.
+> ⚠️ **`ingress.rewriteAnnotations` is only used with standard Ingress providers.** Contour uses `HTTPProxy.pathRewritePolicy` directly. If you use nginx or another Ingress controller, configure rewrite annotations for that controller.
 
 #### Contour (default)
 
-No changes needed. The default `rewriteAnnotations` uses the standard annotation that Contour recognises for prefix rewriting:
-
-```yaml
-ingress:
-  rewriteAnnotations:
-    ingress.kubernetes.io/rewrite-target: /
-```
+No rewrite annotations are needed. The chart renders `HTTPProxy` resources and
+uses `pathRewritePolicy` for the dashboard `/fabric`, `/core-main`, and
+`/core-start` routes.
 
 #### nginx-ingress
 
