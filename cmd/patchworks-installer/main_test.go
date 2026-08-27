@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	yaml "go.yaml.in/yaml/v3"
+	helmchart "helm.sh/helm/v4/pkg/chart"
+	helmloader "helm.sh/helm/v4/pkg/chart/loader"
 )
 
 func TestLocalConfigLoadsGroupedConfig(t *testing.T) {
@@ -93,6 +95,67 @@ func TestParseCLIAcceptsVersionCommand(t *testing.T) {
 		}
 		if opts.Command != "version" {
 			t.Fatalf("parseCLI(%v) command = %q", args, opts.Command)
+		}
+	}
+}
+
+func TestParseCLIAcceptsUnpackChartsCommand(t *testing.T) {
+	opts, err := parseCLI([]string{"unpack-charts", "--output", "/tmp/patchworks-charts"})
+	if err != nil {
+		t.Fatalf("parseCLI unpack-charts: %v", err)
+	}
+	if opts.Command != "unpack-charts" {
+		t.Fatalf("command = %q", opts.Command)
+	}
+	if opts.ChartsOutputDir != "/tmp/patchworks-charts" {
+		t.Fatalf("charts output dir = %q", opts.ChartsOutputDir)
+	}
+}
+
+func TestEmbeddedPatchworksChartsLoad(t *testing.T) {
+	for _, chartName := range []string{"patchworks-infra", "patchworks-app"} {
+		chartPath, cleanup, err := embeddedChartPath(chartName)
+		if err != nil {
+			t.Fatalf("embeddedChartPath(%q): %v", chartName, err)
+		}
+		defer cleanup()
+
+		chart, err := helmloader.Load(chartPath)
+		if err != nil {
+			t.Fatalf("load embedded chart %q: %v", chartName, err)
+		}
+		accessor, err := helmchart.NewAccessor(chart)
+		if err != nil {
+			t.Fatalf("create accessor for embedded chart %q: %v", chartName, err)
+		}
+		if accessor.Name() != chartName {
+			t.Fatalf("embedded chart %q metadata name = %q", chartName, accessor.Name())
+		}
+	}
+}
+
+func TestUnpackEmbeddedCharts(t *testing.T) {
+	outputDir := t.TempDir()
+	if err := unpackEmbeddedCharts(outputDir); err != nil {
+		t.Fatalf("unpackEmbeddedCharts: %v", err)
+	}
+
+	for _, chartName := range []string{"patchworks-infra", "patchworks-app"} {
+		chartPath := filepath.Join(outputDir, chartName)
+		if _, err := os.Stat(filepath.Join(chartPath, "Chart.yaml")); err != nil {
+			t.Fatalf("unpacked chart %q Chart.yaml: %v", chartName, err)
+		}
+
+		chart, err := helmloader.Load(chartPath)
+		if err != nil {
+			t.Fatalf("load unpacked chart %q: %v", chartName, err)
+		}
+		accessor, err := helmchart.NewAccessor(chart)
+		if err != nil {
+			t.Fatalf("create accessor for unpacked chart %q: %v", chartName, err)
+		}
+		if accessor.Name() != chartName {
+			t.Fatalf("unpacked chart %q metadata name = %q", chartName, accessor.Name())
 		}
 	}
 }

@@ -33,6 +33,20 @@ Use `--save-config` to write the selected prompt values back to the ignored
 go run ./cmd/patchworks-installer --save-config
 ```
 
+The released binary includes the Patchworks Helm charts. To inspect exactly
+what the installer will apply, unpack them with:
+
+```bash
+patchworks-installer unpack-charts
+```
+
+By default this writes to `./patchworks-charts`. Use `--output` to choose a
+different directory:
+
+```bash
+patchworks-installer unpack-charts --output ./charts
+```
+
 The TUI asks for:
 
 - Confirmation that the detected kubeconfig and context are correct
@@ -58,10 +72,10 @@ When complete, it writes the selected values to disk and prints the Helm
 commands to install the infra and app charts with that shared values file. It
 shows an install summary before applying anything. If installation is enabled,
 it can create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in
-the selected namespace, runs the install through the embedded Helm Go SDK with
-progress screens for each dependency/update/install/status step, then checks
-workload status through the Kubernetes API. The Helm CLI is only needed if you
-choose to copy and run the manual commands yourself.
+the selected namespace, runs the install through the embedded Helm Go SDK and
+embedded Patchworks charts, then checks workload status through the Kubernetes
+API. The Helm CLI is only needed if you choose to copy and run the manual
+commands yourself.
 
 During the infra and app Helm installs, the progress screen polls Kubernetes
 Jobs and readiness state so it can show phases such as credential generation,

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,6 +19,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	embeddedcharts "github.com/patchworks/selfhosted/charts"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -37,7 +39,6 @@ import (
 	helmloader "helm.sh/helm/v4/pkg/chart/loader"
 	"helm.sh/helm/v4/pkg/cli"
 	helmvalues "helm.sh/helm/v4/pkg/cli/values"
-	"helm.sh/helm/v4/pkg/downloader"
 	"helm.sh/helm/v4/pkg/getter"
 	"helm.sh/helm/v4/pkg/kube"
 	"helm.sh/helm/v4/pkg/registry"
@@ -355,9 +356,10 @@ func overrideBool(target **bool, value *bool) {
 }
 
 type cliOptions struct {
-	Command    string
-	ConfigPath string
-	SaveConfig bool
+	Command         string
+	ConfigPath      string
+	SaveConfig      bool
+	ChartsOutputDir string
 }
 
 type inspectResult struct {
@@ -447,6 +449,14 @@ func main() {
 		fmt.Println(version)
 		return
 	}
+	if opts.Command == "unpack-charts" {
+		if err := unpackEmbeddedCharts(opts.ChartsOutputDir); err != nil {
+			fmt.Fprintf(os.Stderr, "unpack charts failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("Charts unpacked to %s\n", opts.ChartsOutputDir)
+		return
+	}
 
 	if err := runInstaller(opts); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
@@ -458,16 +468,24 @@ func main() {
 }
 
 func parseCLI(args []string) (cliOptions, error) {
-	opts := cliOptions{Command: "install", ConfigPath: "config.yaml"}
+	opts := cliOptions{Command: "install", ConfigPath: "config.yaml", ChartsOutputDir: "patchworks-charts"}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		switch {
 		case arg == "version" || arg == "--version":
 			opts.Command = "version"
-		case arg == "install" || arg == "uninstall":
+		case arg == "install" || arg == "uninstall" || arg == "unpack-charts":
 			opts.Command = arg
 		case arg == "--save-config":
 			opts.SaveConfig = true
+		case arg == "--output":
+			i++
+			if i >= len(args) {
+				return cliOptions{}, fmt.Errorf("--output requires a path")
+			}
+			opts.ChartsOutputDir = args[i]
+		case strings.HasPrefix(arg, "--output="):
+			opts.ChartsOutputDir = strings.TrimPrefix(arg, "--output=")
 		case arg == "--config":
 			i++
 			if i >= len(args) {
@@ -477,13 +495,16 @@ func parseCLI(args []string) (cliOptions, error) {
 		case strings.HasPrefix(arg, "--config="):
 			opts.ConfigPath = strings.TrimPrefix(arg, "--config=")
 		case arg == "-h" || arg == "--help":
-			return cliOptions{}, fmt.Errorf("usage: patchworks-installer [install|uninstall|version] [--config config.yaml] [--save-config]")
+			return cliOptions{}, fmt.Errorf("usage: patchworks-installer [install|uninstall|unpack-charts|version] [--config config.yaml] [--save-config] [--output patchworks-charts]")
 		default:
-			return cliOptions{}, fmt.Errorf("unknown argument %q. Use install, uninstall, or version", arg)
+			return cliOptions{}, fmt.Errorf("unknown argument %q. Use install, uninstall, unpack-charts, or version", arg)
 		}
 	}
 	if strings.TrimSpace(opts.ConfigPath) == "" {
 		return cliOptions{}, fmt.Errorf("--config requires a non-empty path")
+	}
+	if strings.TrimSpace(opts.ChartsOutputDir) == "" {
+		return cliOptions{}, fmt.Errorf("--output requires a non-empty path")
 	}
 	return opts, nil
 }
@@ -566,7 +587,7 @@ func runInstaller(opts cliOptions) error {
 				Description(installSummary(config)),
 			huh.NewConfirm().
 				Title("Install Patchworks now?").
-				Description("The installer will run Helm dependency update, install/upgrade the infra chart, install/upgrade the app chart, then check rollout status.").
+				Description("The installer will use embedded Helm charts to install or upgrade the infra and app releases, then check rollout status. Helm CLI is only needed for manual commands.").
 				Affirmative("Install").
 				Negative("Only write values").
 				Value(&runInstall),
@@ -774,22 +795,11 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string) error {
 		return err
 	}
 
-	if err := runProgress("Updating infra chart dependencies", "Resolving dependencies for charts/patchworks-infra", func() error {
-		return updateChartDependencies(settings, "charts/patchworks-infra")
-	}); err != nil {
-		return err
-	}
-	if err := runProgress("Updating app chart dependencies", "Resolving dependencies for charts/patchworks-app", func() error {
-		return updateChartDependencies(settings, "charts/patchworks-app")
-	}); err != nil {
-		return err
-	}
-
 	var infraChart helmchart.Charter
 	var infraValues map[string]any
-	if err := runProgress("Loading infra chart", "Reading charts/patchworks-infra and generated values", func() error {
+	if err := runProgress("Loading infra chart", "Reading embedded patchworks-infra chart and generated values", func() error {
 		var loadErr error
-		infraChart, infraValues, loadErr = loadHelmChart(settings, "./charts/patchworks-infra", "", valuesFile)
+		infraChart, infraValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-infra", valuesFile)
 		return loadErr
 	}); err != nil {
 		return err
@@ -802,9 +812,9 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string) error {
 
 	var appChart helmchart.Charter
 	var appValues map[string]any
-	if err := runProgress("Loading app chart", "Reading charts/patchworks-app and generated values", func() error {
+	if err := runProgress("Loading app chart", "Reading embedded patchworks-app chart and generated values", func() error {
 		var loadErr error
-		appChart, appValues, loadErr = loadHelmChart(settings, "./charts/patchworks-app", "", valuesFile)
+		appChart, appValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-app", valuesFile)
 		return loadErr
 	}); err != nil {
 		return err
@@ -992,27 +1002,6 @@ func helmRuntime(access kubeAccess, namespace string) (*cli.EnvSettings, *action
 	return settings, cfg, nil
 }
 
-func updateChartDependencies(settings *cli.EnvSettings, chartPath string) error {
-	registryClient, err := registry.NewClient(
-		registry.ClientOptWriter(os.Stdout),
-		registry.ClientOptCredentialsFile(settings.RegistryConfig),
-	)
-	if err != nil {
-		return err
-	}
-
-	manager := &downloader.Manager{
-		Out:              io.Discard,
-		ChartPath:        chartPath,
-		Getters:          getter.All(settings),
-		RegistryClient:   registryClient,
-		RepositoryConfig: settings.RepositoryConfig,
-		RepositoryCache:  settings.RepositoryCache,
-		ContentCache:     settings.ContentCache,
-	}
-	return manager.Update()
-}
-
 func loadHelmChart(settings *cli.EnvSettings, chartRef, repoURL, valuesFile string) (helmchart.Charter, map[string]any, error) {
 	chartPathOptions := action.ChartPathOptions{RepoURL: repoURL}
 	chartPath, err := chartPathOptions.LocateChart(chartRef, settings)
@@ -1025,16 +1014,86 @@ func loadHelmChart(settings *cli.EnvSettings, chartRef, repoURL, valuesFile stri
 		return nil, nil, err
 	}
 
-	valueOptions := &helmvalues.Options{}
-	if valuesFile != "" {
-		valueOptions.ValueFiles = []string{valuesFile}
-	}
-	values, err := valueOptions.MergeValues(getter.All(settings))
+	values, err := mergeHelmValues(settings, valuesFile)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	return chart, values, nil
+}
+
+func loadEmbeddedPatchworksChart(settings *cli.EnvSettings, chartName, valuesFile string) (helmchart.Charter, map[string]any, error) {
+	chartPath, cleanup, err := embeddedChartPath(chartName)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer cleanup()
+
+	chart, err := helmloader.Load(chartPath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	values, err := mergeHelmValues(settings, valuesFile)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return chart, values, nil
+}
+
+func embeddedChartPath(chartName string) (string, func(), error) {
+	chartFS, err := fs.Sub(embeddedcharts.FS, chartName)
+	if err != nil {
+		return "", nil, err
+	}
+
+	tempDir, err := os.MkdirTemp("", "patchworks-chart-*")
+	if err != nil {
+		return "", nil, err
+	}
+
+	cleanup := func() { _ = os.RemoveAll(tempDir) }
+	if err := copyEmbeddedFS(tempDir, chartFS); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+
+	return tempDir, cleanup, nil
+}
+
+func unpackEmbeddedCharts(dest string) error {
+	if strings.TrimSpace(dest) == "" {
+		return fmt.Errorf("output path cannot be empty")
+	}
+	return copyEmbeddedFS(dest, embeddedcharts.FS)
+}
+
+func copyEmbeddedFS(dest string, source fs.FS) error {
+	return fs.WalkDir(source, ".", func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		target := filepath.Join(dest, filepath.FromSlash(path))
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+
+		data, err := fs.ReadFile(source, path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+}
+
+func mergeHelmValues(settings *cli.EnvSettings, valuesFile string) (map[string]any, error) {
+	valueOptions := &helmvalues.Options{}
+	if valuesFile != "" {
+		valueOptions.ValueFiles = []string{valuesFile}
+	}
+	return valueOptions.MergeValues(getter.All(settings))
 }
 
 func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace string, chart helmchart.Charter, values map[string]any, createNamespace bool, timeout time.Duration, labels map[string]string) error {
