@@ -64,7 +64,9 @@ homebrew_casks:
       owner: gopatchworks
       name: homebrew-tap
       branch: main
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      git:
+        url: ssh://git@github.com/gopatchworks/homebrew-tap.git
+        private_key: "{{ .Env.HOMEBREW_TAP_DEPLOY_KEY }}"
     directory: Casks
     homepage: https://github.com/gopatchworks/selfhosted
     description: Patchworks self-hosted installer
