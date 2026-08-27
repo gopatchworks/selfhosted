@@ -1,0 +1,70 @@
+version: 2
+
+project_name: patchworks-installer
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: patchworks-installer
+    main: ./cmd/patchworks-installer
+    binary: patchworks-installer
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: patchworks-installer
+    ids:
+      - patchworks-installer
+    formats:
+      - tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - docs/installer.md
+
+checksum:
+  name_template: checksums.txt
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+
+release:
+  github:
+    owner: gopatchworks
+    name: selfhosted
+
+homebrew_casks:
+  - name: patchworks-installer
+    ids:
+      - patchworks-installer
+    binaries:
+      - patchworks-installer
+    repository:
+      owner: gopatchworks
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    directory: Casks
+    homepage: https://github.com/gopatchworks/selfhosted
+    description: Patchworks self-hosted installer
