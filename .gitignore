@@ -3,5 +3,6 @@
 local/
 .DS_Store
 /patchworks-installer
+/dist/
 /patchworks.values.yaml
 /config.yaml
