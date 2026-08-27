@@ -14,9 +14,7 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "-2"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
     argocd.argoproj.io/sync-wave: "-2"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
@@ -95,9 +93,7 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "-1"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
     argocd.argoproj.io/sync-wave: "-1"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
@@ -200,9 +196,7 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "0"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
     argocd.argoproj.io/sync-wave: "0"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
@@ -256,9 +250,7 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "20"
-    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
     argocd.argoproj.io/sync-wave: "20"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}

@@ -27,6 +27,8 @@ hooks only. The first-install order is: Fabric migrations, Fabric seeders,
 Fabric company seeder, Core migrations, Core seeders, then application startup.
 The hook jobs render their required environment directly instead of depending
 on app ConfigMaps/Secrets that Helm has not created yet.
+Successful seed Jobs are kept in the cluster so GitOps syncs and installer
+reruns do not create a fresh seed Job after the initial install.
 
 When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 `seeds.tenant.existingSecret.name` is provided, the app chart creates a stable
@@ -134,7 +136,9 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for all app pods |
 
 Core web, Gateway, Start, scheduler, and worker pods receive
-`QUEUE_CONNECTION` from `workers.queue.connection`.
+`QUEUE_CONNECTION` from `workers.queue.connection`. When `workers.type` is
+`standalone`, they also receive `REDIS_QUEUE` from `workers.queue.name` so jobs
+dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 
 ---
 
