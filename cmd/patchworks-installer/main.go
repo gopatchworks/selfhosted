@@ -77,6 +77,7 @@ type localConfig struct {
 	Kubeconfig        string `yaml:"kubeconfig"`
 	Context           string `yaml:"context"`
 	Namespace         string `yaml:"namespace"`
+	Infrastructure    string `yaml:"infrastructure"`
 	Domain            string `yaml:"domain"`
 	Scheme            string `yaml:"scheme"`
 	LicenseKey        string `yaml:"licenseKey"`
@@ -93,55 +94,60 @@ type localConfig struct {
 	QuayUsername      string `yaml:"quayUsername"`
 	QuayPassword      string `yaml:"quayPassword"`
 	QuayEmail         string `yaml:"quayEmail"`
-	SeedInstall       *bool  `yaml:"seedInstall"`
-	CompanyName       string `yaml:"companyName"`
-	AdminName         string `yaml:"adminName"`
-	AdminEmail        string `yaml:"adminEmail"`
-	AdminPassword     string `yaml:"adminPassword"`
-	UserRole          string `yaml:"userRole"`
-	Output            string `yaml:"output"`
-	Install           *bool  `yaml:"install"`
-	ConfirmKubeAccess *bool  `yaml:"confirmKubeAccess"`
+	InfraComponents   localConfigInfrastructure
+	External          localConfigExternal `yaml:"external"`
+	SeedInstall       *bool               `yaml:"seedInstall"`
+	CompanyName       string              `yaml:"companyName"`
+	AdminName         string              `yaml:"adminName"`
+	AdminEmail        string              `yaml:"adminEmail"`
+	AdminPassword     string              `yaml:"adminPassword"`
+	UserRole          string              `yaml:"userRole"`
+	Output            string              `yaml:"output"`
+	Install           *bool               `yaml:"install"`
+	ConfirmKubeAccess *bool               `yaml:"confirmKubeAccess"`
 }
 
 type localConfigFile struct {
-	Kubernetes  localConfigKubernetes  `yaml:"kubernetes,omitempty"`
-	Application localConfigApplication `yaml:"application,omitempty"`
-	Workers     localConfigWorkers     `yaml:"workers,omitempty"`
-	Ingress     localConfigIngress     `yaml:"ingress,omitempty"`
-	Registry    localConfigRegistry    `yaml:"registry,omitempty"`
-	Seed        localConfigSeed        `yaml:"seed,omitempty"`
-	Output      localConfigOutput      `yaml:"output,omitempty"`
-	Installer   localConfigInstaller   `yaml:"installer,omitempty"`
+	Kubernetes     localConfigKubernetes     `yaml:"kubernetes,omitempty"`
+	Application    localConfigApplication    `yaml:"application,omitempty"`
+	Infrastructure localConfigInfrastructure `yaml:"infrastructure,omitempty"`
+	Workers        localConfigWorkers        `yaml:"workers,omitempty"`
+	Ingress        localConfigIngress        `yaml:"ingress,omitempty"`
+	Registry       localConfigRegistry       `yaml:"registry,omitempty"`
+	Seed           localConfigSeed           `yaml:"seed,omitempty"`
+	Output         localConfigOutput         `yaml:"output,omitempty"`
+	Installer      localConfigInstaller      `yaml:"installer,omitempty"`
 
-	Kubeconfig        string `yaml:"kubeconfig,omitempty"`
-	Context           string `yaml:"context,omitempty"`
-	Namespace         string `yaml:"namespace,omitempty"`
-	Domain            string `yaml:"domain,omitempty"`
-	Scheme            string `yaml:"scheme,omitempty"`
-	LicenseKey        string `yaml:"licenseKey,omitempty"`
-	LicenseServerURL  string `yaml:"licenseServerUrl,omitempty"`
-	DashboardEnabled  *bool  `yaml:"dashboardEnabled,omitempty"`
-	RoutingMode       string `yaml:"routingMode,omitempty"`
-	WorkerMode        string `yaml:"workerMode,omitempty"`
-	IngressEnabled    *bool  `yaml:"ingressEnabled,omitempty"`
-	IngressProvider   string `yaml:"ingressProvider,omitempty"`
-	IngressClass      string `yaml:"ingressClass,omitempty"`
-	CookieDomain      string `yaml:"cookieDomain,omitempty"`
-	PullSecretMode    string `yaml:"pullSecretMode,omitempty"`
-	PullSecret        string `yaml:"pullSecret,omitempty"`
-	QuayUsername      string `yaml:"quayUsername,omitempty"`
-	QuayPassword      string `yaml:"quayPassword,omitempty"`
-	QuayEmail         string `yaml:"quayEmail,omitempty"`
-	SeedInstall       *bool  `yaml:"seedInstall,omitempty"`
-	CompanyName       string `yaml:"companyName,omitempty"`
-	AdminName         string `yaml:"adminName,omitempty"`
-	AdminEmail        string `yaml:"adminEmail,omitempty"`
-	AdminPassword     string `yaml:"adminPassword,omitempty"`
-	UserRole          string `yaml:"userRole,omitempty"`
-	ValuesFile        string `yaml:"valuesFile,omitempty"`
-	InstallEnabled    *bool  `yaml:"install,omitempty"`
-	ConfirmKubeAccess *bool  `yaml:"confirmKubeAccess,omitempty"`
+	Kubeconfig         string              `yaml:"kubeconfig,omitempty"`
+	Context            string              `yaml:"context,omitempty"`
+	Namespace          string              `yaml:"namespace,omitempty"`
+	InfrastructureMode string              `yaml:"infrastructureMode,omitempty"`
+	Domain             string              `yaml:"domain,omitempty"`
+	Scheme             string              `yaml:"scheme,omitempty"`
+	LicenseKey         string              `yaml:"licenseKey,omitempty"`
+	LicenseServerURL   string              `yaml:"licenseServerUrl,omitempty"`
+	DashboardEnabled   *bool               `yaml:"dashboardEnabled,omitempty"`
+	RoutingMode        string              `yaml:"routingMode,omitempty"`
+	WorkerMode         string              `yaml:"workerMode,omitempty"`
+	IngressEnabled     *bool               `yaml:"ingressEnabled,omitempty"`
+	IngressProvider    string              `yaml:"ingressProvider,omitempty"`
+	IngressClass       string              `yaml:"ingressClass,omitempty"`
+	CookieDomain       string              `yaml:"cookieDomain,omitempty"`
+	PullSecretMode     string              `yaml:"pullSecretMode,omitempty"`
+	PullSecret         string              `yaml:"pullSecret,omitempty"`
+	QuayUsername       string              `yaml:"quayUsername,omitempty"`
+	QuayPassword       string              `yaml:"quayPassword,omitempty"`
+	QuayEmail          string              `yaml:"quayEmail,omitempty"`
+	External           localConfigExternal `yaml:"external,omitempty"`
+	SeedInstall        *bool               `yaml:"seedInstall,omitempty"`
+	CompanyName        string              `yaml:"companyName,omitempty"`
+	AdminName          string              `yaml:"adminName,omitempty"`
+	AdminEmail         string              `yaml:"adminEmail,omitempty"`
+	AdminPassword      string              `yaml:"adminPassword,omitempty"`
+	UserRole           string              `yaml:"userRole,omitempty"`
+	ValuesFile         string              `yaml:"valuesFile,omitempty"`
+	InstallEnabled     *bool               `yaml:"install,omitempty"`
+	ConfirmKubeAccess  *bool               `yaml:"confirmKubeAccess,omitempty"`
 }
 
 type localConfigKubernetes struct {
@@ -157,6 +163,100 @@ type localConfigApplication struct {
 	License      localConfigLicense   `yaml:"license,omitempty"`
 	Dashboard    localConfigDashboard `yaml:"dashboard,omitempty"`
 	CookieDomain string               `yaml:"cookieDomain,omitempty"`
+}
+
+type localConfigInfrastructure struct {
+	Mode          string               `yaml:"mode,omitempty"`
+	MySQL         localConfigComponent `yaml:"mysql,omitempty"`
+	FabricMySQL   localConfigComponent `yaml:"fabricMysql,omitempty"`
+	FabricRedis   localConfigComponent `yaml:"fabricRedis,omitempty"`
+	Redis         localConfigComponent `yaml:"redis,omitempty"`
+	RabbitMQ      localConfigComponent `yaml:"rabbitmq,omitempty"`
+	ElasticSearch localConfigComponent `yaml:"elasticsearch,omitempty"`
+	S3            localConfigComponent `yaml:"s3,omitempty"`
+	KubeFaaS      localConfigComponent `yaml:"kubefaas,omitempty"`
+	Pusher        localConfigComponent `yaml:"pusher,omitempty"`
+}
+
+type localConfigComponent struct {
+	Enabled *bool `yaml:"enabled,omitempty"`
+}
+
+type localConfigExternal struct {
+	CredentialsMode string                           `yaml:"credentialsMode,omitempty"`
+	MySQL           localConfigExternalSQL           `yaml:"mysql,omitempty"`
+	FabricMySQL     localConfigExternalSQL           `yaml:"fabricMysql,omitempty"`
+	Redis           localConfigExternalRedis         `yaml:"redis,omitempty"`
+	RabbitMQ        localConfigExternalRabbitMQ      `yaml:"rabbitmq,omitempty"`
+	ElasticSearch   localConfigExternalElasticSearch `yaml:"elasticsearch,omitempty"`
+	S3              localConfigExternalS3            `yaml:"s3,omitempty"`
+	Pusher          localConfigExternalPusher        `yaml:"pusher,omitempty"`
+}
+
+type localConfigExternalSQL struct {
+	Host        string `yaml:"host,omitempty"`
+	Port        string `yaml:"port,omitempty"`
+	Database    string `yaml:"database,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	SecretName  string `yaml:"secretName,omitempty"`
+	PasswordKey string `yaml:"passwordKey,omitempty"`
+}
+
+type localConfigExternalRedis struct {
+	Host        string `yaml:"host,omitempty"`
+	Port        string `yaml:"port,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	SecretName  string `yaml:"secretName,omitempty"`
+	PasswordKey string `yaml:"passwordKey,omitempty"`
+}
+
+type localConfigExternalRabbitMQ struct {
+	Host        string `yaml:"host,omitempty"`
+	Port        string `yaml:"port,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	Vhost       string `yaml:"vhost,omitempty"`
+	SecretName  string `yaml:"secretName,omitempty"`
+	PasswordKey string `yaml:"passwordKey,omitempty"`
+}
+
+type localConfigExternalElasticSearch struct {
+	Host        string `yaml:"host,omitempty"`
+	Port        string `yaml:"port,omitempty"`
+	Scheme      string `yaml:"scheme,omitempty"`
+	Username    string `yaml:"username,omitempty"`
+	Password    string `yaml:"password,omitempty"`
+	SecretName  string `yaml:"secretName,omitempty"`
+	UsernameKey string `yaml:"usernameKey,omitempty"`
+	PasswordKey string `yaml:"passwordKey,omitempty"`
+}
+
+type localConfigExternalS3 struct {
+	Endpoint     string `yaml:"endpoint,omitempty"`
+	Region       string `yaml:"region,omitempty"`
+	Bucket       string `yaml:"bucket,omitempty"`
+	AccessKey    string `yaml:"accessKey,omitempty"`
+	SecretKey    string `yaml:"secretKey,omitempty"`
+	PathStyle    *bool  `yaml:"pathStyle,omitempty"`
+	SecretName   string `yaml:"secretName,omitempty"`
+	AccessKeyKey string `yaml:"accessKeyKey,omitempty"`
+	SecretKeyKey string `yaml:"secretKeyKey,omitempty"`
+}
+
+type localConfigExternalPusher struct {
+	Host          string `yaml:"host,omitempty"`
+	Port          string `yaml:"port,omitempty"`
+	Scheme        string `yaml:"scheme,omitempty"`
+	AppID         string `yaml:"appId,omitempty"`
+	AppKey        string `yaml:"appKey,omitempty"`
+	AppSecret     string `yaml:"appSecret,omitempty"`
+	AppCluster    string `yaml:"appCluster,omitempty"`
+	SecretName    string `yaml:"secretName,omitempty"`
+	AppIDKey      string `yaml:"appIdKey,omitempty"`
+	AppKeyKey     string `yaml:"appKeyKey,omitempty"`
+	AppSecretKey  string `yaml:"appSecretKey,omitempty"`
+	AppClusterKey string `yaml:"appClusterKey,omitempty"`
 }
 
 type localConfigLicense struct {
@@ -226,6 +326,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 		Kubeconfig:        file.Kubeconfig,
 		Context:           file.Context,
 		Namespace:         file.Namespace,
+		Infrastructure:    file.InfrastructureMode,
 		Domain:            file.Domain,
 		Scheme:            file.Scheme,
 		LicenseKey:        file.LicenseKey,
@@ -242,6 +343,8 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 		QuayUsername:      file.QuayUsername,
 		QuayPassword:      file.QuayPassword,
 		QuayEmail:         file.QuayEmail,
+		InfraComponents:   file.Infrastructure,
+		External:          file.External,
 		SeedInstall:       file.SeedInstall,
 		CompanyName:       file.CompanyName,
 		AdminName:         file.AdminName,
@@ -257,6 +360,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	overrideString(&config.Context, file.Kubernetes.Context)
 	overrideString(&config.Namespace, file.Kubernetes.Namespace)
 	overrideBool(&config.ConfirmKubeAccess, file.Kubernetes.ConfirmAccess)
+	overrideString(&config.Infrastructure, file.Infrastructure.Mode)
 	overrideString(&config.Domain, file.Application.Domain)
 	overrideString(&config.Scheme, file.Application.Scheme)
 	overrideString(&config.LicenseKey, file.Application.License.Key)
@@ -292,6 +396,18 @@ func (config localConfig) MarshalYAML() (any, error) {
 			Namespace:     config.Namespace,
 			ConfirmAccess: config.ConfirmKubeAccess,
 		},
+		Infrastructure: localConfigInfrastructure{
+			Mode:          config.Infrastructure,
+			MySQL:         config.InfraComponents.MySQL,
+			FabricMySQL:   config.InfraComponents.FabricMySQL,
+			FabricRedis:   config.InfraComponents.FabricRedis,
+			Redis:         config.InfraComponents.Redis,
+			RabbitMQ:      config.InfraComponents.RabbitMQ,
+			ElasticSearch: config.InfraComponents.ElasticSearch,
+			S3:            config.InfraComponents.S3,
+			KubeFaaS:      config.InfraComponents.KubeFaaS,
+			Pusher:        config.InfraComponents.Pusher,
+		},
 		Application: localConfigApplication{
 			Domain: config.Domain,
 			Scheme: config.Scheme,
@@ -324,6 +440,7 @@ func (config localConfig) MarshalYAML() (any, error) {
 				Email:    config.QuayEmail,
 			},
 		},
+		External: config.External,
 		Seed: localConfigSeed{
 			Enabled:     config.SeedInstall,
 			CompanyName: config.CompanyName,
@@ -575,6 +692,12 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 
+	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
+	if err != nil {
+		return err
+	}
+	config.Values["installInfrastructure"] = fmt.Sprintf("%t", installInfrastructure)
+
 	if err := writeValues(config.Output, config.Values); err != nil {
 		return err
 	}
@@ -603,7 +726,7 @@ func runInstaller(opts cliOptions) error {
 		fmt.Printf("%s %s\n", successStyle.Render("Values saved to"), opts.ConfigPath)
 	}
 
-	commands := helmCommandText(config.Values["namespace"], config.Output)
+	commands := helmCommandText(config.Values["namespace"], config.Output, installInfrastructure)
 	fmt.Println(valuesCreatedView(96, config.Output, commands))
 	fmt.Println(accessDetailsView(96, config.Values, "", false))
 
@@ -619,7 +742,7 @@ func runInstaller(opts cliOptions) error {
 		}
 	}
 
-	if err := installPatchworks(access, config.Values["namespace"], config.Output); err != nil {
+	if err := installPatchworks(access, config.Values["namespace"], config.Output, installInfrastructure); err != nil {
 		return err
 	}
 
@@ -787,7 +910,7 @@ func installContour(access kubeAccess) error {
 	return nil
 }
 
-func installPatchworks(access kubeAccess, namespace, valuesFile string) error {
+func installPatchworks(access kubeAccess, namespace, valuesFile string, installInfrastructure bool) error {
 	fmt.Println(brandStyle.Render("Installing Patchworks"))
 
 	settings, cfg, err := helmRuntime(access, namespace)
@@ -795,19 +918,21 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string) error {
 		return err
 	}
 
-	var infraChart helmchart.Charter
-	var infraValues map[string]any
-	if err := runProgress("Loading infra chart", "Reading embedded patchworks-infra chart and generated values", func() error {
-		var loadErr error
-		infraChart, infraValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-infra", valuesFile)
-		return loadErr
-	}); err != nil {
-		return err
-	}
-	if err := runProgressWithPhase("Installing infrastructure", "Applying release patchworks-infra and waiting for readiness", installPhaseMonitor(access, namespace, "infra"), func() error {
-		return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, infraChart, infraValues, true, 15*time.Minute, installerLabels())
-	}); err != nil {
-		return err
+	if installInfrastructure {
+		var infraChart helmchart.Charter
+		var infraValues map[string]any
+		if err := runProgress("Loading infra chart", "Reading embedded patchworks-infra chart and generated values", func() error {
+			var loadErr error
+			infraChart, infraValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-infra", valuesFile)
+			return loadErr
+		}); err != nil {
+			return err
+		}
+		if err := runProgressWithPhase("Installing infrastructure", "Applying release patchworks-infra and waiting for readiness", installPhaseMonitor(access, namespace, "infra"), func() error {
+			return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, infraChart, infraValues, true, 15*time.Minute, installerLabels())
+		}); err != nil {
+			return err
+		}
 	}
 
 	var appChart helmchart.Charter
@@ -826,14 +951,65 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string) error {
 		return err
 	}
 
-	if err := runProgress("Checking infra release", "Reading Helm status for patchworks-infra", func() error {
-		return helmPrintStatus(cfg, "patchworks-infra")
-	}); err != nil {
-		return err
+	if installInfrastructure {
+		if err := runProgress("Checking infra release", "Reading Helm status for patchworks-infra", func() error {
+			return helmPrintStatus(cfg, "patchworks-infra")
+		}); err != nil {
+			return err
+		}
 	}
 	return runProgress("Checking app release", "Reading Helm status for patchworks-app", func() error {
 		return helmPrintStatus(cfg, "patchworks-app")
 	})
+}
+
+func chooseInfrastructureInstall(access kubeAccess, namespace string, values map[string]string) (bool, error) {
+	if values["infrastructure"] == "external" || allInfrastructureComponentsDisabled(values) {
+		return false, nil
+	}
+
+	_, cfg, err := helmRuntime(access, namespace)
+	if err != nil {
+		return false, err
+	}
+	if !helmReleaseExists(cfg, "patchworks-infra") {
+		return true, nil
+	}
+
+	upgradeInfrastructure := false
+	if err := runFormWithQuitConfirm(huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Upgrade bundled infrastructure?").
+				Description("patchworks-infra is already installed. Leave it unchanged unless you are deliberately changing MySQL, RabbitMQ, Redis, ElasticSearch, S3, Soketi, or KubeFaaS infrastructure settings.").
+				Affirmative("Upgrade infra").
+				Negative("Leave infra unchanged").
+				Value(&upgradeInfrastructure),
+		),
+	).WithTheme(installerTheme()).WithWidth(88)); err != nil {
+		return false, err
+	}
+	return upgradeInfrastructure, nil
+}
+
+func allInfrastructureComponentsDisabled(values map[string]string) bool {
+	defaults := map[string]bool{
+		"infraMysqlEnabled":         true,
+		"infraFabricMysqlEnabled":   false,
+		"infraFabricRedisEnabled":   false,
+		"infraRedisEnabled":         true,
+		"infraRabbitmqEnabled":      true,
+		"infraElasticsearchEnabled": true,
+		"infraS3Enabled":            true,
+		"infraKubefaasEnabled":      false,
+		"infraPusherEnabled":        true,
+	}
+	for key, fallback := range defaults {
+		if parseBoolDefault(values[key], fallback) {
+			return false
+		}
+	}
+	return true
 }
 
 func runUninstall(opts cliOptions) error {
@@ -1188,7 +1364,12 @@ func helmPrintStatus(cfg *action.Configuration, releaseName string) error {
 	return nil
 }
 
-func helmCommandText(namespace, valuesFile string) string {
+func helmCommandText(namespace, valuesFile string, installInfrastructure bool) string {
+	if !installInfrastructure {
+		return fmt.Sprintf(`helm dependency update charts/patchworks-app
+helm upgrade --install patchworks-app ./charts/patchworks-app -n %s --create-namespace -f %s --timeout 15m --wait`,
+			namespace, valuesFile)
+	}
 	return fmt.Sprintf(`helm dependency update charts/patchworks-infra
 helm dependency update charts/patchworks-app
 helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout 15m --wait
@@ -2240,6 +2421,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	dashboardEnabled := boolDefault(defaults.DashboardEnabled, true)
 	routingMode := stringDefault(defaults.RoutingMode, "host")
 	workerMode := defaultWorkerMode(defaults.WorkerMode)
+	infrastructureMode := stringDefault(defaults.Infrastructure, "bundled")
 	if err := runFormWithQuitConfirm(huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().
@@ -2279,9 +2461,26 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 					huh.NewOption("mono", "mono"),
 				).
 				Value(&workerMode),
+			huh.NewSelect[string]().
+				Title("Infrastructure").
+				Description("Use the bundled MySQL, Redis, RabbitMQ, ElasticSearch, S3, and Soketi stack, or connect to services you manage separately.").
+				Options(
+					huh.NewOption("Install bundled infrastructure", "bundled"),
+					huh.NewOption("Use my own infrastructure", "external"),
+				).
+				Value(&infrastructureMode),
 		),
 	).WithTheme(installerTheme()).WithWidth(88)); err != nil {
 		return installConfig{}, err
+	}
+
+	external := defaults.External
+	if infrastructureMode == "external" {
+		var err error
+		external, err = runExternalInfrastructureForm(defaults.External)
+		if err != nil {
+			return installConfig{}, err
+		}
 	}
 
 	info.QuaySecretPresent = secretExistsInNamespace(kubeconfig, contextName, namespace, "quay-credentials")
@@ -2382,6 +2581,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"kubeconfig":        kubeconfig,
 		"context":           contextName,
 		"namespace":         namespace,
+		"infrastructure":    infrastructureMode,
 		"domain":            domain,
 		"scheme":            scheme,
 		"licenseKey":        licenseKey,
@@ -2403,6 +2603,8 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"userRole":          userRole,
 		"confirmKubeAccess": "true",
 	}
+	addExternalValues(values, external)
+	addInfrastructureComponentValues(values, defaults.InfraComponents)
 
 	return installConfig{Values: values, Output: output, Quay: quay}, nil
 }
@@ -2483,6 +2685,171 @@ func runPullSecretForm(quaySecretPresent bool, defaults localConfig) (string, *q
 	return secretName, creds, nil
 }
 
+func runExternalInfrastructureForm(defaults localConfigExternal) (localConfigExternal, error) {
+	external := defaults
+	external.CredentialsMode = stringDefault(external.CredentialsMode, "secret")
+
+	external.MySQL.Host = stringDefault(external.MySQL.Host, "mysql.example.com")
+	external.MySQL.Port = stringDefault(external.MySQL.Port, "3306")
+	external.MySQL.Database = stringDefault(external.MySQL.Database, "core")
+	external.MySQL.Username = stringDefault(external.MySQL.Username, "patchworks")
+	external.MySQL.PasswordKey = stringDefault(external.MySQL.PasswordKey, "password")
+
+	external.FabricMySQL.Host = stringDefault(external.FabricMySQL.Host, external.MySQL.Host)
+	external.FabricMySQL.Port = stringDefault(external.FabricMySQL.Port, external.MySQL.Port)
+	external.FabricMySQL.Database = stringDefault(external.FabricMySQL.Database, "fabric")
+	external.FabricMySQL.Username = stringDefault(external.FabricMySQL.Username, external.MySQL.Username)
+	external.FabricMySQL.PasswordKey = stringDefault(external.FabricMySQL.PasswordKey, "password")
+
+	external.Redis.Host = stringDefault(external.Redis.Host, "redis.example.com")
+	external.Redis.Port = stringDefault(external.Redis.Port, "6379")
+	external.Redis.PasswordKey = stringDefault(external.Redis.PasswordKey, "password")
+
+	external.RabbitMQ.Host = stringDefault(external.RabbitMQ.Host, "rabbitmq.example.com")
+	external.RabbitMQ.Port = stringDefault(external.RabbitMQ.Port, "5672")
+	external.RabbitMQ.Username = stringDefault(external.RabbitMQ.Username, "patchworks")
+	external.RabbitMQ.Vhost = stringDefault(external.RabbitMQ.Vhost, "/")
+	external.RabbitMQ.PasswordKey = stringDefault(external.RabbitMQ.PasswordKey, "password")
+
+	external.ElasticSearch.Host = stringDefault(external.ElasticSearch.Host, "elasticsearch.example.com")
+	external.ElasticSearch.Port = stringDefault(external.ElasticSearch.Port, "9200")
+	external.ElasticSearch.Scheme = stringDefault(external.ElasticSearch.Scheme, "https")
+	external.ElasticSearch.UsernameKey = stringDefault(external.ElasticSearch.UsernameKey, "username")
+	external.ElasticSearch.PasswordKey = stringDefault(external.ElasticSearch.PasswordKey, "password")
+
+	external.S3.Endpoint = stringDefault(external.S3.Endpoint, "https://s3.amazonaws.com")
+	external.S3.Region = stringDefault(external.S3.Region, "eu-west-2")
+	external.S3.Bucket = stringDefault(external.S3.Bucket, "patchworks")
+	external.S3.AccessKeyKey = stringDefault(external.S3.AccessKeyKey, "access-key")
+	external.S3.SecretKeyKey = stringDefault(external.S3.SecretKeyKey, "secret-key")
+	s3PathStyle := boolDefault(external.S3.PathStyle, false)
+
+	external.Pusher.Host = stringDefault(external.Pusher.Host, "wss.example.com")
+	external.Pusher.Port = stringDefault(external.Pusher.Port, "443")
+	external.Pusher.Scheme = stringDefault(external.Pusher.Scheme, "https")
+	external.Pusher.AppCluster = stringDefault(external.Pusher.AppCluster, "mt1")
+	external.Pusher.AppIDKey = stringDefault(external.Pusher.AppIDKey, "app-id")
+	external.Pusher.AppKeyKey = stringDefault(external.Pusher.AppKeyKey, "app-key")
+	external.Pusher.AppSecretKey = stringDefault(external.Pusher.AppSecretKey, "app-secret")
+	external.Pusher.AppClusterKey = stringDefault(external.Pusher.AppClusterKey, "app-cluster")
+
+	if err := runFormWithQuitConfirm(huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("External credential source").
+				Description("Plaintext writes passwords into the generated values file. Existing Secrets only writes secret names and keys.").
+				Options(
+					huh.NewOption("Existing Kubernetes Secrets", "secret"),
+					huh.NewOption("Plaintext values", "plaintext"),
+				).
+				Value(&external.CredentialsMode),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("MySQL host").Value(&external.MySQL.Host).CharLimit(253).Validate(required("mysql host")),
+			huh.NewInput().Title("MySQL port").Value(&external.MySQL.Port).CharLimit(16).Validate(required("mysql port")),
+			huh.NewInput().Title("Core database").Value(&external.MySQL.Database).CharLimit(128).Validate(required("core database")),
+			huh.NewInput().Title("MySQL username").Value(&external.MySQL.Username).CharLimit(128).Validate(required("mysql username")),
+			huh.NewInput().Title("Fabric MySQL host").Description("Use the same host as MySQL unless Fabric has a separate instance.").Value(&external.FabricMySQL.Host).CharLimit(253).Validate(required("fabric mysql host")),
+			huh.NewInput().Title("Fabric MySQL port").Value(&external.FabricMySQL.Port).CharLimit(16).Validate(required("fabric mysql port")),
+			huh.NewInput().Title("Fabric database").Value(&external.FabricMySQL.Database).CharLimit(128).Validate(required("fabric database")),
+			huh.NewInput().Title("Fabric MySQL username").Value(&external.FabricMySQL.Username).CharLimit(128).Validate(required("fabric mysql username")),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("Redis host").Value(&external.Redis.Host).CharLimit(253).Validate(required("redis host")),
+			huh.NewInput().Title("Redis port").Value(&external.Redis.Port).CharLimit(16).Validate(required("redis port")),
+			huh.NewInput().Title("RabbitMQ host").Value(&external.RabbitMQ.Host).CharLimit(253).Validate(required("rabbitmq host")),
+			huh.NewInput().Title("RabbitMQ port").Value(&external.RabbitMQ.Port).CharLimit(16).Validate(required("rabbitmq port")),
+			huh.NewInput().Title("RabbitMQ username").Value(&external.RabbitMQ.Username).CharLimit(128).Validate(required("rabbitmq username")),
+			huh.NewInput().Title("RabbitMQ vhost").Value(&external.RabbitMQ.Vhost).CharLimit(128).Validate(required("rabbitmq vhost")),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("ElasticSearch host").Value(&external.ElasticSearch.Host).CharLimit(253).Validate(required("elasticsearch host")),
+			huh.NewInput().Title("ElasticSearch port").Value(&external.ElasticSearch.Port).CharLimit(16).Validate(required("elasticsearch port")),
+			huh.NewSelect[string]().Title("ElasticSearch scheme").Options(huh.NewOption("https", "https"), huh.NewOption("http", "http")).Value(&external.ElasticSearch.Scheme),
+			huh.NewInput().Title("ElasticSearch username").Value(&external.ElasticSearch.Username).CharLimit(128),
+			huh.NewInput().Title("S3 endpoint").Value(&external.S3.Endpoint).CharLimit(512).Validate(required("s3 endpoint")),
+			huh.NewInput().Title("S3 region").Value(&external.S3.Region).CharLimit(64).Validate(required("s3 region")),
+			huh.NewInput().Title("S3 bucket").Value(&external.S3.Bucket).CharLimit(256).Validate(required("s3 bucket")),
+			huh.NewConfirm().Title("Use S3 path-style URLs").Affirmative("Yes").Negative("No").Value(&s3PathStyle),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("Pusher/Soketi host").Description("Public WebSocket host, without scheme.").Value(&external.Pusher.Host).CharLimit(253).Validate(required("pusher host")),
+			huh.NewInput().Title("Pusher/Soketi port").Value(&external.Pusher.Port).CharLimit(16).Validate(required("pusher port")),
+			huh.NewSelect[string]().Title("Pusher/Soketi scheme").Options(huh.NewOption("https", "https"), huh.NewOption("http", "http")).Value(&external.Pusher.Scheme),
+			huh.NewInput().Title("Pusher app cluster").Value(&external.Pusher.AppCluster).CharLimit(64).Validate(required("pusher app cluster")),
+		),
+	).WithTheme(installerTheme()).WithWidth(88)); err != nil {
+		return localConfigExternal{}, err
+	}
+	external.S3.PathStyle = boolPtr(s3PathStyle)
+
+	if external.CredentialsMode == "secret" {
+		if err := runExternalSecretForm(&external); err != nil {
+			return localConfigExternal{}, err
+		}
+		return external, nil
+	}
+	if err := runExternalPlaintextSecretForm(&external); err != nil {
+		return localConfigExternal{}, err
+	}
+	return external, nil
+}
+
+func runExternalSecretForm(external *localConfigExternal) error {
+	external.MySQL.SecretName = stringDefault(external.MySQL.SecretName, "patchworks-db")
+	external.FabricMySQL.SecretName = stringDefault(external.FabricMySQL.SecretName, external.MySQL.SecretName)
+	external.Redis.SecretName = stringDefault(external.Redis.SecretName, "patchworks-redis")
+	external.RabbitMQ.SecretName = stringDefault(external.RabbitMQ.SecretName, "patchworks-rabbitmq")
+	external.ElasticSearch.SecretName = stringDefault(external.ElasticSearch.SecretName, "patchworks-elasticsearch")
+	external.S3.SecretName = stringDefault(external.S3.SecretName, "patchworks-s3")
+	external.Pusher.SecretName = stringDefault(external.Pusher.SecretName, "patchworks-soketi-auth")
+
+	return runFormWithQuitConfirm(huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().Title("MySQL password Secret").Value(&external.MySQL.SecretName).CharLimit(253).Validate(required("mysql password secret")),
+			huh.NewInput().Title("MySQL password key").Value(&external.MySQL.PasswordKey).CharLimit(253).Validate(required("mysql password key")),
+			huh.NewInput().Title("Fabric MySQL password Secret").Value(&external.FabricMySQL.SecretName).CharLimit(253).Validate(required("fabric mysql password secret")),
+			huh.NewInput().Title("Fabric MySQL password key").Value(&external.FabricMySQL.PasswordKey).CharLimit(253).Validate(required("fabric mysql password key")),
+			huh.NewInput().Title("Redis password Secret").Value(&external.Redis.SecretName).CharLimit(253),
+			huh.NewInput().Title("Redis password key").Value(&external.Redis.PasswordKey).CharLimit(253),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("RabbitMQ password Secret").Value(&external.RabbitMQ.SecretName).CharLimit(253).Validate(required("rabbitmq password secret")),
+			huh.NewInput().Title("RabbitMQ password key").Value(&external.RabbitMQ.PasswordKey).CharLimit(253).Validate(required("rabbitmq password key")),
+			huh.NewInput().Title("ElasticSearch credential Secret").Value(&external.ElasticSearch.SecretName).CharLimit(253),
+			huh.NewInput().Title("ElasticSearch username key").Value(&external.ElasticSearch.UsernameKey).CharLimit(253),
+			huh.NewInput().Title("ElasticSearch password key").Value(&external.ElasticSearch.PasswordKey).CharLimit(253),
+		),
+		huh.NewGroup(
+			huh.NewInput().Title("S3 credential Secret").Value(&external.S3.SecretName).CharLimit(253).Validate(required("s3 credential secret")),
+			huh.NewInput().Title("S3 access key field").Value(&external.S3.AccessKeyKey).CharLimit(253).Validate(required("s3 access key field")),
+			huh.NewInput().Title("S3 secret key field").Value(&external.S3.SecretKeyKey).CharLimit(253).Validate(required("s3 secret key field")),
+			huh.NewInput().Title("Pusher credential Secret").Value(&external.Pusher.SecretName).CharLimit(253).Validate(required("pusher credential secret")),
+			huh.NewInput().Title("Pusher app id key").Value(&external.Pusher.AppIDKey).CharLimit(253).Validate(required("pusher app id key")),
+			huh.NewInput().Title("Pusher app key key").Value(&external.Pusher.AppKeyKey).CharLimit(253).Validate(required("pusher app key key")),
+			huh.NewInput().Title("Pusher app secret key").Value(&external.Pusher.AppSecretKey).CharLimit(253).Validate(required("pusher app secret key")),
+			huh.NewInput().Title("Pusher app cluster key").Value(&external.Pusher.AppClusterKey).CharLimit(253).Validate(required("pusher app cluster key")),
+		),
+	).WithTheme(installerTheme()).WithWidth(88))
+}
+
+func runExternalPlaintextSecretForm(external *localConfigExternal) error {
+	return runFormWithQuitConfirm(huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().Title("MySQL password").EchoMode(huh.EchoModePassword).Value(&external.MySQL.Password).CharLimit(1024).Validate(required("mysql password")),
+			huh.NewInput().Title("Fabric MySQL password").EchoMode(huh.EchoModePassword).Value(&external.FabricMySQL.Password).CharLimit(1024).Validate(required("fabric mysql password")),
+			huh.NewInput().Title("Redis password").EchoMode(huh.EchoModePassword).Value(&external.Redis.Password).CharLimit(1024),
+			huh.NewInput().Title("RabbitMQ password").EchoMode(huh.EchoModePassword).Value(&external.RabbitMQ.Password).CharLimit(1024).Validate(required("rabbitmq password")),
+			huh.NewInput().Title("ElasticSearch password").EchoMode(huh.EchoModePassword).Value(&external.ElasticSearch.Password).CharLimit(1024),
+			huh.NewInput().Title("S3 access key").EchoMode(huh.EchoModePassword).Value(&external.S3.AccessKey).CharLimit(1024).Validate(required("s3 access key")),
+			huh.NewInput().Title("S3 secret key").EchoMode(huh.EchoModePassword).Value(&external.S3.SecretKey).CharLimit(1024).Validate(required("s3 secret key")),
+			huh.NewInput().Title("Pusher app id").EchoMode(huh.EchoModePassword).Value(&external.Pusher.AppID).CharLimit(1024).Validate(required("pusher app id")),
+			huh.NewInput().Title("Pusher app key").EchoMode(huh.EchoModePassword).Value(&external.Pusher.AppKey).CharLimit(1024).Validate(required("pusher app key")),
+			huh.NewInput().Title("Pusher app secret").EchoMode(huh.EchoModePassword).Value(&external.Pusher.AppSecret).CharLimit(1024).Validate(required("pusher app secret")),
+		),
+	).WithTheme(installerTheme()).WithWidth(88))
+}
+
 func required(label string) func(string) error {
 	return func(value string) error {
 		if strings.TrimSpace(value) == "" {
@@ -2519,22 +2886,96 @@ func saveLocalConfig(path string, config localConfig) error {
 func localConfigFromInstallConfig(config installConfig, install bool) localConfig {
 	values := config.Values
 	local := localConfig{
-		Kubeconfig:        values["kubeconfig"],
-		Context:           values["context"],
-		Namespace:         values["namespace"],
-		Domain:            values["domain"],
-		Scheme:            values["scheme"],
-		LicenseKey:        values["licenseKey"],
-		LicenseServerURL:  stringDefault(values["licenseServerUrl"], defaultLicenseServerURL),
-		DashboardEnabled:  boolPtr(parseBoolDefault(values["dashboardEnabled"], true)),
-		RoutingMode:       values["routingMode"],
-		WorkerMode:        defaultWorkerMode(values["workerMode"]),
-		IngressEnabled:    boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
-		IngressProvider:   values["ingressProvider"],
-		IngressClass:      values["ingressClass"],
-		CookieDomain:      values["cookieDomain"],
-		PullSecretMode:    values["pullSecretMode"],
-		PullSecret:        values["pullSecret"],
+		Kubeconfig:       values["kubeconfig"],
+		Context:          values["context"],
+		Namespace:        values["namespace"],
+		Infrastructure:   values["infrastructure"],
+		Domain:           values["domain"],
+		Scheme:           values["scheme"],
+		LicenseKey:       values["licenseKey"],
+		LicenseServerURL: stringDefault(values["licenseServerUrl"], defaultLicenseServerURL),
+		DashboardEnabled: boolPtr(parseBoolDefault(values["dashboardEnabled"], true)),
+		RoutingMode:      values["routingMode"],
+		WorkerMode:       defaultWorkerMode(values["workerMode"]),
+		IngressEnabled:   boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
+		IngressProvider:  values["ingressProvider"],
+		IngressClass:     values["ingressClass"],
+		CookieDomain:     values["cookieDomain"],
+		PullSecretMode:   values["pullSecretMode"],
+		PullSecret:       values["pullSecret"],
+		InfraComponents:  infrastructureComponentsFromValues(values),
+		External: localConfigExternal{
+			CredentialsMode: values["externalCredentialsMode"],
+			MySQL: localConfigExternalSQL{
+				Host:        values["mysqlHost"],
+				Port:        values["mysqlPort"],
+				Database:    values["mysqlDatabase"],
+				Username:    values["mysqlUsername"],
+				Password:    values["mysqlPassword"],
+				SecretName:  values["mysqlSecretName"],
+				PasswordKey: values["mysqlPasswordKey"],
+			},
+			FabricMySQL: localConfigExternalSQL{
+				Host:        values["fabricMysqlHost"],
+				Port:        values["fabricMysqlPort"],
+				Database:    values["fabricMysqlDatabase"],
+				Username:    values["fabricMysqlUsername"],
+				Password:    values["fabricMysqlPassword"],
+				SecretName:  values["fabricMysqlSecretName"],
+				PasswordKey: values["fabricMysqlPasswordKey"],
+			},
+			Redis: localConfigExternalRedis{
+				Host:        values["redisHost"],
+				Port:        values["redisPort"],
+				Password:    values["redisPassword"],
+				SecretName:  values["redisSecretName"],
+				PasswordKey: values["redisPasswordKey"],
+			},
+			RabbitMQ: localConfigExternalRabbitMQ{
+				Host:        values["rabbitmqHost"],
+				Port:        values["rabbitmqPort"],
+				Username:    values["rabbitmqUsername"],
+				Password:    values["rabbitmqPassword"],
+				Vhost:       values["rabbitmqVhost"],
+				SecretName:  values["rabbitmqSecretName"],
+				PasswordKey: values["rabbitmqPasswordKey"],
+			},
+			ElasticSearch: localConfigExternalElasticSearch{
+				Host:        values["elasticsearchHost"],
+				Port:        values["elasticsearchPort"],
+				Scheme:      values["elasticsearchScheme"],
+				Username:    values["elasticsearchUsername"],
+				Password:    values["elasticsearchPassword"],
+				SecretName:  values["elasticsearchSecretName"],
+				UsernameKey: values["elasticsearchUsernameKey"],
+				PasswordKey: values["elasticsearchPasswordKey"],
+			},
+			S3: localConfigExternalS3{
+				Endpoint:     values["s3Endpoint"],
+				Region:       values["s3Region"],
+				Bucket:       values["s3Bucket"],
+				AccessKey:    values["s3AccessKey"],
+				SecretKey:    values["s3SecretKey"],
+				PathStyle:    boolPtr(parseBoolDefault(values["s3PathStyle"], false)),
+				SecretName:   values["s3SecretName"],
+				AccessKeyKey: values["s3AccessKeyKey"],
+				SecretKeyKey: values["s3SecretKeyKey"],
+			},
+			Pusher: localConfigExternalPusher{
+				Host:          values["pusherHost"],
+				Port:          values["pusherPort"],
+				Scheme:        values["pusherScheme"],
+				AppID:         values["pusherAppId"],
+				AppKey:        values["pusherAppKey"],
+				AppSecret:     values["pusherAppSecret"],
+				AppCluster:    values["pusherAppCluster"],
+				SecretName:    values["pusherSecretName"],
+				AppIDKey:      values["pusherAppIdKey"],
+				AppKeyKey:     values["pusherAppKeyKey"],
+				AppSecretKey:  values["pusherAppSecretKey"],
+				AppClusterKey: values["pusherAppClusterKey"],
+			},
+		},
 		SeedInstall:       boolPtr(parseBoolDefault(values["seedInstall"], true)),
 		CompanyName:       values["companyName"],
 		AdminName:         values["adminName"],
@@ -2551,6 +2992,28 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 		local.QuayEmail = config.Quay.Email
 	}
 	return local
+}
+
+func infrastructureComponentsFromValues(values map[string]string) localConfigInfrastructure {
+	return localConfigInfrastructure{
+		MySQL:         componentFromValue(values, "infraMysqlEnabled"),
+		FabricMySQL:   componentFromValue(values, "infraFabricMysqlEnabled"),
+		FabricRedis:   componentFromValue(values, "infraFabricRedisEnabled"),
+		Redis:         componentFromValue(values, "infraRedisEnabled"),
+		RabbitMQ:      componentFromValue(values, "infraRabbitmqEnabled"),
+		ElasticSearch: componentFromValue(values, "infraElasticsearchEnabled"),
+		S3:            componentFromValue(values, "infraS3Enabled"),
+		KubeFaaS:      componentFromValue(values, "infraKubefaasEnabled"),
+		Pusher:        componentFromValue(values, "infraPusherEnabled"),
+	}
+}
+
+func componentFromValue(values map[string]string, key string) localConfigComponent {
+	value, ok := values[key]
+	if !ok {
+		return localConfigComponent{}
+	}
+	return localConfigComponent{Enabled: boolPtr(parseBoolDefault(value, false))}
 }
 
 func pullSecretModeFromSelection(pullSecret string, quay *quayCredentials) string {
@@ -2578,6 +3041,83 @@ func parseBoolDefault(value string, fallback bool) bool {
 	}
 }
 
+func addExternalValues(values map[string]string, external localConfigExternal) {
+	values["externalCredentialsMode"] = external.CredentialsMode
+	values["mysqlHost"] = external.MySQL.Host
+	values["mysqlPort"] = external.MySQL.Port
+	values["mysqlDatabase"] = external.MySQL.Database
+	values["mysqlUsername"] = external.MySQL.Username
+	values["mysqlPassword"] = external.MySQL.Password
+	values["mysqlSecretName"] = external.MySQL.SecretName
+	values["mysqlPasswordKey"] = external.MySQL.PasswordKey
+	values["fabricMysqlHost"] = external.FabricMySQL.Host
+	values["fabricMysqlPort"] = external.FabricMySQL.Port
+	values["fabricMysqlDatabase"] = external.FabricMySQL.Database
+	values["fabricMysqlUsername"] = external.FabricMySQL.Username
+	values["fabricMysqlPassword"] = external.FabricMySQL.Password
+	values["fabricMysqlSecretName"] = external.FabricMySQL.SecretName
+	values["fabricMysqlPasswordKey"] = external.FabricMySQL.PasswordKey
+	values["redisHost"] = external.Redis.Host
+	values["redisPort"] = external.Redis.Port
+	values["redisPassword"] = external.Redis.Password
+	values["redisSecretName"] = external.Redis.SecretName
+	values["redisPasswordKey"] = external.Redis.PasswordKey
+	values["rabbitmqHost"] = external.RabbitMQ.Host
+	values["rabbitmqPort"] = external.RabbitMQ.Port
+	values["rabbitmqUsername"] = external.RabbitMQ.Username
+	values["rabbitmqPassword"] = external.RabbitMQ.Password
+	values["rabbitmqVhost"] = external.RabbitMQ.Vhost
+	values["rabbitmqSecretName"] = external.RabbitMQ.SecretName
+	values["rabbitmqPasswordKey"] = external.RabbitMQ.PasswordKey
+	values["elasticsearchHost"] = external.ElasticSearch.Host
+	values["elasticsearchPort"] = external.ElasticSearch.Port
+	values["elasticsearchScheme"] = external.ElasticSearch.Scheme
+	values["elasticsearchUsername"] = external.ElasticSearch.Username
+	values["elasticsearchPassword"] = external.ElasticSearch.Password
+	values["elasticsearchSecretName"] = external.ElasticSearch.SecretName
+	values["elasticsearchUsernameKey"] = external.ElasticSearch.UsernameKey
+	values["elasticsearchPasswordKey"] = external.ElasticSearch.PasswordKey
+	values["s3Endpoint"] = external.S3.Endpoint
+	values["s3Region"] = external.S3.Region
+	values["s3Bucket"] = external.S3.Bucket
+	values["s3AccessKey"] = external.S3.AccessKey
+	values["s3SecretKey"] = external.S3.SecretKey
+	values["s3PathStyle"] = fmt.Sprintf("%t", boolDefault(external.S3.PathStyle, false))
+	values["s3SecretName"] = external.S3.SecretName
+	values["s3AccessKeyKey"] = external.S3.AccessKeyKey
+	values["s3SecretKeyKey"] = external.S3.SecretKeyKey
+	values["pusherHost"] = external.Pusher.Host
+	values["pusherPort"] = external.Pusher.Port
+	values["pusherScheme"] = external.Pusher.Scheme
+	values["pusherAppId"] = external.Pusher.AppID
+	values["pusherAppKey"] = external.Pusher.AppKey
+	values["pusherAppSecret"] = external.Pusher.AppSecret
+	values["pusherAppCluster"] = external.Pusher.AppCluster
+	values["pusherSecretName"] = external.Pusher.SecretName
+	values["pusherAppIdKey"] = external.Pusher.AppIDKey
+	values["pusherAppKeyKey"] = external.Pusher.AppKeyKey
+	values["pusherAppSecretKey"] = external.Pusher.AppSecretKey
+	values["pusherAppClusterKey"] = external.Pusher.AppClusterKey
+}
+
+func addInfrastructureComponentValues(values map[string]string, infra localConfigInfrastructure) {
+	setComponentEnabledValue(values, "infraMysqlEnabled", infra.MySQL.Enabled)
+	setComponentEnabledValue(values, "infraFabricMysqlEnabled", infra.FabricMySQL.Enabled)
+	setComponentEnabledValue(values, "infraFabricRedisEnabled", infra.FabricRedis.Enabled)
+	setComponentEnabledValue(values, "infraRedisEnabled", infra.Redis.Enabled)
+	setComponentEnabledValue(values, "infraRabbitmqEnabled", infra.RabbitMQ.Enabled)
+	setComponentEnabledValue(values, "infraElasticsearchEnabled", infra.ElasticSearch.Enabled)
+	setComponentEnabledValue(values, "infraS3Enabled", infra.S3.Enabled)
+	setComponentEnabledValue(values, "infraKubefaasEnabled", infra.KubeFaaS.Enabled)
+	setComponentEnabledValue(values, "infraPusherEnabled", infra.Pusher.Enabled)
+}
+
+func setComponentEnabledValue(values map[string]string, key string, enabled *bool) {
+	if enabled != nil {
+		values[key] = fmt.Sprintf("%t", *enabled)
+	}
+}
+
 func stringDefault(value, fallback string) string {
 	if strings.TrimSpace(value) == "" {
 		return fallback
@@ -2597,6 +3137,7 @@ func installSummary(config installConfig) string {
 	lines := []string{
 		keyValue("Values file", config.Output),
 		keyValue("Namespace", values["namespace"]),
+		keyValue("Infrastructure", infrastructureSummary(values)),
 		keyValue("Base domain", values["domain"]),
 		keyValue("URL scheme", values["scheme"]),
 		keyValue("License key", configuredSummary(values["licenseKey"])),
@@ -2614,6 +3155,19 @@ func installSummary(config installConfig) string {
 		lines = append(lines, keyValue("Quay secret action", "use existing secret"))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func infrastructureSummary(values map[string]string) string {
+	if values["infrastructure"] != "external" {
+		if allInfrastructureComponentsDisabled(values) {
+			return "bundled, all infra components disabled"
+		}
+		if values["installInfrastructure"] == "false" {
+			return "bundled, leave existing infra unchanged"
+		}
+		return "bundled, install/upgrade infra"
+	}
+	return fmt.Sprintf("external (%s credentials)", stringDefault(values["externalCredentialsMode"], "secret"))
 }
 
 func uninstallSummary(namespace, pullSecretName string, removeContour, contourMarked bool) string {
@@ -2964,6 +3518,13 @@ func writeValues(path string, values map[string]string) error {
 		fmt.Fprintf(&b, "    serverUrl: %s\n", quote(values["licenseServerUrl"]))
 	}
 	fmt.Fprintf(&b, "\n")
+
+	if values["infrastructure"] == "external" {
+		writeExternalInfrastructureValues(&b, values)
+	} else {
+		writeBundledInfrastructureValues(&b, values)
+	}
+
 	fmt.Fprintf(&b, "ingress:\n")
 	fmt.Fprintf(&b, "  enabled: %s\n", values["ingressEnabled"])
 	fmt.Fprintf(&b, "  provider: %s\n", quote(values["ingressProvider"]))
@@ -2981,6 +3542,35 @@ func writeValues(path string, values map[string]string) error {
 	fmt.Fprintf(&b, "  enabled: %s\n", values["dashboardEnabled"])
 	fmt.Fprintf(&b, "  routingMode: %s\n", quote(values["routingMode"]))
 	fmt.Fprintf(&b, "  authCookieDomain: %s\n\n", quote(cookieDomain))
+
+	fmt.Fprintf(&b, "pusher:\n")
+	if values["infrastructure"] == "external" {
+		fmt.Fprintf(&b, "  enabled: false\n")
+		fmt.Fprintf(&b, "  appCluster: %s\n", quote(values["pusherAppCluster"]))
+		if values["externalCredentialsMode"] == "secret" {
+			fmt.Fprintf(&b, "  existingSecret:\n")
+			fmt.Fprintf(&b, "    name: %s\n", quote(values["pusherSecretName"]))
+			fmt.Fprintf(&b, "    appIdKey: %s\n", quote(values["pusherAppIdKey"]))
+			fmt.Fprintf(&b, "    appKeyKey: %s\n", quote(values["pusherAppKeyKey"]))
+			fmt.Fprintf(&b, "    appSecretKey: %s\n", quote(values["pusherAppSecretKey"]))
+			fmt.Fprintf(&b, "    appClusterKey: %s\n", quote(values["pusherAppClusterKey"]))
+		} else {
+			fmt.Fprintf(&b, "  appId: %s\n", quote(values["pusherAppId"]))
+			fmt.Fprintf(&b, "  appKey: %s\n", quote(values["pusherAppKey"]))
+			fmt.Fprintf(&b, "  appSecret: %s\n", quote(values["pusherAppSecret"]))
+		}
+		fmt.Fprintf(&b, "  external:\n")
+		fmt.Fprintf(&b, "    host: %s\n", quote(values["pusherHost"]))
+		fmt.Fprintf(&b, "    port: %s\n", values["pusherPort"])
+		fmt.Fprintf(&b, "    scheme: %s\n\n", quote(values["pusherScheme"]))
+	} else {
+		fmt.Fprintf(&b, "  enabled: true\n")
+		fmt.Fprintf(&b, "  ingress:\n")
+		fmt.Fprintf(&b, "    enabled: %s\n", values["ingressEnabled"])
+		fmt.Fprintf(&b, "    provider: %s\n", quote(values["ingressProvider"]))
+		fmt.Fprintf(&b, "    className: %s\n", quote(values["ingressClass"]))
+		fmt.Fprintf(&b, "    host: %s\n\n", quote("wss."+domain))
+	}
 
 	fmt.Fprintf(&b, "web:\n  sessionDomain: %s\n\n", quote(cookieDomain))
 
@@ -3002,6 +3592,153 @@ func writeValues(path string, values map[string]string) error {
 	fmt.Fprintf(&b, "    userRole: %s\n", quote(values["userRole"]))
 
 	return os.WriteFile(cleanPath(path), b.Bytes(), 0o644)
+}
+
+func writeExternalInfrastructureValues(b *bytes.Buffer, values map[string]string) {
+	secretMode := values["externalCredentialsMode"] == "secret"
+
+	fmt.Fprintf(b, "mysql:\n")
+	fmt.Fprintf(b, "  enabled: false\n")
+	fmt.Fprintf(b, "  external:\n")
+	fmt.Fprintf(b, "    host: %s\n", quote(values["mysqlHost"]))
+	fmt.Fprintf(b, "    port: %s\n", values["mysqlPort"])
+	fmt.Fprintf(b, "    database: %s\n", quote(values["mysqlDatabase"]))
+	fmt.Fprintf(b, "    username: %s\n", quote(values["mysqlUsername"]))
+	if secretMode {
+		fmt.Fprintf(b, "    existingSecret:\n")
+		fmt.Fprintf(b, "      name: %s\n", quote(values["mysqlSecretName"]))
+		fmt.Fprintf(b, "      passwordKey: %s\n", quote(values["mysqlPasswordKey"]))
+	} else {
+		fmt.Fprintf(b, "    password: %s\n", quote(values["mysqlPassword"]))
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "fabric:\n")
+	fmt.Fprintf(b, "  mysql:\n")
+	fmt.Fprintf(b, "    enabled: false\n")
+	fmt.Fprintf(b, "    external:\n")
+	fmt.Fprintf(b, "      host: %s\n", quote(values["fabricMysqlHost"]))
+	fmt.Fprintf(b, "      port: %s\n", values["fabricMysqlPort"])
+	fmt.Fprintf(b, "      database: %s\n", quote(values["fabricMysqlDatabase"]))
+	fmt.Fprintf(b, "      username: %s\n", quote(values["fabricMysqlUsername"]))
+	if secretMode {
+		fmt.Fprintf(b, "      existingSecret:\n")
+		fmt.Fprintf(b, "        name: %s\n", quote(values["fabricMysqlSecretName"]))
+		fmt.Fprintf(b, "        passwordKey: %s\n", quote(values["fabricMysqlPasswordKey"]))
+	} else {
+		fmt.Fprintf(b, "      password: %s\n", quote(values["fabricMysqlPassword"]))
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "redis:\n")
+	fmt.Fprintf(b, "  enabled: false\n")
+	fmt.Fprintf(b, "  external:\n")
+	fmt.Fprintf(b, "    host: %s\n", quote(values["redisHost"]))
+	fmt.Fprintf(b, "    port: %s\n", values["redisPort"])
+	if secretMode {
+		if values["redisSecretName"] != "" {
+			fmt.Fprintf(b, "    existingSecret:\n")
+			fmt.Fprintf(b, "      name: %s\n", quote(values["redisSecretName"]))
+			fmt.Fprintf(b, "      passwordKey: %s\n", quote(values["redisPasswordKey"]))
+		}
+	} else if values["redisPassword"] != "" {
+		fmt.Fprintf(b, "    password: %s\n", quote(values["redisPassword"]))
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "rabbitmq:\n")
+	fmt.Fprintf(b, "  enabled: false\n")
+	fmt.Fprintf(b, "  topology:\n")
+	fmt.Fprintf(b, "    enabled: true\n")
+	fmt.Fprintf(b, "  external:\n")
+	fmt.Fprintf(b, "    host: %s\n", quote(values["rabbitmqHost"]))
+	fmt.Fprintf(b, "    port: %s\n", values["rabbitmqPort"])
+	fmt.Fprintf(b, "    username: %s\n", quote(values["rabbitmqUsername"]))
+	fmt.Fprintf(b, "    vhost: %s\n", quote(values["rabbitmqVhost"]))
+	if secretMode {
+		fmt.Fprintf(b, "    existingSecret:\n")
+		fmt.Fprintf(b, "      name: %s\n", quote(values["rabbitmqSecretName"]))
+		fmt.Fprintf(b, "      passwordKey: %s\n", quote(values["rabbitmqPasswordKey"]))
+	} else {
+		fmt.Fprintf(b, "    password: %s\n", quote(values["rabbitmqPassword"]))
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "elasticsearch:\n")
+	fmt.Fprintf(b, "  enabled: false\n")
+	fmt.Fprintf(b, "  external:\n")
+	fmt.Fprintf(b, "    host: %s\n", quote(values["elasticsearchHost"]))
+	fmt.Fprintf(b, "    port: %s\n", values["elasticsearchPort"])
+	fmt.Fprintf(b, "    scheme: %s\n", quote(values["elasticsearchScheme"]))
+	if values["elasticsearchUsername"] != "" {
+		fmt.Fprintf(b, "    username: %s\n", quote(values["elasticsearchUsername"]))
+	}
+	if secretMode {
+		if values["elasticsearchSecretName"] != "" {
+			fmt.Fprintf(b, "    existingSecret:\n")
+			fmt.Fprintf(b, "      name: %s\n", quote(values["elasticsearchSecretName"]))
+			fmt.Fprintf(b, "      usernameKey: %s\n", quote(values["elasticsearchUsernameKey"]))
+			fmt.Fprintf(b, "      passwordKey: %s\n", quote(values["elasticsearchPasswordKey"]))
+		}
+	} else if values["elasticsearchPassword"] != "" {
+		fmt.Fprintf(b, "    password: %s\n", quote(values["elasticsearchPassword"]))
+	}
+	fmt.Fprintf(b, "\n")
+
+	fmt.Fprintf(b, "s3:\n")
+	fmt.Fprintf(b, "  enabled: false\n")
+	fmt.Fprintf(b, "  external:\n")
+	fmt.Fprintf(b, "    endpoint: %s\n", quote(values["s3Endpoint"]))
+	fmt.Fprintf(b, "    region: %s\n", quote(values["s3Region"]))
+	fmt.Fprintf(b, "    bucket: %s\n", quote(values["s3Bucket"]))
+	fmt.Fprintf(b, "    pathStyle: %s\n", values["s3PathStyle"])
+	if secretMode {
+		fmt.Fprintf(b, "    existingSecret:\n")
+		fmt.Fprintf(b, "      name: %s\n", quote(values["s3SecretName"]))
+		fmt.Fprintf(b, "      accessKeyKey: %s\n", quote(values["s3AccessKeyKey"]))
+		fmt.Fprintf(b, "      secretKeyKey: %s\n", quote(values["s3SecretKeyKey"]))
+	} else {
+		fmt.Fprintf(b, "    accessKey: %s\n", quote(values["s3AccessKey"]))
+		fmt.Fprintf(b, "    secretKey: %s\n", quote(values["s3SecretKey"]))
+	}
+	fmt.Fprintf(b, "\n")
+}
+
+func writeBundledInfrastructureValues(b *bytes.Buffer, values map[string]string) {
+	writeComponentEnabledValue(b, "mysql", values, "infraMysqlEnabled")
+	if hasValue(values, "infraFabricMysqlEnabled") || hasValue(values, "infraFabricRedisEnabled") {
+		fmt.Fprintf(b, "fabric:\n")
+		writeNestedComponentEnabledValue(b, "mysql", values, "infraFabricMysqlEnabled")
+		writeNestedComponentEnabledValue(b, "redis", values, "infraFabricRedisEnabled")
+		fmt.Fprintf(b, "\n")
+	}
+	writeComponentEnabledValue(b, "redis", values, "infraRedisEnabled")
+	writeComponentEnabledValue(b, "rabbitmq", values, "infraRabbitmqEnabled")
+	writeComponentEnabledValue(b, "elasticsearch", values, "infraElasticsearchEnabled")
+	writeComponentEnabledValue(b, "s3", values, "infraS3Enabled")
+	writeComponentEnabledValue(b, "kubefaas", values, "infraKubefaasEnabled")
+	writeComponentEnabledValue(b, "pusher", values, "infraPusherEnabled")
+}
+
+func writeComponentEnabledValue(b *bytes.Buffer, name string, values map[string]string, key string) {
+	if !hasValue(values, key) {
+		return
+	}
+	fmt.Fprintf(b, "%s:\n", name)
+	fmt.Fprintf(b, "  enabled: %s\n\n", values[key])
+}
+
+func writeNestedComponentEnabledValue(b *bytes.Buffer, name string, values map[string]string, key string) {
+	if !hasValue(values, key) {
+		return
+	}
+	fmt.Fprintf(b, "  %s:\n", name)
+	fmt.Fprintf(b, "    enabled: %s\n", values[key])
+}
+
+func hasValue(values map[string]string, key string) bool {
+	_, ok := values[key]
+	return ok
 }
 
 func cleanPath(path string) string {

@@ -30,6 +30,20 @@ application:
   cookieDomain: selfhosted.example.com
 workers:
   type: microservice
+infrastructure:
+  mode: bundled
+  mysql:
+    enabled: false
+  redis:
+    enabled: false
+  rabbitmq:
+    enabled: false
+  elasticsearch:
+    enabled: false
+  s3:
+    enabled: false
+  pusher:
+    enabled: false
 ingress:
   enabled: true
   provider: contour
@@ -79,11 +93,36 @@ installer:
 	if config.WorkerMode != "microservice" {
 		t.Fatalf("worker mode = %q", config.WorkerMode)
 	}
+	if config.Infrastructure != "bundled" {
+		t.Fatalf("infrastructure mode = %q", config.Infrastructure)
+	}
+	if config.InfraComponents.MySQL.Enabled == nil || *config.InfraComponents.MySQL.Enabled {
+		t.Fatalf("infrastructure mysql enabled was not loaded as false")
+	}
 	if config.AdminPassword != "admin-password" {
 		t.Fatalf("admin password was not loaded")
 	}
 	if config.Install == nil || !*config.Install {
 		t.Fatalf("install flag was not loaded")
+	}
+}
+
+func TestAllInfrastructureComponentsDisabled(t *testing.T) {
+	values := map[string]string{
+		"infraMysqlEnabled":         "false",
+		"infraRedisEnabled":         "false",
+		"infraRabbitmqEnabled":      "false",
+		"infraElasticsearchEnabled": "false",
+		"infraS3Enabled":            "false",
+		"infraPusherEnabled":        "false",
+	}
+	if !allInfrastructureComponentsDisabled(values) {
+		t.Fatalf("expected infra to be disabled when all default-enabled components are false")
+	}
+
+	values["infraRabbitmqEnabled"] = "true"
+	if allInfrastructureComponentsDisabled(values) {
+		t.Fatalf("expected infra to be enabled when one component is true")
 	}
 }
 
@@ -307,6 +346,155 @@ func TestWriteValuesIncludesLicenseConfig(t *testing.T) {
 	}
 }
 
+func TestWriteValuesIncludesExternalInfrastructure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "patchworks.values.yaml")
+	values := map[string]string{
+		"namespace":                "patchworks",
+		"infrastructure":           "external",
+		"domain":                   "selfhosted.example.com",
+		"scheme":                   "https",
+		"licenseKey":               "license-key",
+		"licenseServerUrl":         "https://license.example.com",
+		"ingressEnabled":           "true",
+		"ingressProvider":          "contour",
+		"ingressClass":             "contour",
+		"dashboardEnabled":         "true",
+		"routingMode":              "host",
+		"workerMode":               "standalone",
+		"cookieDomain":             ".selfhosted.example.com",
+		"seedInstall":              "false",
+		"companyName":              "Self-Hosted",
+		"adminName":                "Admin User",
+		"adminEmail":               "admin@example.com",
+		"userRole":                 "superadmin",
+		"externalCredentialsMode":  "secret",
+		"mysqlHost":                "mysql.example.com",
+		"mysqlPort":                "3306",
+		"mysqlDatabase":            "core",
+		"mysqlUsername":            "patchworks",
+		"mysqlSecretName":          "patchworks-db",
+		"mysqlPasswordKey":         "password",
+		"fabricMysqlHost":          "mysql.example.com",
+		"fabricMysqlPort":          "3306",
+		"fabricMysqlDatabase":      "fabric",
+		"fabricMysqlUsername":      "patchworks",
+		"fabricMysqlSecretName":    "patchworks-db",
+		"fabricMysqlPasswordKey":   "password",
+		"redisHost":                "redis.example.com",
+		"redisPort":                "6379",
+		"redisSecretName":          "patchworks-redis",
+		"redisPasswordKey":         "password",
+		"rabbitmqHost":             "rabbitmq.example.com",
+		"rabbitmqPort":             "5672",
+		"rabbitmqUsername":         "patchworks",
+		"rabbitmqVhost":            "/",
+		"rabbitmqSecretName":       "patchworks-rabbitmq",
+		"rabbitmqPasswordKey":      "password",
+		"elasticsearchHost":        "search.example.com",
+		"elasticsearchPort":        "9200",
+		"elasticsearchScheme":      "https",
+		"elasticsearchUsername":    "elastic",
+		"elasticsearchSecretName":  "patchworks-elasticsearch",
+		"elasticsearchUsernameKey": "username",
+		"elasticsearchPasswordKey": "password",
+		"s3Endpoint":               "https://s3.example.com",
+		"s3Region":                 "eu-west-2",
+		"s3Bucket":                 "patchworks",
+		"s3PathStyle":              "false",
+		"s3SecretName":             "patchworks-s3",
+		"s3AccessKeyKey":           "access-key",
+		"s3SecretKeyKey":           "secret-key",
+		"pusherHost":               "wss.example.com",
+		"pusherPort":               "443",
+		"pusherScheme":             "https",
+		"pusherAppCluster":         "mt1",
+		"pusherSecretName":         "patchworks-soketi-auth",
+		"pusherAppIdKey":           "app-id",
+		"pusherAppKeyKey":          "app-key",
+		"pusherAppSecretKey":       "app-secret",
+		"pusherAppClusterKey":      "app-cluster",
+	}
+	if err := writeValues(path, values); err != nil {
+		t.Fatalf("write values: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read values: %v", err)
+	}
+	rendered := string(data)
+	for _, expected := range []string{
+		"mysql:\n  enabled: false",
+		"    host: \"mysql.example.com\"",
+		"fabric:\n  mysql:\n    enabled: false",
+		"redis:\n  enabled: false",
+		"rabbitmq:\n  enabled: false",
+		"elasticsearch:\n  enabled: false",
+		"s3:\n  enabled: false",
+		"pusher:\n  enabled: false",
+		"    host: \"wss.example.com\"",
+		"    name: \"patchworks-soketi-auth\"",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("values file missing %q:\n%s", expected, rendered)
+		}
+	}
+	if strings.Contains(rendered, "wss.selfhosted.example.com") {
+		t.Fatalf("external pusher should not emit bundled websocket ingress:\n%s", rendered)
+	}
+}
+
+func TestWriteValuesIncludesBundledInfrastructureOverrides(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "patchworks.values.yaml")
+	values := map[string]string{
+		"namespace":                 "patchworks",
+		"infrastructure":            "bundled",
+		"domain":                    "selfhosted.example.com",
+		"scheme":                    "https",
+		"licenseKey":                "license-key",
+		"licenseServerUrl":          "https://license.example.com",
+		"ingressEnabled":            "true",
+		"ingressProvider":           "contour",
+		"ingressClass":              "contour",
+		"dashboardEnabled":          "true",
+		"routingMode":               "host",
+		"workerMode":                "standalone",
+		"cookieDomain":              ".selfhosted.example.com",
+		"seedInstall":               "false",
+		"companyName":               "Self-Hosted",
+		"adminName":                 "Admin User",
+		"adminEmail":                "admin@example.com",
+		"userRole":                  "superadmin",
+		"infraMysqlEnabled":         "false",
+		"infraRedisEnabled":         "false",
+		"infraRabbitmqEnabled":      "false",
+		"infraElasticsearchEnabled": "false",
+		"infraS3Enabled":            "false",
+		"infraPusherEnabled":        "false",
+	}
+	if err := writeValues(path, values); err != nil {
+		t.Fatalf("write values: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read values: %v", err)
+	}
+	rendered := string(data)
+	for _, expected := range []string{
+		"mysql:\n  enabled: false",
+		"redis:\n  enabled: false",
+		"rabbitmq:\n  enabled: false",
+		"elasticsearch:\n  enabled: false",
+		"s3:\n  enabled: false",
+		"pusher:\n  enabled: false",
+	} {
+		if !strings.Contains(rendered, expected) {
+			t.Fatalf("values file missing %q:\n%s", expected, rendered)
+		}
+	}
+}
+
 func TestLocalConfigFromInstallConfigDefaultsLicenseServerURL(t *testing.T) {
 	config := localConfigFromInstallConfig(installConfig{
 		Output: "patchworks.values.yaml",
@@ -410,5 +598,27 @@ func TestFormatInstallRowsKeepsAllRowsAlphabetically(t *testing.T) {
 		if !strings.Contains(rendered, expected) {
 			t.Fatalf("rendered rows missing %q:\n%s", expected, rendered)
 		}
+	}
+}
+
+func TestHelmCommandTextCanSkipInfrastructure(t *testing.T) {
+	commands := helmCommandText("patchworks", "patchworks.values.yaml", false)
+
+	if strings.Contains(commands, "patchworks-infra") {
+		t.Fatalf("manual commands should not include infra when skipped:\n%s", commands)
+	}
+	if !strings.Contains(commands, "patchworks-app") {
+		t.Fatalf("manual commands should include app:\n%s", commands)
+	}
+}
+
+func TestHelmCommandTextIncludesInfrastructure(t *testing.T) {
+	commands := helmCommandText("patchworks", "patchworks.values.yaml", true)
+
+	if !strings.Contains(commands, "patchworks-infra") {
+		t.Fatalf("manual commands should include infra:\n%s", commands)
+	}
+	if !strings.Contains(commands, "patchworks-app") {
+		t.Fatalf("manual commands should include app:\n%s", commands)
 	}
 }

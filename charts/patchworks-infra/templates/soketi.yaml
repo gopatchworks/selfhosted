@@ -18,6 +18,7 @@ stringData:
   {{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}: {{ .Values.pusher.appId | quote }}
   {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}: {{ .Values.pusher.appKey | quote }}
   {{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}: {{ .Values.pusher.appSecret | quote }}
+  {{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}: {{ .Values.pusher.appCluster | quote }}
 {{- end }}
 ---
 apiVersion: apps/v1
@@ -48,6 +49,57 @@ spec:
       securityContext:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: soketi-config
+          image: "{{ .Values.soketi.image.repository }}:{{ .Values.soketi.image.tag }}"
+          imagePullPolicy: {{ .Values.soketi.image.pullPolicy }}
+          command:
+            - node
+            - -e
+            - |
+              const fs = require('fs');
+              const app = {
+                id: process.env.PUSHER_APP_ID,
+                key: process.env.PUSHER_APP_KEY,
+                secret: process.env.PUSHER_APP_SECRET,
+                maxConnections: -1,
+                enableClientMessages: false,
+                enabled: true,
+                maxBackendEventsPerSecond: -1,
+                maxClientEventsPerSecond: -1,
+                maxReadRequestsPerSecond: -1,
+                webhooks: [],
+              };
+              fs.mkdirSync('/etc/soketi/config', { recursive: true });
+              fs.writeFileSync('/etc/soketi/config/config.json', JSON.stringify({
+                appManager: {
+                  driver: 'array',
+                  array: { apps: [app] },
+                },
+              }, null, 2));
+          env:
+            - name: PUSHER_APP_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appIdKey | default "app-id" }}
+            - name: PUSHER_APP_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appKeyKey | default "app-key" }}
+            - name: PUSHER_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $pusherSecret.name | default $secretName }}
+                  key: {{ $pusherSecret.appSecretKey | default "app-secret" }}
+          volumeMounts:
+            - name: soketi-config
+              mountPath: /etc/soketi/config
       containers:
         - name: soketi
           image: "{{ .Values.soketi.image.repository }}:{{ .Values.soketi.image.tag }}"
@@ -58,6 +110,8 @@ spec:
           {{- end }}
           command:
             {{- toYaml .Values.soketi.command | nindent 12 }}
+          args:
+            - --config=/etc/soketi/config/config.json
           ports:
             - name: soketi
               containerPort: 6001
@@ -73,24 +127,13 @@ spec:
               value: "6001"
             - name: SOKETI_MODE
               value: {{ .Values.soketi.mode | quote }}
-            - name: SOKETI_DEFAULT_APP_ID
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $pusherSecret.name | default $secretName }}
-                  key: {{ $pusherSecret.appIdKey | default "app-id" }}
-            - name: SOKETI_DEFAULT_APP_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $pusherSecret.name | default $secretName }}
-                  key: {{ $pusherSecret.appKeyKey | default "app-key" }}
-            - name: SOKETI_DEFAULT_APP_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: {{ $pusherSecret.name | default $secretName }}
-                  key: {{ $pusherSecret.appSecretKey | default "app-secret" }}
             {{- with .Values.soketi.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
+          volumeMounts:
+            - name: soketi-config
+              mountPath: /etc/soketi/config
+              readOnly: true
           livenessProbe:
             httpGet:
               path: /
@@ -127,6 +170,9 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      volumes:
+        - name: soketi-config
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

@@ -1124,6 +1124,26 @@ RabbitMQ component env vars for pods that do not consume patchworks.appConfigDat
 {{- include "patchworks.secretEnv" (dict "name" "PUSHER_APP_CLUSTER" "value" .Values.pusher.appCluster "secret" $s) -}}
 {{- end }}
 
+{{/* Non-sensitive Pusher runtime env vars for Core web and worker pods. */}}
+{{- define "patchworks.pusherRuntimeEnv" -}}
+{{- if include "patchworks.pusher.isConfigured" . }}
+- name: BROADCAST_CONNECTION
+  value: pusher
+{{- with include "patchworks.pusher.host" . }}
+- name: PUSHER_HOST
+  value: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.scheme" . }}
+- name: PUSHER_SCHEME
+  value: {{ . | quote }}
+{{- end }}
+{{- with include "patchworks.pusher.port" . }}
+- name: PUSHER_PORT
+  value: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{/* KUBEFAAS_FUNCTIONS_USERNAME */}}
 {{- define "patchworks.env.kubefaasUsername" -}}
 {{- $auth := .Values.kubefaas.auth -}}
@@ -1280,8 +1300,8 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if and (include "patchworks.kubefaas.host" .) .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) (not (include "patchworks.kubefaas.authGenerated" .)) -}}
 {{- fail "kubefaas.auth.username and kubefaas.auth.password are required unless kubefaas.auth.existingSecret.name is set, or kubefaas.enabled and credentials.autoGenerate are both true." -}}
 {{- end -}}
-{{- if and .Values.pusher.enabled (not .Values.credentials.autoGenerate) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) -}}
-{{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required when pusher.enabled=true unless pusher.existingSecret.name is set, or credentials.autoGenerate=true." -}}
+{{- if and (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
+{{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required unless pusher.existingSecret.name is set, or pusher.enabled=true with credentials.autoGenerate=true." -}}
 {{- end -}}
 {{- end -}}
 
@@ -1391,18 +1411,6 @@ TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
 {{- end }}
 TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-BROADCAST_CONNECTION: "pusher"
-{{- with include "patchworks.pusher.host" . }}
-PUSHER_HOST: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.scheme" . }}
-PUSHER_SCHEME: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.port" . }}
-PUSHER_PORT: {{ . | quote }}
-{{- end }}
-{{- end }}
 {{- with include "patchworks.kubefaas.host" . }}
 KUBEFAAS_FUNCTIONS_HOST: {{ . | quote }}
 {{- end }}
@@ -1514,18 +1522,6 @@ TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "false"
 {{- end }}
 TENANT_CACHE_AWS_BUCKET: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 TENANT_CACHE_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-BROADCAST_CONNECTION: "pusher"
-{{- with include "patchworks.pusher.host" . }}
-PUSHER_HOST: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.scheme" . }}
-PUSHER_SCHEME: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.port" . }}
-PUSHER_PORT: {{ . | quote }}
-{{- end }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -1557,14 +1553,6 @@ Like appSecretEnv but uses fabric MySQL/Redis password helpers.
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_ACCESS_KEY_ID" "value" (include "patchworks.s3.accessKey" .) "secret" $s3AccessSecret) }}
 {{- $s3SecretSecret := dict "name" $s3Secret.name "key" $s3Secret.secretKeyKey }}
 {{ include "patchworks.secretEnv" (dict "name" "TENANT_CACHE_AWS_SECRET_ACCESS_KEY" "value" (include "patchworks.s3.secretKey" .) "secret" $s3SecretSecret) }}
-{{ include "patchworks.env.rabbitmqPassword" . }}
-{{ include "patchworks.env.rabbitmq" . }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-{{ include "patchworks.env.pusherAppId" . }}
-{{ include "patchworks.env.pusherAppKey" . }}
-{{ include "patchworks.env.pusherAppSecret" . }}
-{{ include "patchworks.env.pusherAppCluster" . }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -2044,14 +2032,6 @@ TENANT_CACHE_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quo
 FILE_DOWNLOADS_AWS_ACCESS_KEY_ID: {{ include "patchworks.s3.accessKey" . | quote }}
 FILE_DOWNLOADS_AWS_SECRET_ACCESS_KEY: {{ include "patchworks.s3.secretKey" . | quote }}
 {{- end }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-{{- if and (not .Values.pusher.existingSecret.name) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)))) }}
-PUSHER_APP_ID: {{ .Values.pusher.appId | quote }}
-PUSHER_APP_KEY: {{ .Values.pusher.appKey | quote }}
-PUSHER_APP_SECRET: {{ .Values.pusher.appSecret | quote }}
-PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
-{{- end }}
-{{- end }}
 {{- end }}
 
 {{- define "patchworks.fabricSecretHasData" -}}
@@ -2145,34 +2125,6 @@ Fabric does not connect to RabbitMQ.
     secretKeyRef:
       name: {{ $s3Secret.name }}
       key: {{ $s3Secret.secretKeyKey }}
-{{- end }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-{{- $pusherName := .Values.pusher.existingSecret.name }}
-{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not $pusherName) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
-{{- $pusherName = printf "%s-soketi-auth" (include "patchworks.fullname" .) }}
-{{- end }}
-{{- if $pusherName }}
-- name: PUSHER_APP_ID
-  valueFrom:
-    secretKeyRef:
-      name: {{ $pusherName }}
-      key: {{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}
-- name: PUSHER_APP_KEY
-  valueFrom:
-    secretKeyRef:
-      name: {{ $pusherName }}
-      key: {{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}
-- name: PUSHER_APP_SECRET
-  valueFrom:
-    secretKeyRef:
-      name: {{ $pusherName }}
-      key: {{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}
-- name: PUSHER_APP_CLUSTER
-  valueFrom:
-    secretKeyRef:
-      name: {{ $pusherName }}
-      key: {{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}
-{{- end }}
 {{- end }}
 {{- end }}
 
@@ -2352,26 +2304,6 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 - name: TENANT_CACHE_AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-- name: BROADCAST_CONNECTION
-  value: pusher
-{{ include "patchworks.env.pusherAppId" . }}
-{{ include "patchworks.env.pusherAppKey" . }}
-{{ include "patchworks.env.pusherAppSecret" . }}
-{{ include "patchworks.env.pusherAppCluster" . }}
-{{- with include "patchworks.pusher.host" . }}
-- name: PUSHER_HOST
-  value: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.scheme" . }}
-- name: PUSHER_SCHEME
-  value: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.port" . }}
-- name: PUSHER_PORT
-  value: {{ . | quote }}
-{{- end }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -2492,26 +2424,6 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
   value: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 - name: TENANT_CACHE_AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
-{{- if include "patchworks.pusher.isConfigured" . }}
-- name: BROADCAST_CONNECTION
-  value: pusher
-{{ include "patchworks.env.pusherAppId" . }}
-{{ include "patchworks.env.pusherAppKey" . }}
-{{ include "patchworks.env.pusherAppSecret" . }}
-{{ include "patchworks.env.pusherAppCluster" . }}
-{{- with include "patchworks.pusher.host" . }}
-- name: PUSHER_HOST
-  value: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.scheme" . }}
-- name: PUSHER_SCHEME
-  value: {{ . | quote }}
-{{- end }}
-{{- with include "patchworks.pusher.port" . }}
-- name: PUSHER_PORT
-  value: {{ . | quote }}
-{{- end }}
-{{- end }}
 {{- end }}
 
 {{/* Fabric web runtime env only. Keep this out of fabric-init/seeder jobs. */}}

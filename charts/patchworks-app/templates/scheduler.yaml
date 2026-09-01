@@ -69,6 +69,7 @@ spec:
                 {{- end }}
               env:
                 {{- include "patchworks.appSecretEnvRefs" $root | nindent 16 }}
+                {{- include "patchworks.pusherRuntimeEnv" $root | nindent 16 }}
                 - name: APP_NAME
                   value: {{ $processorName | quote }}
                 - name: APP_DOMAIN

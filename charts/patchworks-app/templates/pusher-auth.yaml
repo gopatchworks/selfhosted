@@ -1,0 +1,129 @@
+{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := .Release.Namespace }}
+{{- $saName := printf "%s-pusher-auth-generator" $fullname }}
+{{- $secretName := printf "%s-soketi-auth" $fullname }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pusher-auth-generator
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-10"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pusher-auth-generator
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-10"
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $secretName | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $saName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pusher-auth-generator
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-10"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-10"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $saName }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $saName }}
+    namespace: {{ $ns }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-pusher-auth-generator
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pusher-auth-generator
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "pusher-auth-generator" "Release" .Release) | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ $saName }}
+      containers:
+        - name: keygen
+          image: "{{ .Values.credentials.generator.image.repository }}:{{ .Values.credentials.generator.image.tag }}"
+          imagePullPolicy: {{ .Values.credentials.generator.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+
+              if kubectl -n {{ $ns | quote }} get secret {{ $secretName | quote }} >/dev/null 2>&1; then
+                echo "Pusher/Soketi auth secret already exists."
+                exit 0
+              fi
+
+              random_value() {
+                head -c 48 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 32
+              }
+
+              pusher_app_id={{ .Values.pusher.appId | quote }}
+              pusher_app_key={{ .Values.pusher.appKey | quote }}
+              pusher_app_secret={{ .Values.pusher.appSecret | quote }}
+              pusher_app_cluster={{ .Values.pusher.appCluster | quote }}
+              [ -n "$pusher_app_id" ] || pusher_app_id="$(random_value)"
+              [ -n "$pusher_app_key" ] || pusher_app_key="$(random_value)"
+              [ -n "$pusher_app_secret" ] || pusher_app_secret="$(random_value)"
+              [ -n "$pusher_app_cluster" ] || pusher_app_cluster="mt1"
+
+              kubectl -n {{ $ns | quote }} create secret generic {{ $secretName | quote }} \
+                "--from-literal={{ .Values.pusher.existingSecret.appIdKey | default "app-id" }}=${pusher_app_id}" \
+                "--from-literal={{ .Values.pusher.existingSecret.appKeyKey | default "app-key" }}=${pusher_app_key}" \
+                "--from-literal={{ .Values.pusher.existingSecret.appSecretKey | default "app-secret" }}=${pusher_app_secret}" \
+                "--from-literal={{ .Values.pusher.existingSecret.appClusterKey | default "app-cluster" }}=${pusher_app_cluster}"
+              echo "Pusher/Soketi auth secret created."
+{{- end }}

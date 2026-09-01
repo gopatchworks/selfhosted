@@ -67,6 +67,13 @@ dashboard:
   routingMode: host
   authCookieDomain: .selfhosted.example.com
 
+pusher:
+  enabled: true
+  ingress:
+    enabled: true
+    className: contour
+    host: wss.selfhosted.example.com
+
 web:
   sessionDomain: .selfhosted.example.com
 
@@ -190,9 +197,21 @@ If your cluster uses Contour HTTPProxy resources, check those too:
 kubectl get httpproxy -n patchworks
 ```
 
-## 7. Upgrade
+## 7. Upgrade or Rerun
 
-Apply the same values file to both charts when upgrading:
+After the first install, rerun the app chart for normal application changes:
+
+```bash
+helm upgrade patchworks-app ./charts/patchworks-app \
+  -n patchworks \
+  -f values.yaml \
+  --timeout 15m \
+  --wait
+```
+
+Only upgrade the infrastructure chart when you intentionally want to change
+baseline services such as MySQL, RabbitMQ, Redis, Elasticsearch, S3/MinIO,
+Soketi, or KubeFaaS:
 
 ```bash
 helm upgrade patchworks-infra ./charts/patchworks-infra \
@@ -208,6 +227,10 @@ helm upgrade patchworks-app ./charts/patchworks-app \
   --wait
 ```
 
+If all bundled infrastructure components are disabled because you are using
+external services, skip `patchworks-infra` entirely and install or upgrade only
+`patchworks-app`.
+
 ## GitOps Notes
 
 For Argo CD, create two applications or two sources:
@@ -215,9 +238,10 @@ For Argo CD, create two applications or two sources:
 1. `patchworks-infra`
 2. `patchworks-app`
 
-Point both at the same values file and sync infra before app. If Argo already
-manages ingress, cert-manager, pull-secret replication, or monitoring, keep
-those outside the Patchworks bootstrap scripts.
+Point both at the same values file and sync infra before app for the first
+install. After that, only sync infra when you are deliberately changing managed
+infrastructure. If Argo already manages ingress, cert-manager, pull-secret
+replication, or monitoring, keep those outside the Patchworks bootstrap scripts.
 
 ## Local Kind Install
 

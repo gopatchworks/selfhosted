@@ -160,6 +160,7 @@ spec:
             {{- end }}
           env:
             {{- include "patchworks.appSecretEnvRefs" $root | nindent 12 }}
+            {{- include "patchworks.pusherRuntimeEnv" $root | nindent 12 }}
             {{- if $svc.name }}
             - name: APP_NAME
               value: {{ $svc.name | quote }}

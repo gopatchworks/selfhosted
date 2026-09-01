@@ -195,6 +195,12 @@ processors:
   - name: Long Processor
     queue: long-processor
     enabled: true
+  # Used for application broadcast/logging events.
+  - name: Logging
+    queue: logging
+    enabled: true
+    scheduler:
+      enabled: false
 
 # ── Fabric ─────────────────────────────────────────────────────────────────────
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
@@ -581,10 +587,6 @@ workers:
       name: Filter
       domain: filter
 
-    logging:
-      name: Logging
-      domain: logging
-
     manual-input:
       name: Manual Input
       domain: manual-input
@@ -737,7 +739,12 @@ rabbitmq:
     spec: {}
   managementService:
     type: ClusterIP
-  resources: {}
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
 
 # ── KubeFaaS ──────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy KubeFaaS in-cluster (controller, builder, Redis,
@@ -882,7 +889,7 @@ kubefaas:
 # No PUSHER_* env vars are injected when neither enabled nor external.host is set
 # and no credentials are provided.
 pusher:
-  enabled: false
+  enabled: true
   # App credentials. For in-cluster Soketi, omitted values are generated when
   # credentials.autoGenerate=true. Injected as PUSHER_APP_* env vars into app pods.
   appId: ""

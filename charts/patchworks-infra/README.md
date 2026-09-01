@@ -344,6 +344,17 @@ hub monocore Service.
 
 ---
 
+## Processor Shared Values
+
+The infra chart does not render processor workers, but it keeps
+`processors[]` in the shared values file so the app chart can consume the same
+configuration. The default app chart processor list creates worker Deployments
+for `start`, `gateway`, `short-processor`, `medium-processor`,
+`long-processor`, and `logging`. The `logging` processor disables its scheduler
+by default because it only consumes application broadcast/logging work.
+
+---
+
 ## Scheduler Shared Values
 
 The infra chart does not render scheduler resources, but it keeps the
@@ -546,6 +557,7 @@ ingress:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
+| `rabbitmq.resources` | See `values.yaml` | CPU/memory resources for bundled RabbitMQ |
 | `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor and PHP worker hub queue creation |
 | `rabbitmq.topology.command` | `[monocore]` | Shared app-chart value for the queue topology hook command. Image comes from `workers.mono.image` |
 | `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Shared app-chart value for the queue topology hook arguments |
@@ -641,15 +653,16 @@ The app chart consumes them when deploying the bucket creation service.
 
 When `pusher.enabled=true`, the infra chart deploys a native in-cluster Soketi
 Deployment and Service named `patchworks-soketi`. The app chart uses the same
-shared values file to inject `PUSHER_*` env vars into Core, Fabric, workers, and
-dashboard broadcasting config.
+shared values file to inject `PUSHER_*` env vars into Core web pods, workers,
+and dashboard broadcasting config.
 
-For an external Pusher-compatible server, leave `pusher.enabled=false` and set
-`pusher.external.host`, `port`, and `scheme`.
+For an external Pusher-compatible server, leave `pusher.enabled=false`, set
+`pusher.external.host`, `port`, and `scheme`, and provide matching credentials
+inline or via `pusher.existingSecret`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `pusher.enabled` | `false` | Deploy in-cluster Soketi and auto-wire `PUSHER_HOST`, `PUSHER_PORT`, and `PUSHER_SCHEME` |
+| `pusher.enabled` | `true` | Deploy in-cluster Soketi and auto-wire `PUSHER_HOST`, `PUSHER_PORT`, and `PUSHER_SCHEME` |
 | `pusher.appId` | `""` | Pusher app ID. Generated when `pusher.enabled=true`, omitted, and `credentials.autoGenerate=true` |
 | `pusher.appKey` | `""` | Pusher app key. Generated when `pusher.enabled=true`, omitted, and `credentials.autoGenerate=true` |
 | `pusher.appSecret` | `""` | Pusher app secret. Generated when `pusher.enabled=true`, omitted, and `credentials.autoGenerate=true` |
@@ -674,7 +687,7 @@ For an external Pusher-compatible server, leave `pusher.enabled=false` and set
 | `soketi.image.repository` | `quay.io/soketi/soketi` | Native Soketi image repository |
 | `soketi.image.tag` | `1.6-16-debian` | Native Soketi image tag |
 | `soketi.image.pullPolicy` | `IfNotPresent` | Native Soketi image pull policy |
-| `soketi.mode` | `full` | `SOKETI_MODE` |
+| `soketi.mode` | `full` | `SOKETI_MODE`; app credentials are rendered into an array-driver config file from `pusher.*` |
 | `soketi.service.type` | `ClusterIP` | Soketi Service type |
 | `soketi.service.port` | `6001` | Soketi Service port |
 | `soketi.resources` | CPU `250m`, memory `256Mi` limits | Native Soketi resource requests/limits |
@@ -752,6 +765,14 @@ s3:
     existingSecret:
       name: patchworks-secrets
       rootPasswordKey: minio-password
+
+pusher:
+  existingSecret:
+    name: patchworks-secrets
+    appIdKey: pusher-app-id
+    appKeyKey: pusher-app-key
+    appSecretKey: pusher-app-secret
+    appClusterKey: pusher-app-cluster
 ```
 
 ---
