@@ -76,10 +76,11 @@ spec:
               };
               fs.mkdirSync('/etc/soketi/config', { recursive: true });
               fs.writeFileSync('/etc/soketi/config/config.json', JSON.stringify({
-                appManager: {
-                  driver: 'array',
-                  array: { apps: [app] },
-                },
+                // Soketi applies top-level config keys as replacements. Use its
+                // dotted option paths so appManager defaults such as cache are
+                // preserved instead of replacing the entire object.
+                'appManager.driver': 'array',
+                'appManager.array.apps': [app],
               }, null, 2));
           env:
             - name: PUSHER_APP_ID
