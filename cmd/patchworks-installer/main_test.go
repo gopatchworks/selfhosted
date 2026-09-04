@@ -184,6 +184,11 @@ func TestEmbeddedInfraChartKeepsKubefaasRBACAndTLSAligned(t *testing.T) {
 			"resources: [pods/resize]",
 			"apiGroups: [autoscaling.k8s.io]",
 			"resources: [verticalpodautoscalers]",
+			"app.kubefaas.io/component: controller",
+			"app.kubefaas.io/instance: kubefaas",
+		},
+		"patchworks-infra/templates/kubefaas-functions.yaml": {
+			"app.kubefaas.io/component: controller",
 		},
 		"patchworks-infra/templates/kubefaas-builder.yaml": {
 			`$cmCADuration := $kf.builder.tls.certManager.caDuration | default "87600h"`,

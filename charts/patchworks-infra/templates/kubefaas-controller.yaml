@@ -152,6 +152,10 @@ spec:
     metadata:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-controller" "Release" .Release) | nindent 8 }}
+        # KubeFaaS uses these labels to discover ready controller replicas for
+        # scheduled Function reconciliation and autoscaling shard assignment.
+        app.kubefaas.io/component: controller
+        app.kubefaas.io/instance: kubefaas
       annotations:
         checksum/config: {{ $kf | toJson | sha256sum }}
     spec:

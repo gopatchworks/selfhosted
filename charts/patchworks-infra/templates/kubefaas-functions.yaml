@@ -79,7 +79,7 @@ spec:
               kubernetes.io/metadata.name: {{ $ns }}
         - podSelector:
             matchLabels:
-              app.kubefaas.io/component: kubefaas-controller
+              app.kubefaas.io/component: controller
   egress:
     - to:
         - ipBlock:
