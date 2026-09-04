@@ -96,6 +96,8 @@ data:
 {{- if eq $tlsMode "certManager" }}
 {{- $cmIssuerName := $kf.builder.tls.certManager.issuerName }}
 {{- $cmIssuerKind := $kf.builder.tls.certManager.issuerKind | default "Issuer" }}
+{{- $cmCADuration := $kf.builder.tls.certManager.caDuration | default "87600h" }}
+{{- $cmCARenewBefore := $kf.builder.tls.certManager.caRenewBefore | default "8760h" }}
 {{- $cmDuration := $kf.builder.tls.certManager.duration | default "8760h" }}
 {{- $cmRenewBefore := $kf.builder.tls.certManager.renewBefore | default "720h" }}
 {{- if not $cmIssuerName }}
@@ -126,6 +128,8 @@ spec:
   isCA: true
   commonName: kubefaas-docker-ca
   secretName: {{ $fullname }}-kubefaas-docker-ca
+  duration: {{ $cmCADuration }}
+  renewBefore: {{ $cmCARenewBefore }}
   privateKey:
     algorithm: ECDSA
     size: 256

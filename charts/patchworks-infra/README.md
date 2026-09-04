@@ -729,6 +729,10 @@ When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate`
 | `kubefaas.namespace` | `kubefaas` | Namespace for KubeFaaS components (separate from app namespace) |
 | `kubefaas.functions.namespaceCount` | `5` | Number of function execution namespaces created |
 | `kubefaas.builder.tls.mode` | `helm` | TLS mode: `helm`, `certManager`, or `existingSecret` |
+| `kubefaas.builder.tls.certManager.caDuration` | `87600h` | Lifetime of the chart-managed cert-manager CA (10 years) |
+| `kubefaas.builder.tls.certManager.caRenewBefore` | `8760h` | Renew the chart-managed CA one year before expiry |
+| `kubefaas.builder.tls.certManager.duration` | `8760h` | Lifetime of the dind server and client certificates |
+| `kubefaas.builder.tls.certManager.renewBefore` | `720h` | Renew dind certificates 30 days before expiry |
 | `kubefaas.auth.enabled` | `true` | Enable KubeFaaS basic auth env wiring |
 | `kubefaas.auth.username` | `""` | Auth username shared by controller and builder; generated when omitted and eligible |
 | `kubefaas.auth.password` | `""` | Auth password; generated when omitted and eligible |
@@ -736,6 +740,11 @@ When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate`
 | `kubefaas.auth.existingSecret.usernameKey` | `username` | Key for the username |
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `kubefaas.registry.name` | `""` | Container registry for built function images |
+
+When upgrading a cluster where the cert-manager CA has already rotated, force-renew the
+`<release>-kubefaas-docker-server` and `<release>-kubefaas-docker-client` Certificates once
+after applying this chart, then restart the builder Deployment. Cert-manager does not
+automatically replace an unexpired leaf certificate solely because its issuing CA changed.
 
 ---
 

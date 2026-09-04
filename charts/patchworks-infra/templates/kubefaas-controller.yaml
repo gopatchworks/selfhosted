@@ -67,24 +67,34 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: kubefaas-controller
 rules:
+  - apiGroups: [kubefaas.patchworks.io]
+    resources: [functions, profiles]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [kubefaas.patchworks.io]
+    resources: [functions/status, profiles/status]
+    verbs: [get, update, patch]
+  - apiGroups: [kubefaas.patchworks.io]
+    resources: [functions/finalizers, profiles/finalizers]
+    verbs: [update]
   - apiGroups: [""]
-    resources: [pods, pods/log, endpoints, events, configmaps]
-    verbs: [get, list, watch]
+    resources: [namespaces, pods, pods/log, services, endpoints, events, configmaps]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [pods/resize]
+    verbs: [update, patch]
   - apiGroups: [discovery, discovery.k8s.io]
     resources: [endpointslices]
     verbs: [get, list, watch]
   - apiGroups: [apps]
     resources: [deployments]
     verbs: [get, list, watch, create, update, patch, delete]
-  - apiGroups: [""]
-    resources: [services, configmaps]
-    verbs: [get, list, watch, create, update, patch, delete]
+  # Retain HPA access for compatibility with pre-CRD KubeFaaS releases.
   - apiGroups: [autoscaling]
     resources: [horizontalpodautoscalers]
     verbs: [get, list, watch, create, update, patch, delete]
-  - apiGroups: [""]
-    resources: [namespaces]
-    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: [autoscaling.k8s.io]
+    resources: [verticalpodautoscalers]
+    verbs: [get, list, watch, create, update, patch, delete]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding

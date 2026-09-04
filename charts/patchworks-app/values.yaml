@@ -787,6 +787,8 @@ kubefaas:
       certManager:
         issuerName: ""
         issuerKind: Issuer
+        caDuration: 87600h
+        caRenewBefore: 8760h
         duration: 8760h
         renewBefore: 720h
       # mode: existingSecret — names of pre-existing Secrets with ca.crt, tls.crt, tls.key.

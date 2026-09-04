@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	embeddedcharts "github.com/patchworks/selfhosted/charts"
 	yaml "go.yaml.in/yaml/v3"
 	helmchart "helm.sh/helm/v4/pkg/chart"
 	helmloader "helm.sh/helm/v4/pkg/chart/loader"
@@ -169,6 +170,46 @@ func TestEmbeddedPatchworksChartsLoad(t *testing.T) {
 		}
 		if accessor.Name() != chartName {
 			t.Fatalf("embedded chart %q metadata name = %q", chartName, accessor.Name())
+		}
+	}
+}
+
+func TestEmbeddedInfraChartKeepsKubefaasRBACAndTLSAligned(t *testing.T) {
+	checks := map[string][]string{
+		"patchworks-infra/templates/kubefaas-controller.yaml": {
+			"apiGroups: [kubefaas.patchworks.io]",
+			"resources: [functions, profiles]",
+			"resources: [functions/status, profiles/status]",
+			"resources: [functions/finalizers, profiles/finalizers]",
+			"resources: [pods/resize]",
+			"apiGroups: [autoscaling.k8s.io]",
+			"resources: [verticalpodautoscalers]",
+		},
+		"patchworks-infra/templates/kubefaas-builder.yaml": {
+			`$cmCADuration := $kf.builder.tls.certManager.caDuration | default "87600h"`,
+			`$cmCARenewBefore := $kf.builder.tls.certManager.caRenewBefore | default "8760h"`,
+			"duration: {{ $cmCADuration }}",
+			"renewBefore: {{ $cmCARenewBefore }}",
+		},
+		"patchworks-infra/values.yaml": {
+			"caDuration: 87600h",
+			"caRenewBefore: 8760h",
+		},
+		"patchworks-app/values.yaml": {
+			"caDuration: 87600h",
+			"caRenewBefore: 8760h",
+		},
+	}
+
+	for path, expected := range checks {
+		data, err := embeddedcharts.FS.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read embedded chart file %q: %v", path, err)
+		}
+		for _, value := range expected {
+			if !strings.Contains(string(data), value) {
+				t.Errorf("embedded chart file %q missing %q", path, value)
+			}
 		}
 	}
 }
