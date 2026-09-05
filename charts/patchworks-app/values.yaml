@@ -7,7 +7,7 @@ image:
   # Default image name for PHP app components (web, workers, migrations).
   # Monocore, fabric, and dashboard override this with their own repository.
   repository: core
-  tag: v0.1.26
+  tag: v0.1.27
   pullPolicy: IfNotPresent
   # List of image pull secret names to attach to all app pods.
   pullSecrets: []
@@ -206,7 +206,7 @@ fabric:
   image:
     repository: fabric
     registry: quay.io/patchworks
-    tag: v0.1.26
+    tag: v0.1.27
     pullPolicy: ""
   # Fabric migrations run before Core migrations as Helm hooks.
   migrations:
@@ -319,7 +319,7 @@ dashboard:
   image:
     repository: dashboard
     registry: quay.io/patchworks
-    tag: v0.1.26
+    tag: v0.1.27
     pullPolicy: ""
   replicaCount: 1
   service:
@@ -624,7 +624,7 @@ workers:
     image:
       repository: monocore
       registry: quay.io/patchworks
-      tag: v0.1.26
+      tag: v0.1.27
       pullPolicy: ""
     # Queue consumed by the hub monocore deployment. This matches monocore's
     # built-in topology default.
@@ -754,7 +754,7 @@ kubefaas:
     image:
       repository: kubefaas-controller
       registry: quay.io/patchworks    # overrides global image.registry when set
-      tag: v0.1.26         # overrides global image.tag when set
+      tag: v0.1.27         # overrides global image.tag when set
       pullPolicy: ""
     replicaCount: 3
     extraEnv: []
@@ -767,7 +767,7 @@ kubefaas:
     image:
       repository: kubefaas-builder
       registry: quay.io/patchworks
-      tag: v0.1.26
+      tag: v0.1.27
       pullPolicy: ""
     replicaCount: 1
     extraEnv: []
@@ -1168,7 +1168,7 @@ s3Manager:
   image:
     repository: s3manager
     registry: quay.io/patchworks
-    tag: v0.1.26
+    tag: v0.1.27
     pullPolicy: ""
   replicaCount: 1
   service:
