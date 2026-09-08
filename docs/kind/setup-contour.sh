@@ -21,7 +21,8 @@ helm upgrade --install contour contour/contour \
   --namespace "${NAMESPACE}" \
   --create-namespace \
   --set 'commonLabels.selfhosted\.patchworks\.io/installed-by=patchworks-installer' \
-  --set envoy.hostPorts.enabled=true \
+  --set envoy.useHostPort.http=true \
+  --set envoy.useHostPort.https=true \
   --set envoy.hostPorts.http=80 \
   --set envoy.hostPorts.https=443 \
   --set envoy.service.type=ClusterIP \

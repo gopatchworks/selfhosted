@@ -20,17 +20,32 @@ application. The installer does not shell out to `kubectl`. The interface uses
 Charm's `huh` package for confirmations, text inputs, and select lists, with a
 small Bubble Tea screen for cluster inspection progress.
 
-## Run
+## Install and run
+
+Install the released binary on macOS with Homebrew:
+
+```bash
+brew install --cask gopatchworks/tap/patchworks-installer
+patchworks-installer
+```
+
+The binary bundles both charts and uses the Helm SDK and Kubernetes API, so
+no repository checkout, Go installation, Helm CLI, or kubectl is required to
+run it. See the [README quick start](../README.md#getting-started) for local
+kind cluster and ingress setup, or download another platform's binary from
+[GitHub Releases](https://github.com/gopatchworks/selfhosted/releases).
+
+To run from a source checkout with Go installed:
 
 ```bash
 go run ./cmd/patchworks-installer
 ```
 
-Use `--save-config` to write the selected prompt values back to the ignored
+Use `--save-config` to write the selected prompt values back to the local
 `config.yaml` file:
 
 ```bash
-go run ./cmd/patchworks-installer --save-config
+patchworks-installer --save-config
 ```
 
 The released binary includes the Patchworks Helm charts. To inspect exactly
@@ -55,6 +70,7 @@ The TUI asks for:
 - Namespace
 - Public domain and URL scheme
 - Worker mode: standalone, microservice, or mono
+- Bundled infrastructure or external services, including their connection and credential settings
 - License key
 - Ingress provider and class
 - Dashboard routing mode
@@ -70,7 +86,8 @@ not prompted for interactively. Set `application.license.serverUrl` in
 
 When complete, it writes the selected values to disk and prints the Helm
 commands to install the infra and app charts with that shared values file. It
-shows an install summary before applying anything. If installation is enabled,
+shows an install summary before applying the Patchworks releases. Contour, if
+requested, is installed earlier during cluster setup. If installation is enabled,
 it can create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in
 the selected namespace, runs the install through the embedded Helm Go SDK and
 embedded Patchworks charts, then checks workload status through the Kubernetes
@@ -93,7 +110,12 @@ syncs do not seed the installation again.
 
 ## Install From Generated Values
 
+For a manual install, install the Helm CLI and unpack the charts into the
+paths used by the generated commands. A repository checkout is not needed:
+
 ```bash
+patchworks-installer unpack-charts --output ./charts
+
 helm dependency update charts/patchworks-infra
 helm dependency update charts/patchworks-app
 
@@ -115,6 +137,13 @@ Review the generated file before applying it in production. The installer is
 intended to create a sensible starting point, not to replace environment-specific
 review.
 
+Use the namespace and values path you selected in the installer, and select the
+same Kubernetes context for these Helm commands. If you chose external
+infrastructure, follow the installer-generated commands, which skip the infra
+release. If you selected **Only write values**, create any requested Quay pull
+Secret separately before the manual install; it is created automatically only
+when the installer performs the installation.
+
 After writing values, the installer prints the dashboard URL and initial admin
 email address. User-provided passwords are not displayed. If the admin password
 is left blank, the chart generates it into the `patchworks-tenant-admin` Secret
@@ -124,7 +153,7 @@ after a successful install when it can read the Secret.
 ## Uninstall
 
 ```bash
-go run ./cmd/patchworks-installer uninstall
+patchworks-installer uninstall
 ```
 
 The uninstall command confirms the kubeconfig/context, asks for the Patchworks

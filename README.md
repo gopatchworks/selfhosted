@@ -1,269 +1,189 @@
 Patchworks Self-Hosted
 ===
 
-Self-hosted deployment of Patchworks Core via Helm.
+Deploy Patchworks Core on Kubernetes with the interactive Patchworks installer.
+The installer includes the infrastructure and application Helm charts, guides
+configuration, and installs them in the right order. **You do not need to clone
+this repository, install Go, or install the Helm CLI to run the installer.**
 
-The deployment is available as a legacy all-in-one chart and as two split
-charts:
-
-- `charts/patchworks-infra`: baseline infrastructure, including MySQL, Redis,
-  RabbitMQ, Elasticsearch, S3/MinIO, Soketi, KubeFaaS, and generated infra
-  credentials.
-- `charts/patchworks-app`: Patchworks application resources, migrations,
-  seeders, workers, S3 Manager, and ingress.
-
-For GitOps/Argo installs, use the split charts with one shared values file.
-
----
-
-## Overview
-
-![Chart Overview](docs/chart-overview.svg)
-
----
-
-## Worker modes
-
-![Workers Diagram](docs/workers-diagram.svg)
-
----
+For manual Helm installation, use the [advanced install guide](docs/advanced-install.md).
+For an existing-cluster Helm or GitOps deployment, see the
+[existing-cluster guide](docs/getting-started.md).
 
 ## Getting started
 
-For an existing Kubernetes cluster, see the standalone
-[self-hosted getting started guide](docs/getting-started.md).
-
-Stand up a complete local environment with [kind](https://kind.sigs.k8s.io) (Kubernetes in Docker). Everything runs in-cluster — MySQL, Redis, RabbitMQ, Elasticsearch, MinIO, S3 Manager, and the Patchworks application itself.
-
-Total time: ~10 minutes.
-
 ### Prerequisites
 
-| Tool | Install |
-|------|---------|
-| [Docker](https://docs.docker.com/get-docker/) | Desktop or Engine 20+ |
-| [kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation) | `brew install kind` |
-| [kubectl](https://kubernetes.io/docs/tasks/tools/) | `brew install kubectl` |
-| [Helm](https://helm.sh/docs/intro/install/) | `brew install helm` |
+| Requirement | Details |
+|---|---|
+| Kubernetes cluster | A working kubeconfig and permissions to install releases, Secrets, and any required cluster resources. Follow step 2 for a local kind cluster. |
+| Persistent storage | A default StorageClass when using bundled infrastructure. kind supplies one. |
+| Patchworks access | A license key and credentials that can pull the Patchworks images from Quay, or an existing image pull Secret in the target namespace. |
+| Public access | An ingress controller, DNS for the chosen domain and service subdomains, and certificates when using HTTPS. The local example below uses HTTP. |
+| [Homebrew](https://brew.sh) | Used below to install the installer on macOS. |
+| [Docker](https://docs.docker.com/get-docker/) and [kind](https://kind.sigs.k8s.io/docs/user/quick-start/) | Local installs only: start Docker, then `brew install kind`. |
+| [Helm](https://helm.sh/docs/intro/install/) | Local Contour setup or manual Helm installs only: `brew install helm`. |
+| [kubectl](https://kubernetes.io/docs/tasks/tools/) | Optional for inspecting workloads: `brew install kubectl`. |
 
-### 1. Create the cluster
+### 1. Install the installer
 
 ```bash
-kind create cluster --config docs/kind/cluster.yaml
+brew install --cask gopatchworks/tap/patchworks-installer
 ```
 
-The cluster config maps host ports 80 and 443 to the node (used if you later add an ingress controller) and labels the node `ingress-ready`.
+Binaries for other platforms are available from
+[GitHub Releases](https://github.com/gopatchworks/selfhosted/releases).
 
-Confirm it's up:
+### 2. Prepare a Kubernetes cluster
+
+**Existing cluster:** use its kubeconfig and continue to step 3. The installer
+confirms the detected context before connecting, inspects storage and ingress,
+and offers to install Contour if no ingress controller is detected. Configure
+DNS and, for HTTPS, TLS certificates for your chosen hosts.
+
+**Local kind cluster:** with Docker running, install the local setup tools:
 
 ```bash
-kubectl cluster-info --context kind-patchworks
-kubectl get nodes
+brew install kind helm
 ```
 
-### 2. Install Helm chart dependencies
+Create the cluster with this single command. The configuration is passed on
+stdin, so no checkout or downloaded configuration file is needed. It matches
+[docs/kind/cluster.yaml](docs/kind/cluster.yaml), reserving host ports 80 and 443
+for ingress; those ports must be available.
 
 ```bash
-helm dependency update charts/patchworks-infra
+kind create cluster --wait 120s --config - <<'EOF'
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: patchworks
+nodes:
+  - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
+    extraPortMappings:
+      - containerPort: 80
+        hostPort: 80
+        protocol: TCP
+      - containerPort: 443
+        hostPort: 443
+        protocol: TCP
+EOF
 ```
 
-Downloads optional chart dependencies, including the upstream Soketi sub-chart
-used only when `soketi.subchart.enabled=true`. Only needed once (or after
-updating `Chart.yaml`).
-
-### 3. Install the infrastructure chart
-
-The infra chart creates the baseline services. By default, empty in-cluster
-credentials are generated once by a pre-install hook and stored in Secrets such
-as `patchworks-mysql-auth`, `patchworks-rabbitmq-auth`,
-`patchworks-elasticsearch-auth`, and `patchworks-s3-auth`.
+Install Contour with host ports so ingress is reachable from your laptop.
+Contour's [default chart configuration](https://github.com/projectcontour/helm-charts/blob/main/charts/contour/values.yaml)
+uses a LoadBalancer and disables host ports; the installer uses those defaults.
+This local setup supplies the kind-specific settings before running the installer:
 
 ```bash
-helm install patchworks-infra ./charts/patchworks-infra \
-  -f docs/kind/values.yaml \
+helm upgrade --install contour contour \
+  --repo https://projectcontour.github.io/helm-charts/ \
+  --kube-context kind-patchworks \
+  --namespace projectcontour \
+  --create-namespace \
+  --set 'commonLabels.selfhosted\.patchworks\.io/installed-by=patchworks-installer' \
+  --set envoy.useHostPort.http=true \
+  --set envoy.useHostPort.https=true \
+  --set envoy.hostPorts.http=80 \
+  --set envoy.hostPorts.https=443 \
+  --set envoy.service.type=ClusterIP \
   --timeout 10m \
   --wait
 ```
 
-### 4. Install the application chart
+### 3. Run the installer
+
+Run from a directory where you want to keep the generated configuration:
 
 ```bash
-helm install patchworks-app ./charts/patchworks-app \
-  --set app.url="http://localhost:8080" \
-  -f docs/kind/values.yaml \
-  --timeout 10m \
-  --wait
+patchworks-installer --save-config
 ```
 
-Use the same values file for both charts. The app chart resolves empty
-in-cluster credentials to the Secrets generated by the infra chart. Migrations
-run as `pre-install,pre-upgrade` hooks; seeders run as `pre-install` hooks.
-Fabric seeders run before Core migrations, and Core seeders run after Core
-migrations. If `app.key` is empty, the app chart generates a stable APP_KEY
-Secret automatically.
+For the local cluster, confirm that the selected context is `kind-patchworks`.
+If another context is detected, choose **No** and select the correct one.
 
-### 5. Watch the rollout
+The installer walks through the namespace, domain, worker mode, bundled or
+external infrastructure, image pull credentials, ingress, license, and initial
+company/admin. For a local install, use:
+
+| Prompt | Local value |
+|---|---|
+| Namespace | `patchworks` |
+| Base domain | `patchworks.local` |
+| Public URL scheme | `http` |
+| Enable dashboard / ingress | Yes |
+| Dashboard routing mode | `host` |
+| Worker mode | `standalone` |
+| Infrastructure | Install bundled infrastructure |
+| Ingress provider / class | `contour` |
+| Cookie/session domain | `.patchworks.local` |
+| Image pull secret | Create from your Quay credentials, or select an existing Secret |
+| Create initial company/admin | Yes; enter your company and admin details |
+
+Provide your license key. Leave the admin password blank to generate one, or
+enter your own. Review the install summary and choose **Install**.
+
+The installer writes `patchworks.values.yaml` by default, creates the Quay pull
+Secret if requested, installs infrastructure followed by the app, and displays
+migration, seeding, and rollout progress. `--save-config` also saves prompt
+choices to `config.yaml` for future runs. These files can contain credentials;
+keep them private.
+
+Choose **Only write values** to prepare configuration for a later manual install.
+See the [installer reference](docs/installer.md) for unpacking the bundled charts
+and using the generated values without a checkout.
+
+### 4. Open Patchworks
+
+For the local example, add the generated hostnames to `/etc/hosts`:
 
 ```bash
-kubectl get pods --watch
+echo "127.0.0.1 patchworks.local gateway.patchworks.local start.patchworks.local fabric.patchworks.local webhooks.patchworks.local callbacks.patchworks.local wss.patchworks.local" | sudo tee -a /etc/hosts
 ```
 
-Startup takes **3–7 minutes** on a typical laptop — Elasticsearch is usually the slowest. When complete:
+Open [http://patchworks.local](http://patchworks.local). On an existing cluster,
+open the dashboard URL printed by the installer after DNS and TLS are ready.
+Sign in with the admin email you provided. After a successful install, the
+installer displays the generated admin password when it can read the Secret;
+a password you supplied is not printed.
 
-```
-NAME                              READY   STATUS      RESTARTS
-patchworks-elasticsearch-xxxx     1/1     Running     0
-patchworks-fabric-seeds-xxxx      0/1     Completed   0
-patchworks-core-migrations-xxxx   0/1     Completed   0
-patchworks-core-seeds-xxxx        0/1     Completed   0
-patchworks-mysql-xxxx             1/1     Running     0
-patchworks-rabbitmq-xxxx          1/1     Running     0
-patchworks-redis-xxxx             1/1     Running     0
-patchworks-s3-xxxx                1/1     Running     0
-patchworks-s3-manager-xxxx        1/1     Running     0
-patchworks-gateway-xxxx           1/1     Running     0
-patchworks-start-xxxx             1/1     Running     0
-patchworks-workers-xxxx           1/1     Running     0
-patchworks-processor-start-xxxx   1/1     Running     0
-patchworks-processor-gateway-xxxx 1/1     Running     0
-patchworks-processor-short-processor-xxxx   1/1     Running     0
-patchworks-processor-medium-processor-xxxx  1/1     Running     0
-patchworks-processor-long-processor-xxxx    1/1     Running     0
-```
-
-### 6. Access the application
+## Uninstall
 
 ```bash
-kubectl port-forward svc/patchworks-gateway 8080:80
+patchworks-installer uninstall
 ```
 
-Open [http://localhost:8080](http://localhost:8080).
+The uninstaller confirms the cluster and namespace, shows a deletion summary,
+and removes the app release before infrastructure. It asks separately about
+removing Contour.
 
----
-
-## Useful commands
-
-```bash
-# Tail application logs
-kubectl logs -l app.kubernetes.io/component=gateway -f
-kubectl logs -l app.kubernetes.io/component=workers -f
-
-# Run an artisan command
-kubectl exec -it deploy/patchworks-gateway -- php artisan <command>
-
-# Open a MySQL shell
-kubectl exec -it deploy/patchworks-mysql -- mysql -upatchworks -p core
-
-# MinIO console. The password is generated in patchworks-s3-auth by default.
-kubectl port-forward svc/patchworks-s3 9001:9001
-# Open http://localhost:9001
-
-# Upgrade after a values change
-helm upgrade patchworks-infra ./charts/patchworks-infra \
-  -f docs/kind/values.yaml \
-  --timeout 10m \
-  --wait
-
-helm upgrade patchworks-app ./charts/patchworks-app \
-  --set app.url="http://localhost:8080" \
-  -f docs/kind/values.yaml \
-  --timeout 10m \
-  --wait
-```
-
----
-
-## Add an ingress controller (optional)
-
-If you prefer hostnames to `port-forward`, install Contour and enable ingress:
-
-```bash
-./docs/kind/setup-contour.sh
-```
-
-Add the hostnames to `/etc/hosts`:
-
-```bash
-echo "127.0.0.1 patchworks.local core.local start.local webhooks.local callbacks.local fabric.local" | sudo tee -a /etc/hosts
-```
-
-Then upgrade the release with ingress enabled:
-
-```bash
-helm upgrade patchworks-app ./charts/patchworks-app \
-  -f docs/kind/values.yaml \
-  --set ingress.enabled=true \
-  --set ingress.className=contour \
-  --set ingress.hosts.gateway=core.local \
-  --set ingress.hosts.start=start.local \
-  --set ingress.hosts.webhook=webhooks.local \
-  --set ingress.hosts.callback=callbacks.local \
-  --set ingress.hosts.fabric=fabric.local \
-  --set ingress.hosts.dashboard=patchworks.local \
-  --namespace patchworks \
-  --timeout 5m \
-  --wait
-```
-
-The dashboard is then available at [http://patchworks.local](http://patchworks.local).
-
----
-
-## Tear down
+To delete the entire local test cluster and its data:
 
 ```bash
 kind delete cluster --name patchworks
 ```
 
-Removes all containers and volumes. Nothing persists to the host.
+## Overview
 
----
+![Chart Overview](docs/chart-overview.svg)
 
-## Troubleshooting
+## Worker modes
 
-**Pods stuck in `Pending`**
-
-Usually resource pressure. Docker Desktop on macOS defaults to 2 CPUs and 2 GB RAM — increase to at least 4 CPUs and 6 GB in Docker Desktop → Settings → Resources.
-
-```bash
-kubectl describe node patchworks-control-plane
-kubectl describe pod <stuck-pod>
-```
-
-**Elasticsearch stuck in `Init:0/1`**
-
-The init container sets `vm.max_map_count` on the node via a privileged sysctl. If it fails, set it directly:
-
-```bash
-docker exec patchworks-control-plane sysctl -w vm.max_map_count=262144
-kubectl delete pod -l app.kubernetes.io/component=elasticsearch
-```
-
-**Migrations Job failed**
-
-The Job waits for all infrastructure before running. Check which dependency isn't ready:
-
-```bash
-kubectl logs job/patchworks-migrations -c wait-for-deps
-kubectl logs job/patchworks-migrations
-```
-
-A `helm upgrade` triggers a fresh Job run.
-
----
-
-## Configuration
-
-Full configuration references are in the [infra chart README](charts/patchworks-infra/README.md), the [app chart README](charts/patchworks-app/README.md), and the legacy [all-in-one chart README](charts/patchworks/README.md).
-
----
+![Workers Diagram](docs/workers-diagram.svg)
 
 ## Documentation
 
-| | |
+| Guide | Contents |
 |---|---|
-| [Infra chart configuration reference](charts/patchworks-infra/README.md) | Infrastructure values and generated credentials |
-| [App chart configuration reference](charts/patchworks-app/README.md) | Application values, migrations, seeders, workers, and ingress |
-| [Legacy chart configuration reference](charts/patchworks/README.md) | All-in-one chart values |
-| [Chart overview diagram](docs/chart-overview.svg) | Every managed component and how they connect |
+| [Installer reference](docs/installer.md) | Installer options, generated values, embedded charts, and uninstall |
+| [Advanced install](docs/advanced-install.md) | Manual local Helm installation, useful commands, ingress, and troubleshooting |
+| [Existing-cluster / GitOps guide](docs/getting-started.md) | Shared values, external prerequisites, upgrades, and Argo CD |
+| [Infra chart configuration](charts/patchworks-infra/README.md) | Infrastructure values and generated credentials |
+| [App chart configuration](charts/patchworks-app/README.md) | Application values, migrations, seeders, workers, and ingress |
+| [Chart overview diagram](docs/chart-overview.svg) | Managed components and their connections |
 | [Worker modes diagram](docs/workers-diagram.svg) | Standalone, microservice, and mono worker types |

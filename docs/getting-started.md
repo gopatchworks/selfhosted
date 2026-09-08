@@ -9,6 +9,9 @@ using the split Helm charts:
 
 Use one shared values file for both charts.
 
+For the interactive installer, which bundles the charts and requires no
+checkout, see the [README quick start](../README.md#getting-started).
+
 ## Prerequisites
 
 Before installing the charts, make sure the cluster has:
