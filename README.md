@@ -92,9 +92,13 @@ helm upgrade --install contour contour \
   --set envoy.hostPorts.http=80 \
   --set envoy.hostPorts.https=443 \
   --set envoy.service.type=ClusterIP \
+  --set-string 'envoy.service.externalTrafficPolicy=' \
   --timeout 10m \
   --wait
 ```
+
+The empty `externalTrafficPolicy` override removes Contour's default `Local`
+policy, which Kubernetes does not allow on a ClusterIP Service.
 
 ### 3. Run the installer
 
@@ -128,6 +132,14 @@ company/admin. For a local install, use:
 Provide your license key. Leave the admin password blank to generate one, or
 enter your own. Review the install summary and choose **Install**.
 
+New installations download both charts from the latest stable release-update
+commit in this public repository. No GitHub account or login is required.
+The summary shows the resolved version, and an adjacent `.charts.lock.yaml` file
+pins it for repeat runs. Use `--chart-version latest` to refresh the selection,
+`--chart-version X.Y.Z` to select a release, or `--chart-source bundled` to use
+the charts included in the binary without downloading a snapshot.
+
+
 The installer writes `patchworks.values.yaml` by default, creates the Quay pull
 Secret if requested, installs infrastructure followed by the app, and displays
 migration, seeding, and rollout progress. `--save-config` also saves prompt
@@ -135,7 +147,7 @@ choices to `config.yaml` for future runs. These files can contain credentials;
 keep them private.
 
 Choose **Only write values** to prepare configuration for a later manual install.
-See the [installer reference](docs/installer.md) for unpacking the bundled charts
+See the [installer reference](docs/installer.md) for chart selection, unpacking charts,
 and using the generated values without a checkout.
 
 ### 4. Open Patchworks
@@ -180,7 +192,7 @@ kind delete cluster --name patchworks
 
 | Guide | Contents |
 |---|---|
-| [Installer reference](docs/installer.md) | Installer options, generated values, embedded charts, and uninstall |
+| [Installer reference](docs/installer.md) | Installer options, generated values, chart versions, and uninstall |
 | [Advanced install](docs/advanced-install.md) | Manual local Helm installation, useful commands, ingress, and troubleshooting |
 | [Existing-cluster / GitOps guide](docs/getting-started.md) | Shared values, external prerequisites, upgrades, and Argo CD |
 | [Infra chart configuration](charts/patchworks-infra/README.md) | Infrastructure values and generated credentials |

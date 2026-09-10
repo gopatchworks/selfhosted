@@ -74,6 +74,8 @@ type installConfig struct {
 }
 
 type localConfig struct {
+	ChartSource       string
+	ChartVersion      string
 	Kubeconfig        string `yaml:"kubeconfig"`
 	Context           string `yaml:"context"`
 	Namespace         string `yaml:"namespace"`
@@ -313,7 +315,9 @@ type localConfigOutput struct {
 }
 
 type localConfigInstaller struct {
-	Enabled *bool `yaml:"enabled,omitempty"`
+	ChartSource  string `yaml:"chartSource,omitempty"`
+	ChartVersion string `yaml:"chartVersion,omitempty"`
+	Enabled      *bool  `yaml:"enabled,omitempty"`
 }
 
 func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
@@ -323,6 +327,8 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	}
 
 	*config = localConfig{
+		ChartSource:       file.Installer.ChartSource,
+		ChartVersion:      file.Installer.ChartVersion,
 		Kubeconfig:        file.Kubeconfig,
 		Context:           file.Context,
 		Namespace:         file.Namespace,
@@ -455,7 +461,9 @@ func (config localConfig) MarshalYAML() (any, error) {
 			ValuesFile: config.Output,
 		},
 		Installer: localConfigInstaller{
-			Enabled: config.Install,
+			ChartSource:  config.ChartSource,
+			ChartVersion: config.ChartVersion,
+			Enabled:      config.Install,
 		},
 	}, nil
 }
@@ -473,6 +481,9 @@ func overrideBool(target **bool, value *bool) {
 }
 
 type cliOptions struct {
+	ChartLockPath   string
+	ChartSource     string
+	ChartVersion    string
 	Command         string
 	ConfigPath      string
 	SaveConfig      bool
@@ -567,7 +578,7 @@ func main() {
 		return
 	}
 	if opts.Command == "unpack-charts" {
-		if err := unpackEmbeddedCharts(opts.ChartsOutputDir); err != nil {
+		if err := runUnpackCharts(opts); err != nil {
 			fmt.Fprintf(os.Stderr, "unpack charts failed: %v\n", err)
 			os.Exit(1)
 		}
@@ -593,6 +604,37 @@ func parseCLI(args []string) (cliOptions, error) {
 			opts.Command = "version"
 		case arg == "install" || arg == "uninstall" || arg == "unpack-charts":
 			opts.Command = arg
+		case arg == "--chart-version" || arg == "--chart-source":
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return cliOptions{}, fmt.Errorf("%s requires a value", arg)
+			}
+			if arg == "--chart-version" {
+				opts.ChartVersion = args[i]
+			} else {
+				opts.ChartSource = args[i]
+			}
+		case strings.HasPrefix(arg, "--chart-version="):
+			opts.ChartVersion = strings.TrimPrefix(arg, "--chart-version=")
+			if opts.ChartVersion == "" {
+				return cliOptions{}, fmt.Errorf("--chart-version requires a value")
+			}
+		case strings.HasPrefix(arg, "--chart-source="):
+			opts.ChartSource = strings.TrimPrefix(arg, "--chart-source=")
+			if opts.ChartSource == "" {
+				return cliOptions{}, fmt.Errorf("--chart-source requires a value")
+			}
+		case arg == "--chart-lock":
+			i++
+			if i >= len(args) || strings.TrimSpace(args[i]) == "" {
+				return cliOptions{}, fmt.Errorf("--chart-lock requires a path")
+			}
+			opts.ChartLockPath = args[i]
+		case strings.HasPrefix(arg, "--chart-lock="):
+			opts.ChartLockPath = strings.TrimPrefix(arg, "--chart-lock=")
+			if strings.TrimSpace(opts.ChartLockPath) == "" {
+				return cliOptions{}, fmt.Errorf("--chart-lock requires a path")
+			}
 		case arg == "--save-config":
 			opts.SaveConfig = true
 		case arg == "--output":
@@ -612,7 +654,7 @@ func parseCLI(args []string) (cliOptions, error) {
 		case strings.HasPrefix(arg, "--config="):
 			opts.ConfigPath = strings.TrimPrefix(arg, "--config=")
 		case arg == "-h" || arg == "--help":
-			return cliOptions{}, fmt.Errorf("usage: patchworks-installer [install|uninstall|unpack-charts|version] [--config config.yaml] [--save-config] [--output patchworks-charts]")
+			return cliOptions{}, fmt.Errorf("usage: patchworks-installer [install|uninstall|unpack-charts|version] [--config config.yaml] [--save-config] [--output patchworks-charts] [--chart-version latest|X.Y.Z] [--chart-source github|bundled] [--chart-lock path]")
 		default:
 			return cliOptions{}, fmt.Errorf("unknown argument %q. Use install, uninstall, unpack-charts, or version", arg)
 		}
@@ -622,6 +664,15 @@ func parseCLI(args []string) (cliOptions, error) {
 	}
 	if strings.TrimSpace(opts.ChartsOutputDir) == "" {
 		return cliOptions{}, fmt.Errorf("--output requires a non-empty path")
+	}
+	if opts.ChartLockPath != "" && (opts.Command != "unpack-charts" || opts.ChartSource != "" || opts.ChartVersion != "") {
+		return cliOptions{}, fmt.Errorf("--chart-lock is only supported by unpack-charts and cannot be combined with chart selectors")
+	}
+	if err := validateChartOptions(opts.ChartSource, opts.ChartVersion); err != nil {
+		return cliOptions{}, err
+	}
+	if (opts.ChartSource != "" || opts.ChartVersion != "") && opts.Command != "install" && opts.Command != "unpack-charts" {
+		return cliOptions{}, fmt.Errorf("chart options are only supported for install and unpack-charts")
 	}
 	return opts, nil
 }
@@ -692,15 +743,31 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 
+	lockPath := cleanPath(config.Output) + ".charts.lock.yaml"
+	previous, err := readChartLock(lockPath)
+	if err != nil {
+		return err
+	}
+	request, pinned, err := chooseChartRequest(opts, defaults, previous)
+	if err != nil {
+		return err
+	}
+	var charts *preparedCharts
+	if err := runProgress("Preparing Patchworks charts", "Resolving the chart release and validating both charts", func() error {
+		var prepareErr error
+		charts, prepareErr = prepareCharts(request, pinned)
+		return prepareErr
+	}); err != nil {
+		return err
+	}
+	config.Values["chartSource"] = charts.Lock.Source
+	config.Values["chartVersion"] = charts.Lock.Version
+
 	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
 	if err != nil {
 		return err
 	}
 	config.Values["installInfrastructure"] = fmt.Sprintf("%t", installInfrastructure)
-
-	if err := writeValues(config.Output, config.Values); err != nil {
-		return err
-	}
 
 	runInstall := boolDefault(defaults.Install, true)
 	if err := runFormWithQuitConfirm(huh.NewForm(
@@ -710,7 +777,7 @@ func runInstaller(opts cliOptions) error {
 				Description(installSummary(config)),
 			huh.NewConfirm().
 				Title("Install Patchworks now?").
-				Description("The installer will use embedded Helm charts to install or upgrade the infra and app releases, then check rollout status. Helm CLI is only needed for manual commands.").
+				Description("The installer will use the selected charts to install or upgrade the infra and app releases, then check rollout status. Helm CLI is only needed for manual commands.").
 				Affirmative("Install").
 				Negative("Only write values").
 				Value(&runInstall),
@@ -719,6 +786,15 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 
+	if err := writeValues(config.Output, config.Values); err != nil {
+		return err
+	}
+
+	if err := writeChartLock(lockPath, charts.Lock); err != nil {
+		return err
+	}
+	fmt.Printf("Chart release pinned in %s\n", lockPath)
+
 	if opts.SaveConfig {
 		if err := saveLocalConfig(opts.ConfigPath, localConfigFromInstallConfig(config, runInstall)); err != nil {
 			return err
@@ -726,7 +802,7 @@ func runInstaller(opts cliOptions) error {
 		fmt.Printf("%s %s\n", successStyle.Render("Values saved to"), opts.ConfigPath)
 	}
 
-	commands := helmCommandText(config.Values["namespace"], config.Output, installInfrastructure)
+	commands := selectedHelmCommandText(config.Values["namespace"], config.Output, installInfrastructure)
 	fmt.Println(valuesCreatedView(96, config.Output, commands))
 	fmt.Println(accessDetailsView(96, config.Values, "", false))
 
@@ -742,7 +818,7 @@ func runInstaller(opts cliOptions) error {
 		}
 	}
 
-	if err := installPatchworks(access, config.Values["namespace"], config.Output, installInfrastructure); err != nil {
+	if err := installPatchworks(access, config.Values["namespace"], config.Output, installInfrastructure, charts); err != nil {
 		return err
 	}
 
@@ -910,7 +986,7 @@ func installContour(access kubeAccess) error {
 	return nil
 }
 
-func installPatchworks(access kubeAccess, namespace, valuesFile string, installInfrastructure bool) error {
+func installPatchworks(access kubeAccess, namespace, valuesFile string, installInfrastructure bool, charts *preparedCharts) error {
 	fmt.Println(brandStyle.Render("Installing Patchworks"))
 
 	settings, cfg, err := helmRuntime(access, namespace)
@@ -918,34 +994,20 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string, installI
 		return err
 	}
 
+	values, err := mergeHelmValues(settings, valuesFile)
+	if err != nil {
+		return err
+	}
 	if installInfrastructure {
-		var infraChart helmchart.Charter
-		var infraValues map[string]any
-		if err := runProgress("Loading infra chart", "Reading embedded patchworks-infra chart and generated values", func() error {
-			var loadErr error
-			infraChart, infraValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-infra", valuesFile)
-			return loadErr
-		}); err != nil {
-			return err
-		}
 		if err := runProgressWithPhase("Installing infrastructure", "Applying release patchworks-infra and waiting for readiness", installPhaseMonitor(access, namespace, "infra"), func() error {
-			return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, infraChart, infraValues, true, 15*time.Minute, installerLabels())
+			return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
 		}); err != nil {
 			return err
 		}
 	}
 
-	var appChart helmchart.Charter
-	var appValues map[string]any
-	if err := runProgress("Loading app chart", "Reading embedded patchworks-app chart and generated values", func() error {
-		var loadErr error
-		appChart, appValues, loadErr = loadEmbeddedPatchworksChart(settings, "patchworks-app", valuesFile)
-		return loadErr
-	}); err != nil {
-		return err
-	}
 	if err := runProgressWithPhase("Installing application", "Applying release patchworks-app and waiting for hooks/readiness", installPhaseMonitor(access, namespace, "app"), func() error {
-		return helmUpgradeOrInstall(cfg, "patchworks-app", namespace, appChart, appValues, false, 15*time.Minute, installerLabels())
+		return helmUpgradeOrInstall(cfg, "patchworks-app", namespace, charts.Charts["patchworks-app"], values, false, 15*time.Minute, installerLabels())
 	}); err != nil {
 		printInstallFailureDiagnostics(access, namespace)
 		return err
@@ -1198,26 +1260,6 @@ func loadHelmChart(settings *cli.EnvSettings, chartRef, repoURL, valuesFile stri
 	return chart, values, nil
 }
 
-func loadEmbeddedPatchworksChart(settings *cli.EnvSettings, chartName, valuesFile string) (helmchart.Charter, map[string]any, error) {
-	chartPath, cleanup, err := embeddedChartPath(chartName)
-	if err != nil {
-		return nil, nil, err
-	}
-	defer cleanup()
-
-	chart, err := helmloader.Load(chartPath)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	values, err := mergeHelmValues(settings, valuesFile)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return chart, values, nil
-}
-
 func embeddedChartPath(chartName string) (string, func(), error) {
 	chartFS, err := fs.Sub(embeddedcharts.FS, chartName)
 	if err != nil {
@@ -1366,15 +1408,12 @@ func helmPrintStatus(cfg *action.Configuration, releaseName string) error {
 
 func helmCommandText(namespace, valuesFile string, installInfrastructure bool) string {
 	if !installInfrastructure {
-		return fmt.Sprintf(`helm dependency update charts/patchworks-app
-helm upgrade --install patchworks-app ./charts/patchworks-app -n %s --create-namespace -f %s --timeout 15m --wait`,
-			namespace, valuesFile)
+		return fmt.Sprintf(`helm upgrade --install patchworks-app ./charts/patchworks-app -n %s --create-namespace -f %s --timeout 15m --wait`,
+			shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 	}
-	return fmt.Sprintf(`helm dependency update charts/patchworks-infra
-helm dependency update charts/patchworks-app
-helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout 15m --wait
+	return fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout 15m --wait
 helm upgrade --install patchworks-app ./charts/patchworks-app -n %s -f %s --timeout 15m --wait`,
-		namespace, valuesFile, namespace, valuesFile)
+		shellQuote(namespace), shellQuote(cleanPath(valuesFile)), shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 }
 
 func valuesCreatedView(width int, output, commands string) string {
@@ -2886,6 +2925,8 @@ func saveLocalConfig(path string, config localConfig) error {
 func localConfigFromInstallConfig(config installConfig, install bool) localConfig {
 	values := config.Values
 	local := localConfig{
+		ChartSource:      values["chartSource"],
+		ChartVersion:     values["chartVersion"],
 		Kubeconfig:       values["kubeconfig"],
 		Context:          values["context"],
 		Namespace:        values["namespace"],
@@ -3136,6 +3177,7 @@ func installSummary(config installConfig) string {
 	values := config.Values
 	lines := []string{
 		keyValue("Values file", config.Output),
+		keyValue("Chart release", fmt.Sprintf("%s (%s)", values["chartVersion"], values["chartSource"])),
 		keyValue("Namespace", values["namespace"]),
 		keyValue("Infrastructure", infrastructureSummary(values)),
 		keyValue("Base domain", values["domain"]),
@@ -3502,6 +3544,9 @@ func writeValues(path string, values map[string]string) error {
 		cookieDomain = defaultCookieDomain(domain)
 	}
 
+	if values["chartVersion"] != "" {
+		fmt.Fprintf(&b, "# Patchworks chart release: %s (%s)\n# Exact artifacts are recorded in the adjacent .charts.lock.yaml file.\n", values["chartVersion"], values["chartSource"])
+	}
 	fmt.Fprintf(&b, "namespace: %s\n\n", quote(namespace))
 
 	if values["pullSecret"] != "" {

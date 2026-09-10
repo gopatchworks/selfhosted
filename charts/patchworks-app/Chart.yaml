@@ -7,6 +7,8 @@ description: >
 type: application
 version: 0.1.0
 appVersion: "1.0.0"
+annotations:
+  selfhosted.patchworks.io/installer-api-version: "1"
 keywords:
   - patchworks
   - self-hosted

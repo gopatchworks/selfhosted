@@ -17,6 +17,7 @@ helm repo add contour https://projectcontour.github.io/helm-charts/ --force-upda
 helm repo update contour
 
 echo "Installing Contour..."
+# ClusterIP Services cannot use the chart's default externalTrafficPolicy: Local.
 helm upgrade --install contour contour/contour \
   --namespace "${NAMESPACE}" \
   --create-namespace \
@@ -26,6 +27,7 @@ helm upgrade --install contour contour/contour \
   --set envoy.hostPorts.http=80 \
   --set envoy.hostPorts.https=443 \
   --set envoy.service.type=ClusterIP \
+  --set-string 'envoy.service.externalTrafficPolicy=' \
   --wait
 
 echo ""

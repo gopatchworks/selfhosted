@@ -29,9 +29,11 @@ brew install --cask gopatchworks/tap/patchworks-installer
 patchworks-installer
 ```
 
-The binary bundles both charts and uses the Helm SDK and Kubernetes API, so
-no repository checkout, Go installation, Helm CLI, or kubectl is required to
-run it. See the [README quick start](../README.md#getting-started) for local
+The binary uses the Helm SDK and Kubernetes API, so no repository checkout,
+Go installation, Helm CLI, or kubectl is required to run it. It downloads
+charts from the public `gopatchworks/selfhosted` repository by default and includes
+bundled charts for offline use. No GitHub account or registry login is required.
+See the [README quick start](../README.md#getting-started) for local
 kind cluster and ingress setup, or download another platform's binary from
 [GitHub Releases](https://github.com/gopatchworks/selfhosted/releases).
 
@@ -48,19 +50,117 @@ Use `--save-config` to write the selected prompt values back to the local
 patchworks-installer --save-config
 ```
 
-The released binary includes the Patchworks Helm charts. To inspect exactly
-what the installer will apply, unpack them with:
+## Chart versions
+
+The private release pipeline publishes each application release into this public
+repository by updating both charts' `values.yaml` image tags. For example, the
+commit `Update image tags for v0.1.39` updates the image defaults to `v0.1.39`;
+the Helm `Chart.yaml` metadata version may still be `0.1.0`.
+
+`--chart-version` selects that **application release's chart snapshot**, not the
+Helm metadata version or installer binary version. It uses the public commit
+history and downloads both charts from one exact commit SHA. The installer does
+not contact the private releases repository or require published Helm packages.
 
 ```bash
-patchworks-installer unpack-charts
+# Select the newest stable values-update commit on main.
+patchworks-installer --chart-version latest
+
+# Select the snapshot committed for this release (v prefix is also accepted).
+patchworks-installer --chart-version 0.1.39
+
+# Use the charts included in this binary without downloading a snapshot.
+patchworks-installer --chart-source bundled
 ```
 
-By default this writes to `./patchworks-charts`. Use `--output` to choose a
-different directory:
+`--chart-source` accepts `github` or `bundled`; `--chart-version` implies `github`
+and cannot be combined with `--chart-source bundled`. New installations default
+to `github` / `latest`. `latest` means the most recent stable release-update
+commit on `main`, excluding prereleases. An explicit version can select a
+prerelease. Unknown releases fail instead of inventing image tags.
+
+Release discovery follows the existing commit subject convention
+`Update image tags for vX.Y.Z` and paginates the history of
+`charts/patchworks-app/values.yaml` (up to 10,000 commits). The downloaded
+`image.tag` in **both** charts must match the selected release. Chart names,
+matching Helm metadata versions, packaged dependencies, and installer
+compatibility are also checked before either Patchworks release is applied.
+The install summary displays the resolved application release and chart source.
+
+All requests are anonymous HTTPS requests to GitHub's public API and archive
+host. No local GitHub, Docker, or Helm credentials are read. GitHub's anonymous
+API rate limits still apply to version discovery; errors explain when to retry.
+Saved selections download their commit directly without querying release history.
+Network and validation failures stop the run; bundled mode is always explicit.
+Offline chart mode still requires the cluster to pull its container images.
+
+After the summary is accepted, the installer writes
+`<values-file>.charts.lock.yaml` (normally
+`patchworks.values.yaml.charts.lock.yaml`). It records the application release,
+public repository commit SHA, and chart content digests. This happens even with
+**Only write values** and without `--save-config`. The lock records the selected
+release, not installation success. Keep it beside the generated values.
+
+Repeat runs using that values path download the saved commit and verify the
+chart digests. Bundled selections verify the embedded chart contents and reject
+a changed bundle. Selection precedence is explicit CLI options, then the
+adjacent lock, then `installer.chartSource` / `installer.chartVersion` in
+`config.yaml`, then `github` / `latest`.
+
+Use `--chart-version latest` explicitly to refresh a saved selection.
+`--save-config` also writes the resolved source and application release:
+
+```yaml
+installer:
+  enabled: true
+  chartSource: github
+  chartVersion: 0.1.39
+```
+
+An explicit `--chart-source bundled` selects the current binary's bundle anew.
+Existing installations without a lock do not infer a version from the cluster;
+use an explicit release on the first run if you want to retain a particular one.
+
+### Unpack charts
+
+`unpack-charts` defaults to the current binary's bundle. Use an explicit release
+or `latest` to export a public snapshot. For a manual installation, use
+`--chart-lock` to export exactly the saved selection:
 
 ```bash
 patchworks-installer unpack-charts --output ./charts
+patchworks-installer unpack-charts --chart-version 0.1.39 --output ./charts
+patchworks-installer unpack-charts \
+  --chart-lock patchworks.values.yaml.charts.lock.yaml --output ./charts
 ```
+
+Choose a fresh output directory to avoid leaving old templates behind when
+switching versions. The default is `./patchworks-charts`. Each export includes
+`charts.lock.yaml`. `--chart-lock` is only supported by `unpack-charts` and cannot
+be combined with `--chart-version` or `--chart-source`. Without that flag, exports
+do not read installation locks or config defaults.
+
+### Chart compatibility metadata
+
+Both charts declare `selfhosted.patchworks.io/installer-api-version: "1"` in
+`Chart.yaml` annotations. This installer accepts API 1; older unannotated charts
+are treated as API 1. Chart authors must change the API version when the generated
+values contract becomes incompatible. They may additionally require a minimum
+installer release:
+
+```yaml
+annotations:
+  selfhosted.patchworks.io/installer-api-version: "1"
+  selfhosted.patchworks.io/min-installer-version: "1.2.0"
+```
+
+The minimum is optional for existing releases. When present, it must be an exact
+semantic version, and the running installer's build version must meet it.
+Development builds with an unknown version (`dev` or `ci`) cannot satisfy a
+minimum; set the actual installer version using `-ldflags '-X main.version=X.Y.Z'`
+when testing such charts from source.
+
+## Installer prompts
 
 The TUI asks for:
 
@@ -89,10 +189,9 @@ commands to install the infra and app charts with that shared values file. It
 shows an install summary before applying the Patchworks releases. Contour, if
 requested, is installed earlier during cluster setup. If installation is enabled,
 it can create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in
-the selected namespace, runs the install through the embedded Helm Go SDK and
-embedded Patchworks charts, then checks workload status through the Kubernetes
-API. The Helm CLI is only needed if you choose to copy and run the manual
-commands yourself.
+the selected namespace, runs the install through the Helm Go SDK using the
+prepared charts, then checks workload status through the Kubernetes API. The Helm
+CLI is only needed if you choose to copy and run the manual commands yourself.
 
 During the infra and app Helm installs, the progress screen polls Kubernetes
 Jobs and readiness state so it can show phases such as credential generation,
@@ -110,14 +209,15 @@ syncs do not seed the installation again.
 
 ## Install From Generated Values
 
-For a manual install, install the Helm CLI and unpack the charts into the
-paths used by the generated commands. A repository checkout is not needed:
+For a manual install, use the printed Helm commands. They unpack the exact
+selection from the adjacent chart lock, then install the local charts. No
+repository checkout, GitHub login, or registry login is needed. Dependencies
+are already included in the snapshot. For bundled selections, use the same
+installer binary that generated the lock.
 
 ```bash
-patchworks-installer unpack-charts --output ./charts
-
-helm dependency update charts/patchworks-infra
-helm dependency update charts/patchworks-app
+patchworks-installer unpack-charts \
+  --chart-lock patchworks.values.yaml.charts.lock.yaml --output ./charts
 
 helm upgrade --install patchworks-infra ./charts/patchworks-infra \
   -n patchworks \
