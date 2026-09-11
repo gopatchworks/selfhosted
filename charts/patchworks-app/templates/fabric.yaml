@@ -7,6 +7,8 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   name: {{ include "patchworks.fullname" . }}-fabric-nginx
   namespace: {{ include "patchworks.fabric.namespace" . }}
   labels:
@@ -156,6 +158,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   name: {{ include "patchworks.fullname" . }}-fabric
   namespace: {{ include "patchworks.fabric.namespace" . }}
   labels:

@@ -14,8 +14,8 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "-2"
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/sync-wave: "-2"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-19"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
   template:
@@ -93,8 +93,8 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "-1"
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/sync-wave: "-1"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-18"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
   template:
@@ -197,8 +197,8 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "0"
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/sync-wave: "0"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-15"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
   template:
@@ -252,8 +252,8 @@ metadata:
   annotations:
     helm.sh/hook: pre-install
     helm.sh/hook-weight: "20"
-    argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/sync-wave: "20"
+    argocd.argoproj.io/hook: Sync
+    argocd.argoproj.io/sync-wave: "-5"
 spec:
   backoffLimit: {{ .Values.seeds.backoffLimit }}
   template:
