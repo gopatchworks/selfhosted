@@ -385,6 +385,9 @@ dashboard:
 migrations:
   enabled: true
   namespace: ""  # overrides global namespace for migration jobs
+  # Shared by Fabric/Core migrations and optional seed Jobs. For standalone
+  # Helm pre-install hooks, a named account must already exist.
+  serviceAccountName: ""
   frankenphp: {}
   # Empty image fields inherit the enabled gateway image; otherwise use image.*.
   image:

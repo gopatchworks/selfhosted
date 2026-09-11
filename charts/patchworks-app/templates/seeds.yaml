@@ -24,6 +24,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-seeds" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -103,6 +106,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-company-seed" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -207,6 +213,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "tenant-database" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       initContainers:
         - name: wait-for-mysql
           image: mysql:8.0
@@ -262,6 +271,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "core-seeds" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.seeds.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
