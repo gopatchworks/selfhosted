@@ -1,5 +1,5 @@
 {{- if and .Values.s3Manager.enabled (not .Values.s3Manager.external.endpoint) }}
-{{- $fullname := include "patchworks.fullname" . }}
+{{- $fullname := include "patchworks.s3Manager.fullname" . }}
 {{- $ns := include "patchworks.s3Manager.namespace" . }}
 {{- $s3ExistingSecret := fromJson (include "patchworks.s3.existingSecret" .) }}
 {{- $s3AccessSecret := dict "name" $s3ExistingSecret.name "key" $s3ExistingSecret.accessKeyKey }}
@@ -8,7 +8,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ $fullname }}-s3-manager-config
+  name: {{ $fullname }}-config
   namespace: {{ $ns }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
@@ -20,7 +20,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-s3-manager
+  name: {{ $fullname }}
   namespace: {{ $ns }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
@@ -95,7 +95,7 @@ spec:
       volumes:
         - name: config
           configMap:
-            name: {{ $fullname }}-s3-manager-config
+            name: {{ $fullname }}-config
       {{- with .Values.s3Manager.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -112,7 +112,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ $fullname }}-s3-manager
+  name: {{ $fullname }}
   namespace: {{ $ns }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}

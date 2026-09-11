@@ -847,13 +847,22 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- .Values.s3.fileDownloadsBucket | default (include "patchworks.s3.bucket" .) -}}
 {{- end }}
 
+{{/* Resolve the S3 Manager resource name without changing existing defaults. */}}
+{{- define "patchworks.s3Manager.fullname" -}}
+{{- if .Values.s3Manager.fullnameOverride -}}
+{{- .Values.s3Manager.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-s3-manager" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- end }}
+
 {{- define "patchworks.s3.bucketCreationEndpoint" -}}
 {{- if .Values.s3.bucketCreationEndpoint -}}
 {{- .Values.s3.bucketCreationEndpoint -}}
 {{- else if .Values.s3Manager.external.endpoint -}}
 {{- .Values.s3Manager.external.endpoint -}}
 {{- else if .Values.s3Manager.enabled -}}
-{{- printf "http://%s-s3-manager.%s.svc.cluster.local:%v" (include "patchworks.fullname" .) (include "patchworks.s3Manager.namespace" .) (.Values.s3Manager.service.port | default 8080) -}}
+{{- printf "http://%s.%s.svc.cluster.local:%v" (include "patchworks.s3Manager.fullname" .) (include "patchworks.s3Manager.namespace" .) (.Values.s3Manager.service.port | default 8080) -}}
 {{- else -}}
 {{- include "patchworks.s3.endpoint" . -}}
 {{- end -}}

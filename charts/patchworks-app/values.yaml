@@ -1225,6 +1225,8 @@ s3:
 # Bucket creation service deployed by the app chart. Core web pods and non-mono
 # workers use it via S3_BUCKET_CREATION_ENDPOINT.
 s3Manager:
+  # Override the Deployment/Service name and ConfigMap prefix.
+  fullnameOverride: ""
   namespace: ""
   enabled: true
   external:

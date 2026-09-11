@@ -1034,6 +1034,7 @@ It uses the same S3 endpoint and credentials as Core.
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `s3Manager.fullnameOverride` | `""` | Override the Deployment/Service name and ConfigMap prefix; defaults to `<fullname>-s3-manager`. The in-cluster bucket creation endpoint follows this name. |
 | `s3Manager.namespace` | `""` | Namespace override for the S3 Manager service |
 | `s3Manager.enabled` | `true` | Deploy the in-cluster S3 Manager service from the app chart |
 | `s3Manager.external.endpoint` | `""` | External bucket creation service endpoint. Takes precedence over the in-cluster service |
