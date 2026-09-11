@@ -1321,16 +1321,7 @@ CALLBACK_DOMAIN: {{ . | quote }}
 {{- with .Values.ingress.hosts.webhook }}
 WEBHOOK_DOMAIN: {{ . | quote }}
 {{- end }}
-DB_CONNECTION: "mysql"
-DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
-DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
-DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
-DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
-LANDLORD_DB_CONNECTION: "mysql"
-LANDLORD_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
-LANDLORD_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
-LANDLORD_DB_DATABASE: {{ include "patchworks.mysql.database" . | quote }}
-LANDLORD_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
+{{ include "patchworks.database.coreConfigData" . }}
 REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
 REDIS_CLIENT: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
@@ -1387,10 +1378,6 @@ FILE_DOWNLOADS_AWS_BUCKET: {{ include "patchworks.s3.fileDownloadsBucket" . | qu
 FILE_DOWNLOADS_AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 FILE_DOWNLOADS_AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
 S3_BUCKET_CREATION_ENDPOINT: {{ include "patchworks.s3.bucketCreationEndpoint" . | quote }}
-TENANT_DB_CONNECTION: "tenant"
-TENANT_DB_HOST: {{ include "patchworks.mysql.host" . | quote }}
-TENANT_DB_PORT: {{ include "patchworks.mysql.port" . | quote }}
-TENANT_DB_USERNAME: {{ include "patchworks.mysql.username" . | quote }}
 TENANT_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 TENANT_REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
 PAYLOAD_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
@@ -1425,11 +1412,7 @@ KUBEFAAS_FUNCTION_REGISTRY: {{ .Values.kubefaas.registry.name | quote }}
 {{- define "patchworks.appSecretEnv" -}}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
-{{ include "patchworks.env.dbPassword" . }}
-{{- $landlordDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $landlordDbSecret.name "key" $landlordDbSecret.passwordKey)) }}
-{{- $tenantDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
+{{ include "patchworks.database.coreSecretEnv" (dict "root" . "refsOnly" false) }}
 {{- if or (include "patchworks.redis.password" .) .Values.redis.external.existingSecret.name }}
 {{- $s := dict "name" .Values.redis.external.existingSecret.name "key" .Values.redis.external.existingSecret.passwordKey }}
 {{ include "patchworks.secretEnv" (dict "name" "REDIS_PASSWORD" "value" (include "patchworks.redis.password" .) "secret" $s) }}
@@ -1733,12 +1716,7 @@ Each key is only included when NOT backed by an existingSecret.
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
 {{ include "patchworks.licenseSecretData" . }}
-{{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{- if not $dbSecret.name }}
-DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
-LANDLORD_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
-TENANT_DB_PASSWORD: {{ include "patchworks.mysql.password" . | quote }}
-{{- end }}
+{{ include "patchworks.database.coreSecretData" . }}
 {{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if not $fabricDbSecret.name }}
 FABRIC_DB_PASSWORD: {{ include "patchworks.fabric.mysql.password" . | quote }}
@@ -1840,24 +1818,7 @@ KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
       key: {{ $appKeySecret.key }}
 {{- end }}
 {{ include "patchworks.licenseSecretEnvRefs" . }}
-{{- $dbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{- if $dbSecret.name }}
-- name: DB_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ $dbSecret.name }}
-      key: {{ $dbSecret.passwordKey }}
-- name: LANDLORD_DB_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ $dbSecret.name }}
-      key: {{ $dbSecret.passwordKey }}
-- name: TENANT_DB_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ $dbSecret.name }}
-      key: {{ $dbSecret.passwordKey }}
-{{- end }}
+{{ include "patchworks.database.coreSecretEnv" (dict "root" . "refsOnly" true) }}
 {{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if $fabricDbSecret.name }}
 - name: FABRIC_DB_PASSWORD
@@ -2147,29 +2108,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{ include "patchworks.licenseEnv" . }}
 - name: SESSION_DOMAIN
   value: {{ .Values.web.sessionDomain | quote }}
-- name: DB_CONNECTION
-  value: mysql
-- name: DB_HOST
-  value: {{ include "patchworks.mysql.host" . | quote }}
-- name: DB_PORT
-  value: {{ include "patchworks.mysql.port" . | quote }}
-- name: DB_DATABASE
-  value: {{ include "patchworks.mysql.database" . | quote }}
-- name: DB_USERNAME
-  value: {{ include "patchworks.mysql.username" . | quote }}
-{{ include "patchworks.env.dbPassword" . }}
-- name: LANDLORD_DB_CONNECTION
-  value: mysql
-- name: LANDLORD_DB_HOST
-  value: {{ include "patchworks.mysql.host" . | quote }}
-- name: LANDLORD_DB_PORT
-  value: {{ include "patchworks.mysql.port" . | quote }}
-- name: LANDLORD_DB_DATABASE
-  value: {{ include "patchworks.mysql.database" . | quote }}
-- name: LANDLORD_DB_USERNAME
-  value: {{ include "patchworks.mysql.username" . | quote }}
-{{- $landlordDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{ include "patchworks.secretEnv" (dict "name" "LANDLORD_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $landlordDbSecret.name "key" $landlordDbSecret.passwordKey)) }}
+{{ include "patchworks.database.coreEnv" . }}
 - name: REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
 - name: REDIS_PORT
@@ -2248,16 +2187,6 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.s3.pathStyle" . | quote }}
 - name: S3_BUCKET_CREATION_ENDPOINT
   value: {{ include "patchworks.s3.bucketCreationEndpoint" . | quote }}
-- name: TENANT_DB_CONNECTION
-  value: tenant
-- name: TENANT_DB_HOST
-  value: {{ include "patchworks.mysql.host" . | quote }}
-- name: TENANT_DB_PORT
-  value: {{ include "patchworks.mysql.port" . | quote }}
-- name: TENANT_DB_USERNAME
-  value: {{ include "patchworks.mysql.username" . | quote }}
-{{- $tenantDbSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-{{ include "patchworks.secretEnv" (dict "name" "TENANT_DB_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $tenantDbSecret.name "key" $tenantDbSecret.passwordKey)) }}
 - name: FABRIC_DB_CONNECTION
   value: fabric
 - name: FABRIC_DB_HOST
@@ -2449,7 +2378,7 @@ before starting application pods.
     - -c
     - |
       echo "Waiting for MySQL..."
-      until nc -z {{ include "patchworks.mysql.host" . }} {{ include "patchworks.mysql.port" . }}; do sleep 2; done
+      {{- include "patchworks.database.wait" . | nindent 6 }}
       echo "Waiting for Redis..."
       until nc -z {{ include "patchworks.redis.host" . }} {{ include "patchworks.redis.port" . }}; do sleep 2; done
       echo "Waiting for RabbitMQ..."

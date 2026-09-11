@@ -150,6 +150,13 @@ Choose **Only write values** to prepare configuration for a later manual install
 See the [installer reference](docs/installer.md) for chart selection, unpacking charts,
 and using the generated values without a checkout.
 
+For a separate landlord database and multiple tenant databases, configure
+[`database.landlord` and `database.tenant`](charts/patchworks-app/README.md#landlord-and-tenant-databases)
+in the shared values file. The chart maps these settings to the different Core
+and Monocore variables. For bundled MySQL, list additional schema names in
+`mysql.databases`, then install or upgrade infrastructure before the app.
+Tenant records and their database/server assignments are managed by the application.
+
 ### 4. Open Patchworks
 
 For the local example, add the generated hostnames to `/etc/hosts`:

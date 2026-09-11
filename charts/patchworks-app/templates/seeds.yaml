@@ -181,10 +181,11 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
 {{- end }}
-{{- if and .Values.seeds.core.enabled .Values.seeds.fabric.enabled .Values.seeds.tenant.createDatabase }}
+{{- if and .Values.seeds.core.enabled .Values.seeds.fabric.enabled .Values.seeds.tenant.createDatabase (not (dig "tenant" "primaryServerId" "" (.Values.database | default dict))) }}
 ---
 # Job — creates the initial Core tenant database after Fabric has recorded the
-# tenant and before Core tenant migrations run.
+# tenant and before Core tenant migrations run. For an assigned primary server,
+# Core provisioning resolves Fabric's server registry and creates the database.
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -214,7 +215,7 @@ spec:
             - -c
             - |
               echo "Waiting for MySQL..."
-              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
+              until mysqladmin ping -h {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))).host | quote }} -P {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))).port | quote }} --silent; do sleep 2; done
               echo "MySQL ready."
       containers:
         - name: tenant-database
@@ -225,15 +226,16 @@ spec:
             - -c
             - |
               set -e
-              mysql -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} \
+              mysql -h {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))).host | quote }} -P {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))).port | quote }} \
                 -u"${MYSQL_USER}" -p"${MYSQL_PASSWORD}" \
                 -e "CREATE DATABASE IF NOT EXISTS \`{{ include "patchworks.seeds.tenantDatabase" . }}\`;"
               printf 'Tenant database %s ready.\n' {{ include "patchworks.seeds.tenantDatabase" . | quote }}
           env:
             - name: MYSQL_USER
-              value: {{ include "patchworks.mysql.username" . | quote }}
-            {{- $mysqlSecret := fromJson (include "patchworks.mysql.existingSecret" .) }}
-            {{ include "patchworks.secretEnv" (dict "name" "MYSQL_PASSWORD" "value" (include "patchworks.mysql.password" .) "secret" (dict "name" $mysqlSecret.name "key" $mysqlSecret.passwordKey)) | nindent 12 }}
+              value: {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))).username | quote }}
+            {{- $tenantDb := fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant")) }}
+            {{- $mysqlSecret := $tenantDb.existingSecret }}
+            {{ include "patchworks.secretEnv" (dict "name" "MYSQL_PASSWORD" "value" $tenantDb.password "secret" (dict "name" $mysqlSecret.name "key" $mysqlSecret.passwordKey)) | nindent 12 }}
 {{- end }}
 {{- if .Values.seeds.core.enabled }}
 ---
@@ -272,7 +274,7 @@ spec:
             - -c
             - |
               echo "Waiting for MySQL..."
-              until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
+              until mysqladmin ping -h {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "landlord"))).host | quote }} -P {{ (fromJson (include "patchworks.database.connection" (dict "root" . "role" "landlord"))).port | quote }} --silent; do sleep 2; done
               echo "MySQL ready."
       containers:
         {{- $coreSeedSvc := merge (deepCopy .Values.seeds.core) (dict "image" .Values.image) }}

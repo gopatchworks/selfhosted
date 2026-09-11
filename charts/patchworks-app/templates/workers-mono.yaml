@@ -270,7 +270,7 @@ data:
 
     db:
       landlord:
-        name: {{ include "patchworks.mysql.database" $root | quote }}
+        name: {{ (fromJson (include "patchworks.database.connection" (dict "root" $root "role" "landlord"))).database | quote }}
 
     store:
       config: "/etc/monocore/store.yaml"
@@ -416,7 +416,7 @@ spec:
             - -c
             - |
               echo "Waiting for MySQL..."
-              until nc -z {{ include "patchworks.mysql.host" $root }} {{ include "patchworks.mysql.port" $root }}; do sleep 2; done
+              {{- include "patchworks.database.wait" $root | nindent 14 }}
               echo "Waiting for Redis..."
               until nc -z {{ include "patchworks.redis.host" $root }} {{ include "patchworks.redis.port" $root }}; do sleep 2; done
               echo "Waiting for RabbitMQ..."
@@ -449,12 +449,7 @@ spec:
               mountPath: /etc/monocore
               readOnly: true
           env:
-            {{- include "patchworks.env.dbPassword" $root | nindent 12 }}
-            {{- include "patchworks.env.fabricDbPassword" $root | nindent 12 }}
-            - name: DB_FABRIC_DSN
-              value: "{{ include "patchworks.fabric.mysql.username" $root }}:$(FABRIC_DB_PASSWORD)@tcp({{ include "patchworks.fabric.mysql.host" $root }}:{{ include "patchworks.fabric.mysql.port" $root }})/{{ include "patchworks.fabric.mysql.database" $root }}?parseTime=true"
-            - name: DB_LANDLORD_DSN
-              value: "{{ include "patchworks.mysql.username" $root }}:$(DB_PASSWORD)@tcp({{ include "patchworks.mysql.host" $root }}:{{ include "patchworks.mysql.port" $root }})/{{ include "patchworks.mysql.database" $root }}?parseTime=true"
+            {{- include "patchworks.database.monoEnv" $root | nindent 12 }}
             {{- with include "patchworks.env.laravelAppKey" $root }}
             {{- . | nindent 12 }}
             {{- end }}

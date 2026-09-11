@@ -1,9 +1,18 @@
 {{/*
-Only runs in shared-MySQL mode: main mysql is enabled and Fabric is not using
-a dedicated or external MySQL. Creates the fabric database and grants the main
-MySQL user access to it so Fabric can connect with existing credentials.
+Create configured schemas and grant the managed MySQL user access on install
+and upgrade. Keep provisioning the Fabric schema when it shares this server.
 */}}
-{{- if and .Values.mysql.enabled (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) }}
+{{- $sharedFabric := and (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) }}
+{{- $additional := .Values.mysql.databases | default list }}
+{{- if and .Values.mysql.enabled (or $sharedFabric (not (empty $additional))) }}
+{{- if not (kindIs "slice" $additional) }}
+{{- fail "mysql.databases must be a list of database names" }}
+{{- end }}
+{{- $databases := concat (list .Values.mysql.auth.database) $additional }}
+{{- if $sharedFabric }}
+{{- $databases = append $databases .Values.fabric.mysql.database }}
+{{- end }}
+{{- $username := include "patchworks.mysql.setupUsername" . }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.mysql.namespace" . }}
 ---
@@ -32,7 +41,7 @@ spec:
           image: mysql:8.0
           command:
             - sh
-            - -c
+            - -euc
             - |
               echo "Waiting for MySQL..."
               until mysqladmin ping -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} --silent; do sleep 2; done
@@ -43,15 +52,19 @@ spec:
           imagePullPolicy: {{ .Values.mysql.image.pullPolicy }}
           command:
             - sh
-            - -c
+            - -euc
             - |
               mysql -h {{ include "patchworks.mysql.host" . }} -P {{ include "patchworks.mysql.port" . }} \
                 -uroot -p"${MYSQL_ROOT_PASSWORD}" <<'SQL'
-              CREATE DATABASE IF NOT EXISTS `{{ .Values.fabric.mysql.database }}`;
-              GRANT ALL PRIVILEGES ON `{{ .Values.fabric.mysql.database }}`.* TO '{{ include "patchworks.mysql.username" . }}'@'%';
+              SET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES';
+              {{- range $database := uniq $databases }}
+              {{- $name := include "patchworks.mysql.setupDatabase" $database }}
+              CREATE DATABASE IF NOT EXISTS `{{ $name }}`;
+              GRANT ALL PRIVILEGES ON `{{ $name | replace "_" "\\_" }}`.* TO '{{ $username }}'@'%';
+              {{- end }}
               FLUSH PRIVILEGES;
               SQL
-              echo "Fabric database {{ .Values.fabric.mysql.database | quote }} ready."
+              echo "Managed MySQL databases ready."
           env:
             {{- $es := fromJson (include "patchworks.mysql.existingSecret" .) }}
             {{- include "patchworks.secretEnv" (dict "name" "MYSQL_ROOT_PASSWORD" "value" .Values.mysql.auth.rootPassword "secret" (dict "name" $es.name "key" $es.rootPasswordKey)) | nindent 12 }}

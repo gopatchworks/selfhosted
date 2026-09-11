@@ -34,7 +34,9 @@ application: "Application (components independently selectable)" {
 infra: "Infrastructure (in-cluster or external)" {
   style.fill: "#F0FFF4"
 
-  mysql:         "MySQL 8.0\n(DB_*)"                     { shape: cylinder }
+  mysql:         "MySQL 8.0\nBundled default server\nmysql.databases: additional schemas" { shape: cylinder }
+  landlord:      "Landlord database\ndatabase.landlord\nMySQL defaults or separate server" { shape: cylinder }
+  tenants:       "Tenant databases\ndatabase.tenant + servers by credential ID\nschema selected from tenant registry" { shape: cylinder }
   redis:         "Redis / Valkey\n(REDIS_*)"              { shape: cylinder }
   rabbitmq:      "RabbitMQ 3\n(RABBITMQ_*)"               { shape: queue    }
   elasticsearch: "Elasticsearch 8\n(ELASTICSEARCH_HOST)"  { shape: cylinder }
@@ -74,3 +76,6 @@ application.scheduler -> infra.rabbitmq: RABBITMQ_QUEUE
 application.web -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
 application.workers -> application.s3manager: S3_BUCKET_CREATION_ENDPOINT
 application.s3manager -> infra.s3: AWS_*
+application -> infra.mysql: "mysql.* connection defaults"
+application -> infra.landlord: "Core LANDLORD_DB_* / DB_*\nMonocore DB_LANDLORD_*"
+application -> infra.tenants: "Core TENANT_DB_* / TENANT_DB_*_{id}\nMonocore DB_TENANT_* / DB_TENANT_{id}_*"

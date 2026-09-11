@@ -440,6 +440,8 @@ seeds:
     # Tenant database created before core seeds run. Defaults to companyName
     # lowercased with non-alphanumeric characters removed.
     database: ""
+    # Raw bootstrap CREATE targets the default tenant server; skipped when
+    # database.tenant.primaryServerId is set (Core provisioning resolves it).
     createDatabase: true
     tier: "Professional"
     adminName: ""
@@ -998,8 +1000,48 @@ ingress:
   # (also set pathType to ImplementationSpecific and use regex paths e.g. /fabric(/|$)(.*))
   rewriteAnnotations: {}
 
+# ── Core / Monocore database connections ───────────────────────────────────────
+# Default connection fields inherit mysql.*. Tenant schemas are selected from
+# Fabric at runtime. Additional managed schemas are provisioned via mysql.databases.
+database:
+  landlord:
+    host: ""
+    port: 0
+    database: ""
+    username: ""
+    # null inherits mysql credentials; an explicit "" selects an empty password.
+    password: null
+    existingSecret:
+      name: ""
+      passwordKey: password
+    readHost: ""  # Core read replica; Monocore uses the write host
+  tenant:
+    host: ""
+    port: 0
+    username: ""
+    password: null
+    existingSecret:
+      name: ""
+      passwordKey: password
+    readHost: ""
+    # Fabric database_servers.id for new tenant placement (Core only).
+    primaryServerId: ""
+    # Keys are exact Fabric database_servers.credential_id values, not server IDs.
+    # Each server requires host, username and password or existingSecret.name.
+    # Optional port defaults to 3306; readHost is Core-only.
+    servers: {}
+    # servers:
+    #   blue:
+    #     host: tenant-blue.example.com
+    #     port: 3306
+    #     username: tenants
+    #     existingSecret: { name: tenant-blue-auth, passwordKey: password }
+
 # ── MySQL ──────────────────────────────────────────────────────────────────────
 mysql:
+  # Additional schemas created/granted by the infra chart on install/upgrade.
+  # Names: 1–64 letters, digits, underscores or hyphens. External MySQL is unmanaged.
+  databases: []
   namespace: ""  # overrides global namespace for MySQL resources
   # Set to true to deploy MySQL in-cluster. Set to false and populate
   # external.* to use an existing MySQL instance.
