@@ -127,3 +127,59 @@ func TestArgoOptionalSeedsKeepTheirOrderBetweenPrerequisitesAndWorkloads(t *test
 		previous = wave
 	}
 }
+
+func TestMigrationAndSeedServiceAccountIsOptionalAndResolvesBeforeJobs(t *testing.T) {
+	for _, account := range []string{"", "migration-identity"} {
+		t.Run("account="+account, func(t *testing.T) {
+			values := migrationOrderValues(t)
+			componentSelectionSet(values, true, "seeds", "fabric", "enabled")
+			componentSelectionSet(values, true, "seeds", "core", "enabled")
+			componentSelectionSet(values, true, "seeds", "tenant", "createDatabase")
+			componentSelectionSet(values, "synthetic_tenant", "seeds", "tenant", "database")
+			componentSelectionSet(values, "external-tenant-admin", "seeds", "tenant", "existingSecret", "name")
+			if account != "" {
+				componentSelectionSet(values, account, "migrations", "serviceAccountName")
+				componentSelectionSet(values, account, "serviceAccount", "name")
+				componentSelectionSet(values, "synthetic-irsa-role", "serviceAccount", "annotations", "eks.amazonaws.com/role-arn")
+			}
+			objects := renderComponentSelection(t, "ordered", "application", values)
+			jobs := 0
+			for _, object := range objects {
+				if object["kind"] != "Job" {
+					continue
+				}
+				jobs++
+				pod := componentSelectionMap(object, "spec", "template", "spec")
+				if account == "" {
+					if _, exists := pod["serviceAccountName"]; exists {
+						t.Error("default standalone Helm hook must not require the later-created chart ServiceAccount")
+					}
+					continue
+				}
+				if pod["serviceAccountName"] != account {
+					t.Errorf("Job %v does not use the configured identity", componentSelectionMap(object, "metadata")["name"])
+				}
+				found := false
+				for _, dependency := range objects {
+					metadata := componentSelectionMap(dependency, "metadata")
+					if dependency["kind"] == "ServiceAccount" && metadata["name"] == account &&
+						metadata["namespace"] == componentSelectionMap(object, "metadata")["namespace"] {
+						found = true
+						if migrationSyncWave(t, dependency) >= migrationSyncWave(t, object) {
+							t.Error("ServiceAccount must be created before its Job")
+						}
+						if componentSelectionMap(dependency, "metadata", "annotations")["eks.amazonaws.com/role-arn"] != "synthetic-irsa-role" {
+							t.Error("ServiceAccount IRSA annotation was lost")
+						}
+					}
+				}
+				if !found {
+					t.Error("configured Job ServiceAccount was not rendered in the same namespace")
+				}
+			}
+			if jobs != 6 {
+				t.Fatalf("expected two migration and four seed Jobs, got %d", jobs)
+			}
+		})
+	}
+}

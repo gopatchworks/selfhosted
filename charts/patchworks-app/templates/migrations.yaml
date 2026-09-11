@@ -24,6 +24,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-migrations" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.migrations.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -112,6 +115,9 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "core-migrations" "Release" .Release) | nindent 8 }}
     spec:
       restartPolicy: {{ .Values.migrations.restartPolicy }}
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

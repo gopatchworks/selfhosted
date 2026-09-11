@@ -596,6 +596,7 @@ named migration hooks before a new sync and deletes them after success.
 | `migrations.frankenphp.enabled` | unset | Override FrankenPHP runtime for Core migrations |
 | `migrations.command` | `php artisan migrate --force` | Core migration command; include extra flags here |
 | `migrations.restartPolicy` | `Never` | Job pod restart policy. `Never` preserves failed Pods for diagnostics |
+| `migrations.serviceAccountName` | `""` | Optional ServiceAccount for Fabric/Core migration and seed Jobs. Empty uses the namespace default; for standalone Helm pre-install hooks, a named account must already exist. Argo can create it in the prerequisite Sync wave. |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
 | `migrations.image.*` | empty | Non-empty registry, repository, tag and pullPolicy override the enabled gateway image; otherwise fall back to global image settings |
