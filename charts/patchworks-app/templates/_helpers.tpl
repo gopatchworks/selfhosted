@@ -1333,6 +1333,8 @@ WEBHOOK_DOMAIN: {{ . | quote }}
 {{ include "patchworks.database.coreConfigData" . }}
 REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
+REDIS_MODE: {{ .Values.redis.mode | quote }}
+REDIS_SCHEME: {{ .Values.redis.scheme | quote }}
 REDIS_CLIENT: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
 REDIS_DB: {{ .Values.redis.db | quote }}
 REDIS_PREFIX: {{ .Values.redis.prefix | quote }}
@@ -1475,6 +1477,11 @@ LANDLORD_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
 LANDLORD_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
 REDIS_HOST: {{ include "patchworks.fabric.redis.host" . | quote }}
 REDIS_PORT: {{ include "patchworks.fabric.redis.port" . | quote }}
+REDIS_MODE: {{ .Values.fabric.redis.mode | quote }}
+REDIS_SCHEME: {{ .Values.fabric.redis.scheme | quote }}
+{{- if eq .Values.fabric.redis.mode "cluster" }}
+REDIS_CLIENT: "phpredis"
+{{- end }}
 ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}
@@ -2122,6 +2129,10 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.redis.host" . | quote }}
 - name: REDIS_PORT
   value: {{ include "patchworks.redis.port" . | quote }}
+- name: REDIS_MODE
+  value: {{ .Values.redis.mode | quote }}
+- name: REDIS_SCHEME
+  value: {{ .Values.redis.scheme | quote }}
 - name: REDIS_CLIENT
   value: {{ ternary "phpredis-sentinel" "phpredis" (eq .Values.redis.mode "sentinel") | quote }}
 - name: REDIS_DB
@@ -2287,6 +2298,14 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
   value: {{ include "patchworks.fabric.redis.host" . | quote }}
 - name: REDIS_PORT
   value: {{ include "patchworks.fabric.redis.port" . | quote }}
+- name: REDIS_MODE
+  value: {{ .Values.fabric.redis.mode | quote }}
+- name: REDIS_SCHEME
+  value: {{ .Values.fabric.redis.scheme | quote }}
+{{- if eq .Values.fabric.redis.mode "cluster" }}
+- name: REDIS_CLIENT
+  value: "phpredis"
+{{- end }}
 {{- $fabricRedisExistingSecretName := ternary .Values.fabric.redis.external.existingSecret.name .Values.redis.external.existingSecret.name (ne .Values.fabric.redis.external.host "") }}
 {{- $fabricRedisExistingSecretKey := ternary .Values.fabric.redis.external.existingSecret.passwordKey .Values.redis.external.existingSecret.passwordKey (ne .Values.fabric.redis.external.host "") }}
 {{- if or (include "patchworks.fabric.redis.password" .) $fabricRedisExistingSecretName }}

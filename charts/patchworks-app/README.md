@@ -932,6 +932,10 @@ assignment to the intended server.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `redis.enabled` | `true` | Deploy Valkey in-cluster. Set `false` to use an external instance |
+| `redis.mode` | `standalone` | PHP/Monocore connection mode: `standalone`, `sentinel`, or `cluster` |
+| `redis.scheme` | `tcp` | PHP Redis transport: `tcp` or certificate-verified `tls` |
+| `fabric.redis.mode` | `standalone` | Fabric connection mode: `standalone` or `cluster` |
+| `fabric.redis.scheme` | `tcp` | Fabric Redis transport: `tcp` or `tls` |
 | `redis.external.host` | `""` | External Redis hostname |
 | `redis.external.port` | `6379` | External Redis port |
 | `redis.external.password` | `""` | Password (or use `existingSecret`) |
