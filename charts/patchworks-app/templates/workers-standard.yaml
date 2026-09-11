@@ -101,6 +101,8 @@ key in workers.microservices (excluding _default).
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   name: {{ $fullname }}-{{ $slug }}-supervisord
   namespace: {{ $wNs }}
   labels:

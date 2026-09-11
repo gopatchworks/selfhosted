@@ -119,6 +119,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
   name: {{ include "patchworks.fullname" . }}-dashboard
   namespace: {{ include "patchworks.dashboard.namespace" . }}
   labels:

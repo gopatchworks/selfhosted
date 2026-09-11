@@ -30,6 +30,15 @@ on app ConfigMaps/Secrets that Helm has not created yet.
 Successful seed Jobs are kept in the cluster so GitOps syncs and installer
 reruns do not create a fresh seed Job after the initial install.
 
+Argo CD applies persistent ConfigMaps, Secrets, ServiceAccounts and Services in
+Sync wave `-30`, then runs migration and optional seed Jobs as `Sync` hooks.
+Fabric migration/seed waves are `-20`, `-19`, and `-18`; optional tenant database
+creation is `-15`; Core migrations and seeds are `-10` and `-5`. Application
+workloads remain in the default wave `0`, so failed migrations block their
+rollout. These prerequisites are ordinary managed resources and are not deleted
+as hooks. Existing external Secrets must already be materialized before sync.
+Use a full Application sync; selective resource sync skips hooks.
+
 When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 `seeds.tenant.existingSecret.name` is provided, the app chart creates a stable
 `patchworks-tenant-admin` Secret before the Fabric seed job runs.
