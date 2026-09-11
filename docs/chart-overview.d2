@@ -14,15 +14,15 @@ title: "Patchworks Helm Chart — Component Overview" {
   style.font-size: 20
 }
 
-application: Application {
+application: "Application (components independently selectable)" {
   style.fill: "#EDF2FF"
 
-  web: "Core Web\nPHP Laravel" { shape: rectangle }
-  scheduler: "Processor Schedulers\nCronJob × processors[]" { shape: rectangle }
-  processors: "Core Processors\nPHP workers × processors[]" { shape: rectangle }
+  web: "Gateway / Start\nweb.gateway.enabled / web.start.enabled" { shape: rectangle }
+  scheduler: "Processor Schedulers\nscheduler.enabled" { shape: rectangle }
+  processors: "Core Processors\nprocessorDeployments.enabled" { shape: rectangle }
   s3manager: "S3 Manager\n(S3_BUCKET_CREATION_ENDPOINT)" { shape: rectangle }
 
-  workers: Workers {
+  workers: "Workers (workers.enabled)" {
     standalone:   "standalone\nPHP via supervisord" { shape: rectangle }
     microservice: "microservice\nPHP × N services"  { shape: rectangle }
     mono:         "mono\nMonocore Go"               { shape: rectangle }

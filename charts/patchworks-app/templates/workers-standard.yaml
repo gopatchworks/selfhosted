@@ -1,6 +1,6 @@
 {{- $isStandalone   := eq .Values.workers.type "standalone" }}
 {{- $isMicroservice := eq .Values.workers.type "microservice" }}
-{{- if or $isStandalone $isMicroservice }}
+{{- if and .Values.workers.enabled (or $isStandalone $isMicroservice) }}
 {{- $root     := . }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $hubNs    := include "patchworks.workers.namespace" . }}
@@ -24,6 +24,7 @@ key in workers.microservices (excluding _default).
     "replicas"      .Values.workers.replicaCount
     "processes"     (.Values.workers.processes | default 15)
     "resources"     .Values.workers.resources
+    "deploymentAnnotations" .Values.workers.deploymentAnnotations
     "podAnnotations" .Values.workers.podAnnotations
     "nodeSelector"  .Values.workers.nodeSelector
     "tolerations"   .Values.workers.tolerations
@@ -45,6 +46,7 @@ key in workers.microservices (excluding _default).
     "replicas"      (dig "replicas"  (dig "replicas"  1  $default) $ms)
     "processes"     (dig "processes" (dig "processes" 15 $default) $ms)
     "resources"     ($ms.resources     | default $default.resources     | default $root.Values.workers.resources)
+    "deploymentAnnotations" (mergeOverwrite (deepCopy ($root.Values.workers.deploymentAnnotations | default (dict))) ($default.deploymentAnnotations | default (dict)) ($ms.deploymentAnnotations | default (dict)))
     "podAnnotations" ($ms.podAnnotations | default $default.podAnnotations | default $root.Values.workers.podAnnotations)
     "nodeSelector"  ($ms.nodeSelector  | default $default.nodeSelector  | default $root.Values.workers.nodeSelector)
     "tolerations"   ($ms.tolerations   | default $default.tolerations   | default $root.Values.workers.tolerations)
@@ -58,8 +60,11 @@ key in workers.microservices (excluding _default).
 
 {{- range $svc := $services }}
 
-{{/* Build worker list: hub first, then one Deployment per company. */}}
-{{- $workers := list (dict "isHub" true "company" (dict)) }}
+{{/* Build worker list: optional hub, then one Deployment per company. */}}
+{{- $workers := list }}
+{{- if $root.Values.workers.hub.enabled }}
+{{- $workers = append $workers (dict "isHub" true "company" (dict)) }}
+{{- end }}
 {{- range $root.Values.workers.companies }}
 {{- $workers = append $workers (dict "isHub" false "company" .) }}
 {{- end }}
@@ -74,6 +79,7 @@ key in workers.microservices (excluding _default).
 {{- $replicas     := $svc.replicas }}
 {{- $processes    := $svc.processes }}
 {{- $resources    := $svc.resources }}
+{{- $deploymentAnnotations := $svc.deploymentAnnotations }}
 {{- $podAnnotations := $svc.podAnnotations }}
 {{- $nodeSelector := $svc.nodeSelector }}
 {{- $tolerations  := $svc.tolerations }}
@@ -85,6 +91,7 @@ key in workers.microservices (excluding _default).
   {{- $replicas     = dig "replicaCount" $svc.replicas $company }}
   {{- $processes    = dig "processes"   $svc.processes $company }}
   {{- $resources    = $company.resources      | default $svc.resources }}
+  {{- $deploymentAnnotations = mergeOverwrite (deepCopy ($svc.deploymentAnnotations | default (dict))) ($company.deploymentAnnotations | default (dict)) }}
   {{- $podAnnotations = $company.podAnnotations | default $svc.podAnnotations }}
   {{- $nodeSelector = $company.nodeSelector   | default $svc.nodeSelector }}
   {{- $tolerations  = $company.tolerations    | default $svc.tolerations }}
@@ -111,6 +118,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $slug }}
+  {{- with (mergeOverwrite (deepCopy $root.Values.deploymentAnnotations) ($deploymentAnnotations | default (dict))) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: {{ $replicas }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}

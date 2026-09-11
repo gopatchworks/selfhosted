@@ -1,3 +1,4 @@
+{{- if .Values.web.start.enabled }}
 {{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}
 {{- $svc := mergeOverwrite (deepCopy .Values.web) .Values.web.start -}}
 ---
@@ -10,7 +11,7 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: start
-  {{- with $svc.podAnnotations }}
+  {{- with (mergeOverwrite (deepCopy ($svc.podAnnotations | default (dict))) (deepCopy $.Values.deploymentAnnotations) ($svc.deploymentAnnotations | default (dict))) }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -129,3 +130,5 @@ spec:
     - name: http
       port: {{ $svc.service.port }}
       targetPort: http
+
+{{- end }}

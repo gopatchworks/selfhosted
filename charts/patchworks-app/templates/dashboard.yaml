@@ -9,7 +9,7 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: dashboard
-  {{- with .Values.dashboard.podAnnotations }}
+  {{- with (mergeOverwrite (deepCopy (.Values.dashboard.podAnnotations | default (dict))) (deepCopy $.Values.deploymentAnnotations) (.Values.dashboard.deploymentAnnotations | default (dict))) }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}

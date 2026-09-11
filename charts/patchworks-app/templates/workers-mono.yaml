@@ -1,4 +1,4 @@
-{{- if eq .Values.workers.type "mono" }}
+{{- if and .Values.workers.enabled (eq .Values.workers.type "mono") (or .Values.workers.hub.enabled .Values.workers.companies) }}
 {{- $root := . }}
 {{- $mono := .Values.workers.mono }}
 {{- $fullname := include "patchworks.fullname" . }}
@@ -9,10 +9,24 @@
 {{- $storeSecretName := $storeExistingSecret.name | default (printf "%s-workers-store" $fullname) }}
 {{- $storeSecretKey := $storeExistingSecret.key | default "store.yaml" }}
 {{- $s3CredentialSecret := fromJson (include "patchworks.s3.existingSecret" .) }}
+{{- $workers := list }}
+{{- $workerNamespaces := dict }}
+{{- if .Values.workers.hub.enabled }}
+{{- $workers = append $workers (dict "isHub" true "company" (dict)) }}
+{{- $_ := set $workerNamespaces $hubNs true }}
+{{- end }}
+{{- range .Values.workers.companies }}
+{{- $workers = append $workers (dict "isHub" false "company" .) }}
+{{- $_ := set $workerNamespaces (.namespace | default $hubNs) true }}
+{{- end }}
+{{- $generatorNs := (first $workers).company.namespace | default $hubNs }}
+{{- $topologyNamespaces := dict }}
+{{- if .Values.workers.hub.enabled }}
+{{- $_ := set $topologyNamespaces $hubNs true }}
 ---
 # topology.yaml — RabbitMQ topology asserted by monocore at startup.
 # When workers.companies are defined their queues and bindings are included
-# here so topology is managed in one place by the hub deployment.
+# here so every selected worker asserts the same topology.
 # Set workers.mono.rabbitmq.topology to replace the entire contents.
 apiVersion: v1
 kind: ConfigMap
@@ -25,6 +39,7 @@ metadata:
 data:
   topology.yaml: |
 {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $mainQueue) | indent 4 }}
+{{- end }}{{/* hub topology ConfigMap */}}
 {{- if not $storeExistingSecret.name }}
 ---
 # store.yaml — generated as a Secret because it contains S3 credentials.
@@ -32,7 +47,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ $fullname }}-workers-storegen
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ $generatorNs }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: workers-storegen
@@ -80,7 +95,7 @@ metadata:
 subjects:
   - kind: ServiceAccount
     name: {{ $fullname }}-workers-storegen
-    namespace: {{ .Release.Namespace }}
+    namespace: {{ $generatorNs }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -90,7 +105,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: {{ $fullname }}-workers-storegen
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ $generatorNs }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: workers-storegen
@@ -168,19 +183,9 @@ spec:
                   -o yaml | kubectl apply -f -
               }
 
-              apply_store_secret {{ $hubNs | quote }}
-              {{- range .Values.workers.companies }}
-              {{- $companyNs := .namespace | default $hubNs }}
-              {{- if ne $companyNs $hubNs }}
-              apply_store_secret {{ $companyNs | quote }}
+              {{- range $namespace := keys $workerNamespaces | sortAlpha }}
+              apply_store_secret {{ $namespace | quote }}
               {{- end }}
-              {{- end }}
-{{- end }}
-
-{{/* Build the worker list: hub first, then one entry per company. */}}
-{{- $workers := list (dict "isHub" true "company" (dict)) }}
-{{- range .Values.workers.companies }}
-{{- $workers = append $workers (dict "isHub" false "company" .) }}
 {{- end }}
 
 {{- range $workers }}
@@ -205,8 +210,9 @@ spec:
 {{- end }}
 {{- $topoCMName := printf "%s-workers-topology" $fullname }}
 
-{{/* Cross-namespace companies need local copies of the shared topology ConfigMap. */}}
-{{- if and (not $isHub) (ne $wNs $hubNs) }}
+{{/* Each active worker namespace needs one local topology ConfigMap. */}}
+{{- if not (hasKey $topologyNamespaces $wNs) }}
+{{- $_ := set $topologyNamespaces $wNs true }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -363,6 +369,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
     app.kubernetes.io/component: {{ $slug }}
+  {{- with (mergeOverwrite (deepCopy $root.Values.deploymentAnnotations) ($root.Values.workers.deploymentAnnotations | default (dict)) ($mono.deploymentAnnotations | default (dict)) ($company.deploymentAnnotations | default (dict))) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: 1
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}

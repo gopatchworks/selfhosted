@@ -8,7 +8,7 @@ vars: {
 
 direction: right
 
-title: Patchworks Worker Modes {
+title: "Patchworks Worker Modes (workers.enabled)" {
   shape: text
   near: top-center
   style.font-size: 20
@@ -20,7 +20,7 @@ processors: "processors[] (always PHP Core)" {
   style.fill: "#FFF8E6"
   direction: down
 
-  desc: "Background processor queues are independent of workers.type.\nEach enabled processor creates a PHP worker Deployment and scheduler CronJob.\nThe app chart also asserts RabbitMQ queues with a topology hook." {
+  desc: "Background processor queues are independent of workers.type.\nprocessorDeployments.enabled and scheduler.enabled independently select Deployments and CronJobs.\nrabbitmq.topology.enabled independently selects the queue assertion hook." {
     shape: text
   }
 
@@ -49,14 +49,14 @@ standalone: "type: standalone" {
     shape: text
   }
 
-  hub: Hub {
+  hub: "Hub (workers.hub.enabled)" {
     direction: right
     cm: "{name}-workers-supervisord\nqueue: workers.queue.name" { shape: document }
     dep: "Deployment\n{name}-workers" { shape: rectangle }
     cm -> dep: mounts
   }
 
-  company: "Per-Company (optional)" {
+  company: "Per-Company (independent of hub)" {
     style.stroke-dash: 4
     direction: right
     cm: "{name}-workers-{co}-supervisord\nqueue: company.queue" { shape: document }
@@ -81,14 +81,14 @@ microservice: "type: microservice" {
     style.stroke-dash: 4
     direction: down
 
-    hub: Hub {
+    hub: "Hub (workers.hub.enabled)" {
       direction: right
       cm: "{name}-workers-{svc}-supervisord\nqueue: domain" { shape: document }
       dep: "Deployment\n{name}-workers-{svc}" { shape: rectangle }
       cm -> dep: mounts
     }
 
-    company: "Per-Company (optional)" {
+    company: "Per-Company (independent of hub)" {
       style.stroke-dash: 4
       direction: right
       cm: "{name}-workers-{svc}-{co}-supervisord\nqueue: company.queue" { shape: document }
@@ -110,7 +110,7 @@ mono: "type: mono" {
     shape: text
   }
 
-  hub: Hub {
+  hub: "Hub (workers.hub.enabled)" {
     direction: right
     topology: "{name}-workers-topology\ntopology.yaml\nflows + optional flow exchange" { shape: document }
     store:    "{name}-workers-store or existing Secret\nstore.yaml\nS3 endpoint + credentials" { shape: document }
@@ -121,7 +121,7 @@ mono: "type: mono" {
     config   -> dep: mounts
   }
 
-  company: "Per-Company (optional)" {
+  company: "Per-Company (independent of hub)" {
     style.stroke-dash: 4
     direction: right
     config: "{name}-workers-{co}-config\nconfig.yaml"           { shape: document }
@@ -129,5 +129,5 @@ mono: "type: mono" {
     config -> dep: mounts
   }
 
-  hub -> company: "× workers.companies[]\nbinds queues when companyFlows.enabled\ntopology copied + store Secret generated if cross-ns"
+  hub -> company: "× workers.companies[]\nbinds queues when companyFlows.enabled\ntopology + store Secret in selected namespaces"
 }

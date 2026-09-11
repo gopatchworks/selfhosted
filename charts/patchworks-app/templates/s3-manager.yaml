@@ -25,6 +25,10 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: s3-manager
+  {{- with (mergeOverwrite (deepCopy .Values.deploymentAnnotations) (.Values.s3Manager.deploymentAnnotations | default (dict))) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
 spec:
   replicas: {{ .Values.s3Manager.replicaCount }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}

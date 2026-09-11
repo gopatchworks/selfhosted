@@ -1,13 +1,19 @@
+{{- $root := . }}
+{{- range $namespace, $_ := (include "patchworks.consumerNamespaces" . | fromJson).core }}
+{{- with $root }}
 ---
 # ConfigMap for non-sensitive core application environment variables.
-# Mounted via envFrom in gateway, start, workers, migrations, and seeds pods.
+# Mounted via envFrom in gateway, start, processor, scheduler, and PHP worker pods.
 # A checksum of this ConfigMap's data drives rolling restarts on config changes.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: {{ include "patchworks.fullname" . }}-config
-  namespace: {{ .Release.Namespace }}
+  namespace: {{ $namespace }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
 data:
   {{- include "patchworks.appConfigData" . | nindent 2 }}
+
+{{- end }}
+{{- end }}

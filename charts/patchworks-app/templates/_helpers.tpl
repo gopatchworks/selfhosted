@@ -1287,20 +1287,21 @@ stores:
 
 {{/*
 Validate workers.type is a known value and not yet-unavailable.
-Called from web.yaml so the error surfaces at render time for any install.
+Called by validation.yaml so disabled components do not hide active validation.
 */}}
 {{- define "patchworks.validate" -}}
+{{- $consumers := include "patchworks.consumerNamespaces" . | fromJson -}}
 {{- $valid := list "standalone" "mono" "microservice" -}}
-{{- if not (has .Values.workers.type $valid) -}}
+{{- if and .Values.workers.enabled (not (has .Values.workers.type $valid)) -}}
 {{- fail (printf "workers.type must be one of: standalone, mono, microservice. Got: %q" .Values.workers.type) -}}
 {{- end -}}
-{{- if and (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
+{{- if and $consumers.appKey (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
 {{- fail "Fabric has no MySQL source. Enable mysql, enable fabric.mysql, or set fabric.mysql.external.host." -}}
 {{- end -}}
-{{- if and (include "patchworks.kubefaas.host" .) .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) (not (include "patchworks.kubefaas.authGenerated" .)) -}}
+{{- if and $consumers.appKey (include "patchworks.kubefaas.host" .) .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) (not (include "patchworks.kubefaas.authGenerated" .)) -}}
 {{- fail "kubefaas.auth.username and kubefaas.auth.password are required unless kubefaas.auth.existingSecret.name is set, or kubefaas.enabled and credentials.autoGenerate are both true." -}}
 {{- end -}}
-{{- if and (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
+{{- if and $consumers.pusher (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
 {{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required unless pusher.existingSecret.name is set, or pusher.enabled=true with credentials.autoGenerate=true." -}}
 {{- end -}}
 {{- end -}}
@@ -2486,3 +2487,66 @@ annotations:
   {{- toYaml $anns | nindent 2 }}
 {{- end -}}
 {{- end }}
+
+{{/* Namespaces of actual consumers; shared local resources are emitted only there. */}}
+{{- define "patchworks.consumerNamespaces" -}}
+{{- $root := . -}}
+{{- $core := dict -}}
+{{- $workers := dict -}}
+{{- $accounts := dict -}}
+{{- $passport := dict -}}
+{{- $appKey := dict -}}
+{{- $pusher := dict -}}
+{{- if .Values.web.gateway.enabled -}}{{- $_ := set $core (include "patchworks.gateway.namespace" .) true -}}{{- end -}}
+{{- if .Values.web.start.enabled -}}{{- $_ := set $core (include "patchworks.start.namespace" .) true -}}{{- end -}}
+{{- range $processor := .Values.processors -}}
+  {{- if and $processor (dig "enabled" true $processor) -}}
+    {{- $scheduler := mergeOverwrite (deepCopy $root.Values.scheduler) ($processor.scheduler | default (dict)) -}}
+    {{- if or $root.Values.processorDeployments.enabled (and $root.Values.scheduler.enabled $scheduler.enabled) -}}
+      {{- $_ := set $core ($processor.namespace | default (include "patchworks.workers.namespace" $root)) true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if .Values.workers.enabled -}}
+  {{- $hub := include "patchworks.workers.namespace" . -}}
+  {{- if eq .Values.workers.type "microservice" -}}
+    {{- range $name, $service := .Values.workers.microservices -}}
+      {{- if and (ne $name "_default") (dig "enabled" (dig "enabled" true $root.Values.workers.microservices._default) $service) -}}
+        {{- $namespace := $service.namespace | default $hub -}}
+        {{- if $root.Values.workers.hub.enabled -}}{{- $_ := set $workers $namespace true -}}{{- end -}}
+        {{- range $root.Values.workers.companies -}}{{- $_ := set $workers (.namespace | default $namespace) true -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- else -}}
+    {{- if .Values.workers.hub.enabled -}}{{- $_ := set $workers $hub true -}}{{- end -}}
+    {{- range .Values.workers.companies -}}{{- $_ := set $workers (.namespace | default $hub) true -}}{{- end -}}
+  {{- end -}}
+  {{- if ne .Values.workers.type "mono" -}}{{- $_ := merge $core $workers -}}{{- end -}}
+{{- end -}}
+{{- $_ := merge $accounts $core $workers -}}
+{{- $_ := merge $passport $core -}}
+{{- if .Values.fabric.enabled -}}
+  {{- $_ := set $accounts (include "patchworks.fabric.namespace" .) true -}}
+  {{- $_ := set $passport (include "patchworks.fabric.namespace" .) true -}}
+{{- end -}}
+{{- if or .Values.fabric.migrations.enabled .Values.seeds.fabric.enabled -}}{{- $_ := set $passport (include "patchworks.fabric.namespace" .) true -}}{{- end -}}
+{{- if .Values.migrations.enabled -}}{{- $_ := set $passport (include "patchworks.migrations.namespace" .) true -}}{{- end -}}
+{{- if .Values.seeds.core.enabled -}}{{- $_ := set $passport (include "patchworks.seeds.namespace" .) true -}}{{- end -}}
+{{- $_ := merge $appKey $passport $workers -}}
+{{- $_ := merge $pusher $appKey -}}
+{{- if .Values.dashboard.enabled -}}
+  {{- $_ := set $accounts (include "patchworks.dashboard.namespace" .) true -}}
+  {{- $_ := set $pusher (include "patchworks.dashboard.namespace" .) true -}}
+{{- end -}}
+{{- if and .Values.s3Manager.enabled (not .Values.s3Manager.external.endpoint) -}}{{- $_ := set $accounts (include "patchworks.s3Manager.namespace" .) true -}}{{- end -}}
+{{- dict "core" $core "passport" $passport "appKey" $appKey "pusher" $pusher "serviceAccounts" $accounts | toJson -}}
+{{- end -}}
+
+{{/* A generated shared credential may only have one namespace owner. */}}
+{{- define "patchworks.credentialNamespace" -}}
+{{- $namespaces := keys .namespaces | sortAlpha -}}
+{{- if gt (len $namespaces) 1 -}}
+  {{- fail (printf "%s: consumers span namespaces (%s); configure the existingSecret and replicate the same credential into each namespace" .setting (join ", " $namespaces)) -}}
+{{- end -}}
+{{- first $namespaces | default .root.Release.Namespace -}}
+{{- end -}}

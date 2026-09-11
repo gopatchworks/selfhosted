@@ -23,9 +23,14 @@ runtime:
 # Number of old ReplicaSets retained for chart-managed Deployments.
 revisionHistoryLimit: 3
 
+# Deployment metadata annotations, inherited by every application Deployment.
+# Component deploymentAnnotations override these keys.
+deploymentAnnotations: {}
+
 # ── Service account ────────────────────────────────────────────────────────────
 # Shared ServiceAccount used by all app pods (gateway, start, fabric, workers,
-# dashboard, migrations). imagePullSecrets from image.pullSecrets are attached.
+# dashboard, processors, schedulers). Created in each consumer namespace.
+# imagePullSecrets from image.pullSecrets are attached.
 serviceAccount:
   # Set to false to skip creation and use an existing account instead.
   create: true
@@ -116,6 +121,7 @@ web:
       memory: 900Mi
   extraEnv: []
   extraEnvFrom: []
+  deploymentAnnotations: {}
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
@@ -123,11 +129,13 @@ web:
 
   # Gateway — primary API / MCP-facing service.
   gateway:
+    enabled: true
     queue: gateway
     frankenphp: {}
 
   # Start — webhook, callback, and start-trigger service.
   start:
+    enabled: true
     queue: start
     frankenphp: {}
 
@@ -170,6 +178,11 @@ scheduler:
 #     schedule: "*/5 * * * *"
 #     activeDeadlineSeconds: 7500
 # The top-level scheduler.enabled remains the global on/off switch.
+# Controls processor Deployments independently of scheduler CronJobs.
+# The processors list remains the shared queue/processor inventory.
+processorDeployments:
+  enabled: true
+
 processors:
   # Used to schedule flows.
   - name: Start
@@ -199,8 +212,9 @@ processors:
       enabled: false
 
 # ── Fabric ─────────────────────────────────────────────────────────────────────
-# PHP-FPM application fronted by an Nginx sidecar. Required component.
+# PHP-FPM application fronted by an Nginx sidecar, or FrankenPHP when enabled.
 fabric:
+  enabled: true
   namespace: ""
   frankenphp: {}
   image:
@@ -306,6 +320,7 @@ fabric:
   resources: {}
   extraEnv: []
   extraEnvFrom: []
+  deploymentAnnotations: {}
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
@@ -356,6 +371,7 @@ dashboard:
       allowances: ""
 
   extraEnv: []
+  deploymentAnnotations: {}
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
@@ -368,6 +384,7 @@ migrations:
   enabled: true
   namespace: ""  # overrides global namespace for migration jobs
   frankenphp: {}
+  # Empty image fields inherit the enabled gateway image; otherwise use image.*.
   image:
     registry: ""
     tag: ""
@@ -474,6 +491,9 @@ monocore:
 
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
+  enabled: true
+  hub:
+    enabled: true  # false deploys only the selected workers.companies entries
   namespace: ""  # overrides global namespace for worker resources
   frankenphp: {}
   # Deployment type:
@@ -497,6 +517,7 @@ workers:
       memory: 900Mi
   extraEnv: []
   extraEnvFrom: []
+  deploymentAnnotations: {}
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []
@@ -521,7 +542,7 @@ workers:
 
   # ── type: microservice ───────────────────────────────────────────────────
   # Each key (except _default) creates one or more Deployments — one for the
-  # hub queue and one per entry in workers.companies.
+  # hub queue (when workers.hub.enabled) and one per entry in workers.companies.
   #
   # _default is the base template applied to every microservice. Per-service
   # keys override individual fields. Only name and domain are required per
@@ -543,6 +564,7 @@ workers:
       resources: {}
       extraEnv: []
       extraEnvFrom: []
+      deploymentAnnotations: {}
       podAnnotations: {}
       nodeSelector: {}
       tolerations: []
@@ -661,9 +683,10 @@ workers:
       addSource: true
       verbose: false
 
-  # ── Company worker deployments (type: standalone and type: mono) ─────────
+  # ── Company worker deployments (all types) ──────────────────────────────
   # Each entry creates a separate Deployment consuming a company-specific queue,
-  # in addition to the main hub Deployment.
+  # alongside the hub when workers.hub.enabled is true. Disable the hub to
+  # deploy company workers in separate Helm releases.
   #
   # NOTE (type: standalone/microservice): the chart creates hub worker queues
   # through rabbitmq.topology. Company-specific queues and bindings must be
@@ -680,6 +703,7 @@ workers:
   #   resources: {}               # defaults to workers.resources
   #   extraEnv: []
   #   extraEnvFrom: []
+  #   deploymentAnnotations: {}
   #   podAnnotations: {}
   #   nodeSelector: {}
   #   tolerations: []
@@ -1218,6 +1242,7 @@ s3Manager:
         environment: local
   extraEnv: []
   extraEnvFrom: []
+  deploymentAnnotations: {}
   podAnnotations: {}
   nodeSelector: {}
   tolerations: []

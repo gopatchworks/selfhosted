@@ -6,44 +6,21 @@ Namespace: {{ .Release.Namespace }}
 
 ── Application ──────────────────────────────────────────────────────────────
 
-Gateway and Start are deployed and available within the cluster.
+Selected web services:
+  Gateway: {{ .Values.web.gateway.enabled }}
+  Start:   {{ .Values.web.start.enabled }}
+  Fabric:  {{ .Values.fabric.enabled }}
+  Dashboard: {{ .Values.dashboard.enabled }}
 {{- if .Values.ingress.enabled }}
 
-Ingress is enabled. Patchworks is reachable at:
-{{- $scheme := ternary "https" "http" (gt (len .Values.ingress.tls) 0) }}
-{{- with .Values.ingress.hosts.dashboard }}  {{ $scheme }}://{{ . }}           (dashboard)
-  {{ $scheme }}://{{ . }}/fabric      (fabric)
-  {{ $scheme }}://{{ . }}/core-main   (core gateway)
-  {{ $scheme }}://{{ . }}/core-start  (core start)
-{{- end }}
-{{- with .Values.ingress.hosts.gateway }}  {{ $scheme }}://{{ . }}  (core gateway — dedicated host)
-{{- end }}
-{{- with .Values.ingress.hosts.start }}  {{ $scheme }}://{{ . }}  (core start — dedicated host)
-{{- end }}
-{{- with .Values.ingress.hosts.webhook }}  {{ $scheme }}://{{ . }}  (webhooks — core start)
-{{- end }}
-{{- with .Values.ingress.hosts.callback }}  {{ $scheme }}://{{ . }}  (callbacks — core start)
-{{- end }}
-{{- with .Values.ingress.hosts.fabric }}  {{ $scheme }}://{{ . }}  (fabric — dedicated host)
-{{- end }}
-{{- if .Values.ingress.hosts.dashboard }}
-{{- if eq .Values.ingress.provider "contour" }}
-
-  An HTTPProxy (projectcontour.io/v1) is deployed for the dashboard host.
-  Prefix stripping is handled natively — no annotation config needed.
-{{- else }}
-
-  !! ingress.rewriteAnnotations must be set for /fabric, /core-main and
-  !! /core-start prefix stripping to work with your ingress controller.
-  !! See the Ingress section of the chart README for controller-specific
-  !! annotation examples (nginx, Traefik, etc.).
-{{- end }}
-{{- end }}
-{{- else }}
+Ingress is enabled for selected web services with configured hostnames.
+Inspect the rendered Ingress or HTTPProxy resources for their public routes.
+Only enabled services in the Dashboard namespace receive shared-host path routes.
+{{- else if .Values.web.gateway.enabled }}
 
 Ingress is disabled. To reach Gateway from your local machine, run:
 
-  kubectl port-forward -n {{ .Release.Namespace }} \
+  kubectl port-forward -n {{ include "patchworks.gateway.namespace" . }} \
     svc/{{ include "patchworks.fullname" . }}-gateway \
     8080:{{ .Values.web.service.port }}
 
@@ -51,10 +28,11 @@ Then open http://localhost:8080
 
 To enable ingress, set:
   ingress.enabled=true
-  ingress.hosts[0].host=<your-domain>
+  ingress.hosts.gateway=<your-domain>
 {{- end }}
 
 ── Workers ───────────────────────────────────────────────────────────────────
+  Enabled: {{ .Values.workers.enabled }}
   Type: {{ .Values.workers.type }}
 {{- if eq .Values.workers.type "standalone" }}
   Replicas: {{ .Values.workers.replicaCount }}, connection: {{ .Values.workers.queue.connection }}
@@ -102,7 +80,7 @@ To enable ingress, set:
 
 ── Next steps ────────────────────────────────────────────────────────────────
 
-  1. If you did not set app.key, ensure the app key generator hook completed.
+  1. If an app key generator hook was rendered, ensure it completed.
   2. Review resource limits for production workloads.
   3. For production, replace in-cluster MySQL/Redis/Elasticsearch with
      managed services by setting <service>.enabled=false and providing

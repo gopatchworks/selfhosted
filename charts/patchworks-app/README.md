@@ -16,7 +16,7 @@ name, so the app chart can reference services and generated Secrets created by
 the infra chart.
 
 If `app.key` and `app.existingSecret.name` are both empty, the app chart creates
-a stable `patchworks-app-key` Secret with an `APP_KEY` value equivalent to:
+a stable `patchworks-app-key` Secret for enabled APP_KEY consumers, with a value equivalent to:
 
 ```bash
 echo "base64:$(openssl rand -base64 32)"
@@ -40,6 +40,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 
 ## Contents
 
+- [Component selection](#component-selection)
 - [Global](#global)
 - [Images](#images)
 - [Shared values and generated credentials](#shared-values-and-generated-credentials)
@@ -85,11 +86,94 @@ If you use component namespace overrides, remember Kubernetes Secrets are
 namespace-scoped. Keep app and generated infra secrets in the same namespace or
 provide copied Secrets via the relevant `existingSecret` values.
 
+## Component selection
+
+The default installation is unchanged: Gateway, Start, Fabric, processor
+Deployments, scheduler CronJobs, workers and migrations are enabled. Each can
+also be installed in its own Helm release or Argo CD Application.
+
+| Key | Default | Resources controlled |
+|-----|---------|----------------------|
+| `web.gateway.enabled` | `true` | Gateway Deployment, Service and ingress routes |
+| `web.start.enabled` | `true` | Start Deployment, Service and webhook/callback ingress routes |
+| `fabric.enabled` | `true` | Fabric Deployment, Service, runtime configuration and ingress routes |
+| `dashboard.enabled` | `false` | Dashboard Deployment, Service and root ingress route |
+| `processorDeployments.enabled` | `true` | Processor Deployments and supervisord ConfigMaps; preserves `processors[]` for schedulers/topology |
+| `scheduler.enabled` | `true` | CronJobs for enabled entries in `processors[]` |
+| `workers.enabled` | `true` | The selected `workers.type` hub, companies, configuration and mono store generator |
+| `workers.hub.enabled` | `true` | Hub worker Deployments; set `false` for company-only releases |
+| `migrations.enabled` | `true` | Core migration Job |
+| `fabric.migrations.enabled` | `true` | Fabric migration Job; independent of `fabric.enabled` |
+| `seeds.core.enabled` / `seeds.fabric.enabled` | `false` | First-install seed Jobs |
+| `rabbitmq.topology.enabled` | `true` | Explicit RabbitMQ topology Job; independent of workload switches |
+| `s3Manager.enabled` | `true` | S3 Manager, unless an external endpoint is provided |
+
+For separate releases, keep a shared values file with all the switches above
+turned off, then enable only the required component in that release's override.
+A Gateway override is `web.gateway.enabled: true`; a migration release enables
+`migrations.enabled` and `fabric.migrations.enabled`. Disable both seed switches
+and `rabbitmq.topology.enabled` in ordinary workload releases. Assign database
+migrations, initial seeding and RabbitMQ topology to explicit owners.
+
+The app chart deploys no bundled database, Redis, Elasticsearch, Soketi or
+KubeFaaS resources. For externally owned infrastructure, set the corresponding
+`enabled` flags to `false` and configure `external` endpoints/authentication.
+Use `kubefaas.host`, `kubefaas.builderHost` and `pusher.external.host` for those external
+services. See their configuration sections for the complete credential fields.
+
+Shared Core ConfigMaps, inline Secrets and the application ServiceAccount are
+created only in namespaces with active consumers. Fabric runtime configuration
+is created only for the Fabric Deployment; migration and seed Jobs render their
+environment directly. APP_KEY, Passport and Pusher generators are omitted when
+unused. When generation is needed, it happens in the sole consumer namespace.
+If a credential is consumed in several namespaces, set its `existingSecret`
+and replicate **the same credential** to every consumer namespace; the chart
+rejects multi-namespace generation instead of issuing different keys.
+
+The `fullnameOverride` prefix is independent of Helm's release name. Use a
+unique prefix for releases sharing a namespace. In different namespaces the
+same prefix is safe, provided no cluster-scoped resources collide (the mono
+store generator owns cluster RBAC; supplying its existing store Secret avoids
+that generator). Existing Secrets must exist in each destination namespace.
+
+Default service URLs are release-local. Set `dashboard.coreUrl`,
+`dashboard.startUrl`, `dashboard.fabricUrl` and `dashboard.mcpUrl` to the actual
+public endpoints; set `monocore.url` for Core releases using a separately
+installed mono worker. Use `dashboard.routingMode: host` for independent public
+hosts. Shared-host path routes are emitted only for enabled services in the
+Dashboard namespace. Cross-namespace/shared-host routing must be supplied by
+the ingress configuration that owns that hostname.
+
 ## Global
 
 | Key | Default | Description |
 |-----|---------|-------------|
 | `revisionHistoryLimit` | `3` | Number of old ReplicaSets retained for chart-managed Deployments |
+| `deploymentAnnotations` | `{}` | Annotations on application Deployment metadata, inherited by every Deployment |
+
+For Reloader, place its opt-in and pause window on Deployment metadata:
+
+```yaml
+deploymentAnnotations:
+  reloader.stakater.com/auto: "true"
+  deployment.reloader.stakater.com/pause-period: "60s"
+```
+
+Install and configure the reload controller separately. Component
+`deploymentAnnotations` override global keys: `web` (then `web.gateway` or
+`web.start`), `fabric`, `dashboard`, `workers`, `processors[]`, and `s3Manager`.
+Workers also support per-microservice/default, mono and company overrides.
+`podAnnotations` retains its existing meaning and legacy behavior. CronJobs
+and lifecycle Jobs do not inherit Deployment annotations.
+
+The chart retains its checksum annotations for configuration rollouts. Reloader
+can also react to changes in referenced external Secrets and ConfigMaps. Its
+pause window does not guarantee a single rollout when chart checksums change
+at the same time. Direct pod-spec changes also initiate normal rollouts.
+Dashboard's generated config.js is embedded in its init-container command, so
+changing Dashboard values changes the pod spec directly. Configure Argo CD to
+ignore only the reload controller's documented fields for each managed
+Deployment; this chart does not configure Argo CD itself.
 
 ## Images
 
@@ -146,6 +230,8 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `fabric.enabled` | `true` | Deploy Fabric web resources; does not control migrations/seeds |
+| `fabric.deploymentAnnotations` | `{}` | Deployment metadata annotations |
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
 | `fabric.mysql.maxConnections` | `1000` | `max_connections` for dedicated bundled Fabric MySQL when `fabric.mysql.enabled=true` |
@@ -228,7 +314,7 @@ When `passport.existingSecret.name` is set the auto-generation Job, ServiceAccou
 
 ### Multi-namespace deployments
 
-The generated Secret lives in the Helm release namespace (where Core runs). Fabric pods load it from that namespace. If you override `fabric.namespace` to place Fabric in a different namespace, copy the Secret there manually or use `passport.existingSecret` to point at a copy you manage.
+The generator uses the sole namespace containing enabled Passport consumers. If Core, Fabric or lifecycle Jobs consume Passport in different namespaces, supply `passport.existingSecret` and replicate the same keypair to each namespace. Kubernetes cannot mount a Secret from another namespace; multi-namespace auto-generation is rejected.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -276,10 +362,12 @@ commands use `/usr/local/bin/frankenphp php-cli artisan ...`.
 
 ## Web
 
-The main Laravel web application. Always deployed.
+Gateway and Start are independently selectable Laravel web services.
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `web.gateway.enabled` / `web.start.enabled` | `true` | Select each Core web Deployment independently |
+| `web.deploymentAnnotations` | `{}` | Deployment metadata annotations; each web service can override keys |
 | `web.replicaCount` | `1` | Number of web replicas |
 | `web.frankenphp.enabled` | unset | Override global FrankenPHP runtime for both Core web services |
 | `web.service.type` | `ClusterIP` | Kubernetes service type |
@@ -324,7 +412,8 @@ Shared defaults for processor scheduler CronJobs. Each enabled entry in
 
 ## Processors
 
-`processors[]` defines the PHP Core background processor queues. These are
+`processorDeployments.enabled` selects processor Deployments independently of
+`scheduler.enabled`. `processors[]` defines the PHP Core background processor queues. These are
 separate from `workers.type`: even when `workers.type=mono`, processor queues
 are still handled by PHP Core worker Deployments because Monocore does not run
 these jobs.
@@ -380,6 +469,9 @@ processor scheduler CronJobs are rendered, even if an individual processor sets
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `workers.enabled` | `true` | Deploy worker hub/company resources for the selected type |
+| `workers.hub.enabled` | `true` | Include the hub worker for each selected service; independent of `workers.companies` |
+| `workers.deploymentAnnotations` | `{}` | Deployment metadata defaults for workers and processors |
 | `workers.type` | `standalone` | Worker deployment type |
 | `workers.namespace` | `""` | Namespace for worker resources (defaults to release namespace) |
 | `workers.frankenphp.enabled` | unset | Override FrankenPHP runtime for PHP workers |
@@ -455,7 +547,22 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 
 **Multi-company workers**
 
-`workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`) alongside the hub.
+`workers.companies[]` is supported by all three types. Each entry adds a Deployment consuming `company.queue` (or `company.name`). Set `workers.hub.enabled: false` to deploy selected companies without another hub. In microservice mode, the existing per-service `enabled` flags select which services to create for those companies.
+
+For a separate company release, use the shared component-off values described above and enable only its workers:
+
+```yaml
+workers:
+  enabled: true
+  hub:
+    enabled: false
+  type: standalone
+  companies:
+    - name: customer
+      queue: customer-flows
+```
+
+With no hub and no companies selected, the chart creates no worker resources. Mono topology ConfigMaps and generated store Secrets are created only in selected worker namespaces. The store-generator Job and its ServiceAccount run in the hub namespace when enabled, otherwise the first company's namespace; its cluster RBAC still permits the required cross-namespace Secret access.
 
 > **Note (standalone/microservice):** RabbitMQ queues for company workers must be created manually. The app-chart topology hook creates processor queues and hub standalone/microservice queues only.
 
@@ -464,10 +571,15 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 ## Migrations
 
 Fabric migrations run before Core migrations as pre-install/pre-upgrade hooks.
-Core migrations default to `php artisan migrate --force`.
+Core migrations default to `php artisan migrate --force`. When the gateway is
+enabled, their image and pull policy follow the gateway; non-empty
+`migrations.image.*` fields override that inheritance. With the gateway disabled,
+the existing migration/global image fallback applies. Argo CD recreates both
+named migration hooks before a new sync and deletes them after success.
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `migrations.enabled` | `true` | Run Core migrations independently of Core web Deployments |
 | `fabric.migrations.enabled` | `true` | Run Fabric migrations before Core migrations |
 | `fabric.migrations.frankenphp.enabled` | unset | Override FrankenPHP runtime for Fabric migrations |
 | `fabric.migrations.command` | `php artisan migrate --force` | Fabric migration command |
@@ -476,6 +588,7 @@ Core migrations default to `php artisan migrate --force`.
 | `migrations.restartPolicy` | `Never` | Job pod restart policy. `Never` preserves failed Pods for diagnostics |
 | `migrations.backoffLimit` | `3` | Job retry limit |
 | `migrations.resources` | `{}` | Resource requests and limits |
+| `migrations.image.*` | empty | Non-empty registry, repository, tag and pullPolicy override the enabled gateway image; otherwise fall back to global image settings |
 
 ---
 

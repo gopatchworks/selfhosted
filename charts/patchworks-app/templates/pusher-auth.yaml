@@ -1,6 +1,7 @@
-{{- if and .Values.pusher.enabled .Values.credentials.autoGenerate (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
+{{- $consumers := (include "patchworks.consumerNamespaces" . | fromJson).pusher }}
+{{- if and $consumers .Values.pusher.enabled .Values.credentials.autoGenerate (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
 {{- $fullname := include "patchworks.fullname" . }}
-{{- $ns := .Release.Namespace }}
+{{- $ns := include "patchworks.credentialNamespace" (dict "root" . "namespaces" $consumers "setting" "pusher.existingSecret") }}
 {{- $saName := printf "%s-pusher-auth-generator" $fullname }}
 {{- $secretName := printf "%s-soketi-auth" $fullname }}
 ---

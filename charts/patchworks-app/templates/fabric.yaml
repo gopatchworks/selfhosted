@@ -1,3 +1,4 @@
+{{- if .Values.fabric.enabled }}
 {{- $fabricUsesFrankenphp := eq (include "patchworks.usesFrankenphp" (dict "root" . "svc" .Values.fabric)) "true" -}}
 {{- $fabricInitSvc := mergeOverwrite (deepCopy .Values.fabric) .Values.fabric.init -}}
 {{- if not $fabricUsesFrankenphp }}
@@ -25,7 +26,7 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: fabric
-  {{- with .Values.fabric.podAnnotations }}
+  {{- with (mergeOverwrite (deepCopy (.Values.fabric.podAnnotations | default (dict))) (deepCopy $.Values.deploymentAnnotations) (.Values.fabric.deploymentAnnotations | default (dict))) }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
@@ -168,3 +169,5 @@ spec:
     - name: http
       port: {{ .Values.fabric.service.port }}
       targetPort: http
+
+{{- end }}

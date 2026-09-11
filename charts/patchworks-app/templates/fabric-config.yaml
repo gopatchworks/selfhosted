@@ -1,3 +1,4 @@
+{{- if .Values.fabric.enabled }}
 ---
 # ConfigMap for non-sensitive Fabric environment variables.
 # Uses Fabric's own MySQL/Redis connection details.
@@ -10,3 +11,5 @@ metadata:
     {{- include "patchworks.labels" . | nindent 4 }}
 data:
   {{- include "patchworks.fabricConfigData" . | nindent 2 }}
+
+{{- end }}

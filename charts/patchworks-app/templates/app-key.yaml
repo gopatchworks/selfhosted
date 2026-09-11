@@ -1,6 +1,7 @@
-{{- if and (not .Values.app.key) (not .Values.app.existingSecret.name) }}
+{{- $consumers := (include "patchworks.consumerNamespaces" . | fromJson).appKey }}
+{{- if and $consumers (not .Values.app.key) (not .Values.app.existingSecret.name) }}
 {{- $fullname := include "patchworks.fullname" . }}
-{{- $ns := .Release.Namespace }}
+{{- $ns := include "patchworks.credentialNamespace" (dict "root" . "namespaces" $consumers "setting" "app.existingSecret") }}
 {{- $saName := printf "%s-app-keygen" $fullname }}
 {{- $secretName := printf "%s-app-key" $fullname }}
 ---

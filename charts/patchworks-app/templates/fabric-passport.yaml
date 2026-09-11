@@ -1,21 +1,21 @@
+{{- $consumers := (include "patchworks.consumerNamespaces" . | fromJson).passport }}
 {{/*
 Generates a Laravel Passport RSA-4096 key pair on first install and stores it in a
 dedicated Secret (helm.sh/resource-policy: keep) that persists across upgrades and
-uninstalls. The Secret lives in the release namespace so both Core and Fabric can
-load it.
+uninstalls. The Secret lives in the sole consumer namespace. Multiple consumer namespaces
+require an existing Secret replicated with the same keys.
 
 If passport.existingSecret.name is set the generation Job and RBAC are skipped
 entirely — the user is responsible for ensuring the Secret contains
 PASSPORT_PRIVATE_KEY and PASSPORT_PUBLIC_KEY.
 
-Note: if fabric.namespace differs from the release namespace, mount the Secret into
-the fabric namespace manually or set passport.existingSecret to point at a copy.
+No key generator is rendered when there are no Passport consumers.
 */}}
 {{- $fullname   := include "patchworks.fullname" . }}
-{{- $ns         := .Release.Namespace }}
 {{- $saName     := printf "%s-passport-keygen" $fullname }}
 {{- $secretName := include "patchworks.passportSecretName" . }}
-{{- if not .Values.passport.existingSecret.name }}
+{{- if and $consumers (not .Values.passport.existingSecret.name) }}
+{{- $ns := include "patchworks.credentialNamespace" (dict "root" . "namespaces" $consumers "setting" "passport.existingSecret") }}
 ---
 # ServiceAccount used by the key-generation Job.
 # Must be a hook at lower weight than the Job so it exists before the pod starts.

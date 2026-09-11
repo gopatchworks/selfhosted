@@ -2,11 +2,11 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ing := .Values.ingress }}
 {{- $services := list
-  (dict "host" $ing.hosts.gateway "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .) "tlsSecret" (dig "gateway"  "secretName" "" $ing.tls))
-  (dict "host" $ing.hosts.start   "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "start"    "secretName" "" $ing.tls))
-  (dict "host" $ing.hosts.webhook "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "webhook"  "secretName" "" $ing.tls) "name" (printf "%s-webhook" $fullname))
-  (dict "host" $ing.hosts.callback "svcName" (printf "%s-start"   $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "callback" "secretName" "" $ing.tls) "name" (printf "%s-callback" $fullname))
-  (dict "host" $ing.hosts.fabric  "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .) "tlsSecret" (dig "fabric"   "secretName" "" $ing.tls))
+  (dict "enabled" .Values.web.gateway.enabled "host" $ing.hosts.gateway "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .) "tlsSecret" (dig "gateway"  "secretName" "" $ing.tls))
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.start   "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "start"    "secretName" "" $ing.tls))
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.webhook "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "webhook"  "secretName" "" $ing.tls) "name" (printf "%s-webhook" $fullname))
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.callback "svcName" (printf "%s-start"   $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "callback" "secretName" "" $ing.tls) "name" (printf "%s-callback" $fullname))
+  (dict "enabled" .Values.fabric.enabled "host" $ing.hosts.fabric  "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .) "tlsSecret" (dig "fabric"   "secretName" "" $ing.tls))
 }}
 {{- $timeoutPolicy := dict }}
 {{- if $ing.timeout }}
@@ -14,7 +14,7 @@
 {{- $_ =  set $timeoutPolicy "idle"     (printf "%vs" $ing.timeout) }}
 {{- end }}
 {{- range $services }}
-{{- if .host }}
+{{- if and .enabled .host }}
 {{- $resourceName := .name | default .svcName }}
 {{- if eq $ing.provider "contour" }}
 ---
@@ -80,12 +80,19 @@ spec:
 {{- end }}
 {{- end }}
 {{- end }}
-{{- if $ing.hosts.dashboard }}
 {{- $dashNs := include "patchworks.dashboard.namespace" . }}
+{{- $routes := list }}
+{{- if eq .Values.dashboard.routingMode "path" }}
+{{- range (list
+  (dict "enabled" .Values.fabric.enabled "path" "/fabric" "component" "fabric" "ns" (include "patchworks.fabric.namespace" .))
+  (dict "enabled" .Values.web.gateway.enabled "path" "/core-main" "component" "gateway" "ns" (include "patchworks.gateway.namespace" .))
+  (dict "enabled" .Values.web.start.enabled "path" "/core-start" "component" "start" "ns" (include "patchworks.start.namespace" .))) }}
+{{- if and .enabled (eq .ns $dashNs) }}{{- $routes = append $routes . }}{{- end }}
+{{- end }}
+{{- end }}
+{{- if and $ing.hosts.dashboard (or .Values.dashboard.enabled $routes) }}
 {{- if eq $ing.provider "contour" }}
 ---
-# Contour HTTPProxy — native prefix rewriting for /fabric, /core-main, /core-start
-# and catch-all to dashboard. Requires the Contour CRD (projectcontour.io/v1).
 apiVersion: projectcontour.io/v1
 kind: HTTPProxy
 metadata:
@@ -106,8 +113,9 @@ spec:
       secretName: {{ $tlsSecret | quote }}
     {{- end }}
   routes:
+    {{- range $routes }}
     - conditions:
-        - prefix: /fabric
+        - prefix: {{ .path }}
       pathRewritePolicy:
         replacePrefix:
           - replacement: /
@@ -116,32 +124,9 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       services:
-        - name: {{ $fullname }}-fabric
+        - name: {{ $fullname }}-{{ .component }}
           port: 80
-    - conditions:
-        - prefix: /core-main
-      pathRewritePolicy:
-        replacePrefix:
-          - replacement: /
-      {{- with $timeoutPolicy }}
-      timeoutPolicy:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      services:
-        - name: {{ $fullname }}-gateway
-          port: 80
-    - conditions:
-        - prefix: /core-start
-      pathRewritePolicy:
-        replacePrefix:
-          - replacement: /
-      {{- with $timeoutPolicy }}
-      timeoutPolicy:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      services:
-        - name: {{ $fullname }}-start
-          port: 80
+    {{- end }}
     {{- if .Values.dashboard.enabled }}
     - conditions:
         - prefix: /
@@ -154,10 +139,8 @@ spec:
           port: 80
     {{- end }}
 {{- else }}
+{{- if $routes }}
 ---
-# Path-rewriting Ingress — strips /fabric, /core-main, /core-start prefixes
-# before forwarding to their respective services.
-# See ingress.rewriteAnnotations in values.yaml for controller-specific config.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -194,27 +177,16 @@ spec:
     - host: {{ $ing.hosts.dashboard | quote }}
       http:
         paths:
-          - path: /fabric
+          {{- range $routes }}
+          - path: {{ .path }}
             pathType: Prefix
             backend:
               service:
-                name: {{ $fullname }}-fabric
+                name: {{ $fullname }}-{{ .component }}
                 port:
                   name: http
-          - path: /core-main
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ $fullname }}-gateway
-                port:
-                  name: http
-          - path: /core-start
-            pathType: Prefix
-            backend:
-              service:
-                name: {{ $fullname }}-start
-                port:
-                  name: http
+          {{- end }}
+{{- end }}
 {{- if .Values.dashboard.enabled }}
 ---
 # Dashboard Ingress — serves the dashboard at /.
