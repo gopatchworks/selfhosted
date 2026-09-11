@@ -296,6 +296,8 @@ fabric:
   #   3. (default) shared            — use the main Redis instance.
   redis:
     enabled: false
+    mode: standalone             # standalone | cluster; requires a compatible Fabric image
+    scheme: tcp                  # tcp | tls
     external:
       host: ""
       port: 6379
@@ -1087,10 +1089,11 @@ redis:
   # Set to true to deploy Valkey (Redis-compatible) in-cluster. Set to false
   # and populate external.* to use an existing Redis/Valkey instance.
   enabled: true
-  # Connection mode used by monocore's config.yaml.
+  # Connection mode used by PHP applications and monocore's config.yaml.
   # For sentinel, set mode: sentinel, list addrs, and set sentinel.master.
   # Leave addrs empty to auto-derive from enabled/external settings.
-  mode: standalone              # standalone | sentinel
+  mode: standalone              # standalone | sentinel | cluster
+  scheme: tcp                   # tcp | tls; PHP transport, requires a compatible image
   addrs: []                     # e.g. ["redis-sentinel:26379"]
   sentinel:
     master: mymaster
