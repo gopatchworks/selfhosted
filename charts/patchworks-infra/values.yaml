@@ -699,6 +699,18 @@ workers:
 # external.* to use an existing RabbitMQ instance.
 # RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST are injected into app pods and monocore workers.
 rabbitmq:
+  metrics:
+    # Enable the built-in rabbitmq_prometheus plugin and internal metrics Service.
+    enabled: false
+    serviceMonitor:
+      enabled: false
+      additionalLabels: {}
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics/per-object
+      honorLabels: false
+      relabelings: []
+      metricRelabelings: []
   namespace: ""  # overrides global namespace for RabbitMQ resources
   enabled: true
   topology:
@@ -759,6 +771,15 @@ kubefaas:
   namespace: kubefaas
 
   controller:
+    serviceMonitor:
+      enabled: false
+      additionalLabels: {}
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+      honorLabels: false
+      relabelings: []
+      metricRelabelings: []
     image:
       repository: kubefaas-controller
       registry: quay.io/patchworks    # overrides global image.registry when set
@@ -772,6 +793,15 @@ kubefaas:
         memory: 128Mi
 
   builder:
+    serviceMonitor:
+      enabled: false
+      additionalLabels: {}
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+      honorLabels: false
+      relabelings: []
+      metricRelabelings: []
     image:
       repository: kubefaas-builder
       registry: quay.io/patchworks
@@ -1280,6 +1310,18 @@ s3Manager:
 # Native in-cluster Pusher-compatible WebSocket server. Enabled via
 # pusher.enabled and configured from pusher.* credentials.
 soketi:
+  metrics:
+    # Native Soketi metrics listener and internal Service on port 9601.
+    enabled: false
+    serviceMonitor:
+      enabled: false
+      additionalLabels: {}
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+      honorLabels: false
+      relabelings: []
+      metricRelabelings: []
   fullnameOverride: patchworks-soketi
   replicaCount: 1
   image:

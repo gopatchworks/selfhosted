@@ -984,6 +984,46 @@ company workers. For an older chart with a compatible Monocore image,
 
 ---
 
+## Metrics collection
+
+`workers.mono.serviceMonitor.enabled` creates a monitor for each enabled Monocore
+hub/company worker, scraping its existing internal Service on port `metrics`
+(8081). Company workers use their configured namespaces. Standalone and
+microservice PHP workers have no HTTP metrics listener.
+
+Core publishes `core_*` business metrics to a Pushgateway from its medium
+processor scheduler. Supply `PUSH_GATEWAY_HOST` using `app.extraEnv`, run that
+scheduler, and configure a ServiceMonitor on the Pushgateway with
+`honorLabels: true`. Gateway, Start, and PHP processors cannot be scraped directly
+for those metrics. Kubernetes CPU/memory data comes from kubelet/cAdvisor and
+kube-state-metrics in the cluster monitoring stack.
+
+All monitors are opt-in and require the `monitoring.coreos.com/v1` ServiceMonitor
+CRD and a collector selecting their labels and namespaces. Each monitor is created
+in the target Service namespace. Configure the following keys under each
+`serviceMonitor` block:
+
+| Key | Default | Purpose |
+|---|---|---|
+| `enabled` | `false` | Create the ServiceMonitor |
+| `additionalLabels` | `{}` | Labels required by the collector's ServiceMonitor selector |
+| `interval` | `30s` | Scrape interval |
+| `scrapeTimeout` | `10s` | Scrape timeout; must not exceed the interval |
+| `path` | `/metrics` | Metrics endpoint path (RabbitMQ defaults to `/metrics/per-object`) |
+| `honorLabels` | `false` | Preserve conflicting labels from scraped metrics when true |
+| `relabelings` | `[]` | Target relabeling rules |
+| `metricRelabelings` | `[]` | Metric relabeling rules before ingestion |
+
+```yaml
+workers:
+  type: mono
+  mono:
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
+```
+
 ## RabbitMQ
 
 PHP Core web and worker pods default to `RABBITMQ_HEARTBEAT=0`, matching production.

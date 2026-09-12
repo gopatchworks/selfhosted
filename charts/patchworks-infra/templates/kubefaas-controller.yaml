@@ -226,4 +226,9 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+{{- $basicAuth := dict }}
+{{- if $kf.auth.enabled }}
+{{- $basicAuth = dict "username" (dict "name" $authSecretName "key" $authUsernameKey) "password" (dict "name" $authSecretName "key" $authPasswordKey) }}
+{{- end }}
+{{ include "patchworks.serviceMonitor" (dict "root" $root "name" (printf "%s-kubefaas-controller" $fullname) "namespace" $ns "component" "kubefaas-controller" "port" "http" "options" $kf.controller.serviceMonitor "basicAuth" $basicAuth) }}
 {{- end }}

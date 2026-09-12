@@ -79,6 +79,8 @@ spec:
                 // Soketi applies top-level config keys as replacements. Use its
                 // dotted option paths so appManager defaults such as cache are
                 // preserved instead of replacing the entire object.
+                'metrics.enabled': {{ .Values.soketi.metrics.enabled }},
+                'metrics.port': 9601,
                 'appManager.driver': 'array',
                 'appManager.array.apps': [app],
               }, null, 2));
@@ -192,4 +194,25 @@ spec:
       port: {{ .Values.soketi.service.port }}
       targetPort: soketi
       protocol: TCP
+
+{{- if .Values.soketi.metrics.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-soketi-metrics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: soketi-metrics
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "soketi" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: metrics
+      port: 9601
+      targetPort: metrics
+{{ include "patchworks.serviceMonitor" (dict "root" . "name" (printf "%s-soketi" $fullname) "namespace" .Release.Namespace "component" "soketi-metrics" "port" "metrics" "options" .Values.soketi.metrics.serviceMonitor) }}
+{{- end }}
 {{- end }}

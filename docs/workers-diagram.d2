@@ -106,7 +106,7 @@ mono: "type: mono" {
   style.fill: "#F0FFF4"
   direction: down
 
-  desc: "Monocore Go worker. RabbitMQ topology asserted at startup via topology.yaml.\nDatabase connections: DB_LANDLORD_* and DB_TENANT_* / DB_TENANT_{id}_*.\nTENANT_DB_* compatibility aliases also supplied.\nTenant registry selects the schema and server; company queue does not select a database." {
+  desc: "Monocore Go worker. RabbitMQ topology asserted at startup via topology.yaml.\nOptional workers.mono.serviceMonitor.enabled: one ServiceMonitor per worker namespace, metrics :8081.\nDatabase connections: DB_LANDLORD_* and DB_TENANT_* / DB_TENANT_{id}_*.\nTENANT_DB_* compatibility aliases also supplied.\nTenant registry selects the schema and server; company queue does not select a database." {
     shape: text
   }
 

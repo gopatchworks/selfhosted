@@ -653,6 +653,16 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    # Scrape the existing internal metrics Service port (8081).
+    serviceMonitor:
+      enabled: false
+      additionalLabels: {}
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics
+      honorLabels: false
+      relabelings: []
+      metricRelabelings: []
     # Monocore is a separate Go binary on its own release cycle.
     # Set tag independently from the PHP app image.tag.
     image:

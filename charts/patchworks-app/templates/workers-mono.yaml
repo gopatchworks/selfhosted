@@ -550,5 +550,6 @@ spec:
     - name: metrics
       port: 8081
       targetPort: metrics
+{{ include "patchworks.serviceMonitor" (dict "root" $root "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "component" $slug "port" "metrics" "options" $mono.serviceMonitor) }}
 {{- end }}
 {{- end }}

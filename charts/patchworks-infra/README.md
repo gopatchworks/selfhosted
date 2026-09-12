@@ -627,6 +627,60 @@ was checked, but the default `v0.1.43` image was not validated for these feature
 
 ---
 
+## Metrics collection
+
+| Values toggle | What it enables |
+|---|---|
+| `rabbitmq.metrics.enabled` | The native `rabbitmq_prometheus` plugin and an internal ClusterIP metrics Service on 15692 |
+| `rabbitmq.metrics.serviceMonitor.enabled` | Scraping `/metrics/per-object`, including the queue labels used by Core/Monocore dashboards; also requires `rabbitmq.metrics.enabled` |
+| `kubefaas.controller.serviceMonitor.enabled` | Scraping the controller's existing HTTP Service |
+| `kubefaas.builder.serviceMonitor.enabled` | Scraping the builder's existing HTTP Service |
+| `soketi.metrics.enabled` | The native Soketi metrics listener and an internal ClusterIP metrics Service on 9601 |
+| `soketi.metrics.serviceMonitor.enabled` | Scraping the native Soketi metrics Service; also requires `soketi.metrics.enabled` |
+
+Every toggle defaults to `false`. Disabled/external components create no monitors.
+KubeFaaS monitors automatically reference the configured authentication Secret
+and key names when `kubefaas.auth.enabled` is true. Native Soketi options apply
+when `pusher.enabled` is true and `soketi.subchart.enabled` is false; for the
+upstream subchart, use its own monitoring configuration.
+
+Metrics Services are internal and are not added to application ingress routes.
+External databases, Redis services and exporters are monitored by their owning
+infrastructure installation. This chart does not create exporters for them.
+
+All monitors are opt-in and require the `monitoring.coreos.com/v1` ServiceMonitor
+CRD and a collector selecting their labels and namespaces. Each monitor is created
+in the target Service namespace. Configure the following keys under each
+`serviceMonitor` block:
+
+| Key | Default | Purpose |
+|---|---|---|
+| `enabled` | `false` | Create the ServiceMonitor |
+| `additionalLabels` | `{}` | Labels required by the collector's ServiceMonitor selector |
+| `interval` | `30s` | Scrape interval |
+| `scrapeTimeout` | `10s` | Scrape timeout; must not exceed the interval |
+| `path` | `/metrics` | Metrics endpoint path (RabbitMQ defaults to `/metrics/per-object`) |
+| `honorLabels` | `false` | Preserve conflicting labels from scraped metrics when true |
+| `relabelings` | `[]` | Target relabeling rules |
+| `metricRelabelings` | `[]` | Metric relabeling rules before ingestion |
+
+```yaml
+rabbitmq:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      additionalLabels:
+        release: kube-prometheus-stack
+kubefaas:
+  controller:
+    serviceMonitor:
+      enabled: true
+  builder:
+    serviceMonitor:
+      enabled: true
+```
+
 ## RabbitMQ
 
 | Key | Default | Description |
