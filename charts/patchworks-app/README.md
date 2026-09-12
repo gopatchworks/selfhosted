@@ -934,7 +934,7 @@ assignment to the intended server.
 |-----|---------|-------------|
 | `redis.enabled` | `true` | Deploy Valkey in-cluster. Set `false` to use an external instance |
 | `redis.mode` | `standalone` | PHP/Monocore connection mode: `standalone`, `sentinel`, or `cluster` |
-| `redis.scheme` | `tcp` | PHP Redis transport: `tcp` or certificate-verified `tls` |
+| `redis.scheme` | `tcp` | PHP/Monocore transport: `tcp` or certificate-verified `tls` |
 | `fabric.redis.mode` | `standalone` | Fabric connection mode: `standalone` or `cluster` |
 | `fabric.redis.scheme` | `tcp` | Fabric Redis transport: `tcp` or `tls` |
 | `redis.external.host` | `""` | External Redis hostname |
@@ -942,19 +942,29 @@ assignment to the intended server.
 | `redis.external.password` | `""` | Password (or use `existingSecret`) |
 | `redis.external.existingSecret.name` | `""` | Secret name for external password |
 | `redis.external.existingSecret.passwordKey` | `password` | Key for the password |
-| `redis.mode` | `standalone` | Monocore connection mode: `standalone`, `sentinel` or `cluster` |
-| `redis.scheme` | `tcp` | Monocore transport: `tcp` or certificate-verified `tls`, for hub and company workers |
 | `redis.prefix` | `core` | Redis key prefix injected as `REDIS_PREFIX` for Core web and workers |
 | `redis.persistence.size` | `1Gi` | PVC size |
 | `redis.persistence.existingClaim` | `""` | Use a pre-existing PVC |
 
-For a TLS-only Redis or ElastiCache endpoint, set `redis.scheme: tls` and use a
-Monocore image that supports `redis.scheme` / `REDIS_SCHEME`. Older images without
-TLS support cannot enable it through chart values alone. The generated Monocore
-`config.yaml` carries the same scheme for its hub and company workers. If the
-image supports TLS but the installed chart predates this field, set
-`workers.mono.extraEnv` to `[{name: REDIS_SCHEME, value: tls}]` until the chart is
-updated. The PHP microservice worker mode uses its own application configuration.
+For a TLS-only Redis Cluster or ElastiCache cluster endpoint, set both
+`redis.mode: cluster` and `redis.scheme: tls`. The chart passes these as
+`REDIS_MODE` and `REDIS_SCHEME` to Core web services, processors, schedulers,
+PHP workers, migration Jobs and seed Jobs. The settings are included in both
+the shared ConfigMap and the inline environment used by Jobs; ConfigMap checksum
+changes roll the consuming Deployments. Core's cluster configuration covers its
+default, cache, tenant and payload connections and requires database `0`.
+
+Fabric uses `fabric.redis.mode` and `fabric.redis.scheme` independently. Set both
+to `cluster` and `tls` when its endpoint requires them, including when Fabric
+shares Core's Redis host. Its web/init containers and migration/seed Jobs receive
+the same settings. Cluster mode selects `REDIS_CLIENT=phpredis`.
+
+Use Core and Fabric images that support these environment variables. Chart
+settings alone cannot add TLS/cluster support to older application images.
+Monocore similarly requires an image that supports `redis.scheme` /
+`REDIS_SCHEME`; its generated `config.yaml` carries the scheme for hub and
+company workers. For an older chart with a compatible Monocore image,
+`workers.mono.extraEnv: [{name: REDIS_SCHEME, value: tls}]` remains a workaround.
 
 ---
 
