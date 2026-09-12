@@ -235,6 +235,11 @@ fabric:
   service:
     type: ClusterIP
     port: 80
+  # Core creates and migrates company databases when Fabric receives company
+  # creation requests. The default URL uses the resolved Gateway Service.
+  core:
+    initialiseDatabases: true
+    gatewayUrl: ""               # Override for a Gateway outside this release.
   # Fabric web session settings. Laravel SESSION_LIFETIME is in minutes.
   session:
     driver: redis

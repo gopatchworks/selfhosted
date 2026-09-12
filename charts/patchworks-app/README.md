@@ -242,9 +242,25 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 |-----|---------|-------------|
 | `fabric.enabled` | `true` | Deploy Fabric web resources; does not control migrations/seeds |
 | `fabric.deploymentAnnotations` | `{}` | Deployment metadata annotations |
+| `fabric.core.initialiseDatabases` | `true` | Set `CORE_INITIALISE_DATABASES` so Fabric asks Core to create and migrate databases for new companies |
+| `fabric.core.gatewayUrl` | `""` | Set `CORE_GATEWAY_URL`; empty resolves the Gateway Service name, namespace and port |
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
 | `fabric.mysql.maxConnections` | `1000` | `max_connections` for dedicated bundled Fabric MySQL when `fabric.mysql.enabled=true` |
+
+Fabric's Core settings reach its web and init containers, migration Jobs and
+seed Jobs. Changes also update the Fabric Deployment's configuration checksum.
+The default Gateway URL follows `fullnameOverride`/`nameOverride`, the Gateway
+namespace cascade and `web.gateway.service.port` (falling back to
+`web.service.port`). Port 80 is omitted. When Gateway is managed separately,
+set `fabric.core.gatewayUrl` to its reachable base URL, even if
+`web.gateway.enabled=false` in this release. Set
+`fabric.core.initialiseDatabases=false` to leave provisioning to an operator.
+
+Enabling automatic provisioning applies to new company creation requests; it
+does not backfill databases for companies already recorded in Fabric. The
+first-install `app:create-tenant` seeder still uses the chart's separate tenant
+database and Core migration Jobs before application startup.
 
 ---
 

@@ -79,6 +79,25 @@ rendered by workers-mono.yaml.
 {{- end }}
 
 {{/*
+Core Gateway URL consumed by Fabric when provisioning company databases.
+Match gateway.yaml's service settings and namespace cascade; an explicit URL
+also supports a Gateway managed by another release or outside Kubernetes.
+*/}}
+{{- define "patchworks.fabric.core.gatewayUrl" -}}
+{{- if .Values.fabric.core.gatewayUrl -}}
+{{- .Values.fabric.core.gatewayUrl -}}
+{{- else -}}
+{{- $gateway := mergeOverwrite (deepCopy .Values.web) .Values.web.gateway -}}
+{{- $url := printf "http://%s-gateway.%s.svc.cluster.local" (include "patchworks.fullname" .) (include "patchworks.gateway.namespace" .) -}}
+{{- if eq (int $gateway.service.port) 80 -}}
+{{- $url -}}
+{{- else -}}
+{{- printf "%s:%d" $url (int $gateway.service.port) -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Common labels applied to every resource.
 */}}
 {{- define "patchworks.labels" -}}
@@ -1461,6 +1480,8 @@ Non-sensitive Fabric env vars as a YAML map for ConfigMap data:.
 Like appConfigData but uses fabric MySQL/Redis helpers.
 */}}
 {{- define "patchworks.fabricConfigData" -}}
+CORE_INITIALISE_DATABASES: {{ .Values.fabric.core.initialiseDatabases | quote }}
+CORE_GATEWAY_URL: {{ include "patchworks.fabric.core.gatewayUrl" . | quote }}
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
 APP_URL: {{ .Values.app.url | quote }}
@@ -2262,6 +2283,10 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 (dedicated, external, or the shared MySQL with a separate database).
 */}}
 {{- define "patchworks.fabricEnv" -}}
+- name: CORE_INITIALISE_DATABASES
+  value: {{ .Values.fabric.core.initialiseDatabases | quote }}
+- name: CORE_GATEWAY_URL
+  value: {{ include "patchworks.fabric.core.gatewayUrl" . | quote }}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
 - name: APP_ENV
