@@ -687,3 +687,61 @@ func TestComponentSelectionMonoCompanyStoreGenerator(t *testing.T) {
 		t.Fatal("missing company store generator")
 	}
 }
+
+func TestComponentSelectionMonocoreRedisScheme(t *testing.T) {
+	checksums := map[string]map[string]string{}
+	for _, mode := range []string{"standalone", "sentinel", "cluster"} {
+		for _, scheme := range []string{"", "tcp", "tls"} {
+			t.Run(mode+"/"+scheme, func(t *testing.T) {
+				checksums[mode+"/"+scheme] = map[string]string{}
+				values := componentSelectionValues(t)
+				componentSelectionSet(values, true, "workers", "enabled")
+				componentSelectionSet(values, "mono", "workers", "type")
+				componentSelectionSet(values, "hub", "workers", "namespace")
+				componentSelectionSet(values, []any{map[string]any{"name": "acme", "namespace": "acme-workers"}}, "workers", "companies")
+				componentSelectionSet(values, mode, "redis", "mode")
+				if scheme != "" {
+					componentSelectionSet(values, scheme, "redis", "scheme")
+				}
+				wantScheme := scheme
+				if wantScheme == "" {
+					wantScheme = "tcp"
+				}
+				seen := map[string]bool{}
+				for _, object := range renderComponentSelection(t, "redis-scheme", "redis-scheme", values) {
+					if object["kind"] == "Deployment" {
+						namespace := fmt.Sprint(componentSelectionMap(object, "metadata")["namespace"])
+						checksums[mode+"/"+scheme][namespace] = fmt.Sprint(componentSelectionMap(object, "spec", "template", "metadata", "annotations")["checksum/config"])
+					}
+					if object["kind"] != "ConfigMap" {
+						continue
+					}
+					config, ok := componentSelectionMap(object, "data")["config.yaml"].(string)
+					if !ok {
+						continue
+					}
+					var parsed map[string]any
+					if err := yaml.Unmarshal([]byte(config), &parsed); err != nil {
+						t.Fatal(err)
+					}
+					redis := componentSelectionMap(parsed, "redis")
+					if redis["scheme"] != wantScheme || redis["mode"] != mode {
+						t.Errorf("Redis transport = mode %v / scheme %v, want %s / %s", redis["mode"], redis["scheme"], mode, wantScheme)
+					}
+					seen[fmt.Sprint(componentSelectionMap(object, "metadata")["namespace"])] = true
+				}
+				if len(seen) != 2 || !seen["hub"] || !seen["acme-workers"] {
+					t.Fatalf("expected hub and company Redis configurations, got namespaces %v", seen)
+				}
+			})
+		}
+		for _, namespace := range []string{"hub", "acme-workers"} {
+			if checksums[mode+"/tcp"][namespace] == checksums[mode+"/tls"][namespace] {
+				t.Errorf("changing %s Redis from tcp to tls must roll worker in %s", mode, namespace)
+			}
+			if checksums[mode+"/"][namespace] != checksums[mode+"/tcp"][namespace] {
+				t.Errorf("default Redis scheme must behave like explicit tcp in %s", namespace)
+			}
+		}
+	}
+}

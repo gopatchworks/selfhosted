@@ -251,6 +251,7 @@ data:
 
     redis:
       mode: {{ $root.Values.redis.mode | quote }}
+      scheme: {{ $root.Values.redis.scheme | default "tcp" | quote }}
       addrs:
         {{- if $root.Values.redis.addrs }}
         {{- range $root.Values.redis.addrs }}
@@ -384,7 +385,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s%s%s%s%s%s" ($root.Values.workers | toJson) (include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue)) (include "patchworks.mono.storeYaml" (dict "root" $root)) $storeSecretName $storeSecretKey ($queue | toString) | sha256sum }}
+        checksum/config: {{ printf "%s%s%s%s%s%s%s" ($root.Values.workers | toJson) ($root.Values.redis | toJson) (include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue)) (include "patchworks.mono.storeYaml" (dict "root" $root)) $storeSecretName $storeSecretKey ($queue | toString) | sha256sum }}
         {{- with $root.Values.workers.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

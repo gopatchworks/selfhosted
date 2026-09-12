@@ -1090,7 +1090,8 @@ redis:
   # Connection mode used by monocore's config.yaml.
   # For sentinel, set mode: sentinel, list addrs, and set sentinel.master.
   # Leave addrs empty to auto-derive from enabled/external settings.
-  mode: standalone              # standalone | sentinel
+  mode: standalone              # standalone | sentinel | cluster
+  scheme: tcp                   # tcp | tls; Monocore TLS requires a compatible image
   addrs: []                     # e.g. ["redis-sentinel:26379"]
   sentinel:
     master: mymaster
