@@ -1377,6 +1377,7 @@ RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
 RABBITMQ_VHOST: {{ include "patchworks.rabbitmq.vhost" . | quote }}
+RABBITMQ_HEARTBEAT: "0"
 ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}

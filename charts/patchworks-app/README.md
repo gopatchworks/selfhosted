@@ -986,6 +986,10 @@ company workers. For an older chart with a compatible Monocore image,
 
 ## RabbitMQ
 
+PHP Core web and worker pods default to `RABBITMQ_HEARTBEAT=0`, matching production.
+Override it through `app.extraEnv` or the component's `extraEnv` when needed.
+This default does not apply to Monocore workers.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `rabbitmq.enabled` | `true` | Deploy RabbitMQ in-cluster. Set `false` to use an external instance |
