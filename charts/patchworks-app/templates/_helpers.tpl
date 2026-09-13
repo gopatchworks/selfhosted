@@ -2533,3 +2533,7 @@ annotations:
 {{- end -}}
 {{- first $namespaces | default .root.Release.Namespace -}}
 {{- end -}}
+
+{{- define "patchworks.scheduler.prefix" -}}
+{{- printf "%s-scheduler" (include "patchworks.fullname" . | trunc 40 | trimSuffix "-") -}}
+{{- end -}}

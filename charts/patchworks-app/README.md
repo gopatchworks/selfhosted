@@ -528,6 +528,15 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
+| `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed scheduler drain by more than 10 seconds |
+| `workers.mono.durableExecution` | `true` | Durable execution claims and recovery; retain while registered work drains |
+| `workers.mono.scheduler.mode` | `kubernetes` | Hub scheduling mode: kubernetes, standalone or disabled; company pods remain execution-only |
+| `workers.mono.scheduler.shards` | `3` | Shared desired shard count, updated without rolling worker pods |
+| `workers.mono.scheduler.interval` | `5s` | Scheduling and coordination poll interval |
+| `workers.mono.scheduler.drainTimeoutSeconds` | `30` | Active scheduling pass shutdown deadline |
+| `workers.mono.scheduler.timezone` | `UTC` | Must match Core's application timezone |
+| `workers.mono.scheduler.estate` | fullname | Stable scheduling estate identity |
+| `workers.mono.scheduler.rbac.create` | `true` | Bind scheduler permissions to the shared service account in the hub namespace |
 | `workers.mono.store.existingSecret.name` | `""` | Existing Secret containing monocore's `store.yaml`; skips the generated store Secret hook |
 | `workers.mono.store.existingSecret.key` | `store.yaml` | Secret key to mount as `/etc/monocore/store.yaml` |
 | `workers.mono.rabbitmq.flowExchange` | `""` | Flow publish exchange. Empty defaults to `workers.mono.queue` when `companyFlows.enabled=false`, or `customer-flows` when enabled |
@@ -1449,3 +1458,26 @@ s3:
       name: patchworks-secrets
       rootPasswordKey: minio-root-password
 ```
+
+### Monocore scheduling rollout
+
+With `workers.type=mono`, hub scheduling defaults to Kubernetes mode. Use a
+Monocore build supporting scheduler and durable-execution flags. Deploy compatible
+Core ownership guards and the existing runtime tables before enabling company
+`monocore-scheduler` flags. Installing this chart does not transfer company ownership.
+No scheduler schema migration is added.
+
+The chart renders only desired configuration. Monocore creates and updates its own
+runtime ConfigMap; do not delete it to recover a stuck pass. Namespace-scoped RBAC
+permits Lease get/create/update, pod get/list/watch, named desired/runtime ConfigMap
+get/watch, named runtime update and ConfigMap creation for first-start bootstrap.
+Kubernetes cannot restrict create permission by resource name. Set
+`workers.mono.scheduler.rbac.create=false` if those grants are managed externally;
+`serviceAccount.name` and `serviceAccount.create` retain their usual behavior.
+
+Dedicated company workers never schedule the whole catalogue. Standalone mode runs
+on the single hub pod without Kubernetes access, and disabled/standalone modes
+render no scheduler RBAC. Durable execution stays enabled so registered work can
+finish after scheduling is disabled. Shard changes update desired configuration
+without changing the worker checksum. Keep the same estate and runtime ConfigMap
+identity through upgrades.

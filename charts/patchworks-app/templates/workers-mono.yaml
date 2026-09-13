@@ -1,6 +1,17 @@
 {{- if and .Values.workers.enabled (eq .Values.workers.type "mono") (or .Values.workers.hub.enabled .Values.workers.companies) }}
 {{- $root := . }}
 {{- $mono := .Values.workers.mono }}
+{{- $scheduler := $mono.scheduler }}
+{{- if not (has $scheduler.mode (list "disabled" "standalone" "kubernetes")) }}
+{{- fail "workers.mono.scheduler.mode must be disabled, standalone or kubernetes" }}
+{{- end }}
+{{- if and .Values.workers.hub.enabled (ne $scheduler.mode "disabled") }}
+{{- if or (lt (int $scheduler.drainTimeoutSeconds) 1) (le (int $mono.terminationGracePeriodSeconds) (add (int $scheduler.drainTimeoutSeconds) 10)) }}
+{{- fail "mono termination grace must exceed scheduler drain timeout by more than 10 seconds" }}
+{{- end }}
+{{- end }}
+{{- $checksumWorkers := deepCopy .Values.workers }}
+{{- $_ := unset $checksumWorkers.mono.scheduler "shards" }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $hubNs := include "patchworks.workers.namespace" . }}
 {{- $mainQueue := $mono.queue | default .Values.workers.queue.name }}
@@ -391,12 +402,14 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ printf "%s%s%s%s%s%s%s" ($root.Values.workers | toJson) ($root.Values.redis | toJson) (include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue)) (include "patchworks.mono.storeYaml" (dict "root" $root)) $storeSecretName $storeSecretKey ($queue | toString) | sha256sum }}
+        checksum/config: {{ printf "%s%s%s%s%s%s%s" ($checksumWorkers | toJson) ($root.Values.redis | toJson) (include "patchworks.mono.topologyYaml" (dict "root" $root "queueName" $mainQueue)) (include "patchworks.mono.storeYaml" (dict "root" $root)) $storeSecretName $storeSecretKey ($queue | toString) | sha256sum }}
         {{- with $root.Values.workers.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
+      terminationGracePeriodSeconds: {{ $mono.terminationGracePeriodSeconds }}
+      automountServiceAccountToken: {{ and $w.isHub (eq $scheduler.mode "kubernetes") }}
       {{- with $root.Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -456,6 +469,40 @@ spec:
               mountPath: /etc/monocore
               readOnly: true
           env:
+            - name: SCHEDULER_MODE
+              value: {{ ternary $scheduler.mode "disabled" $w.isHub | quote }}
+            - name: WORKER_ENABLE_DURABLE_EXECUTION
+              value: {{ or $mono.durableExecution (ne $scheduler.mode "disabled") | quote }}
+            {{- if and $w.isHub (ne $scheduler.mode "disabled") }}
+            - name: SCHEDULER_INTERVAL
+              value: {{ $scheduler.interval | quote }}
+            - name: SCHEDULER_DRAIN_TIMEOUT
+              value: {{ printf "%ds" (int $scheduler.drainTimeoutSeconds) | quote }}
+            - name: SCHEDULER_TIMEZONE
+              value: {{ $scheduler.timezone | quote }}
+            {{- end }}
+            {{- if and $w.isHub (eq $scheduler.mode "kubernetes") }}
+            - name: SCHEDULER_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SCHEDULER_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: SCHEDULER_POD_UID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.uid
+            - name: SCHEDULER_ESTATE
+              value: {{ default $fullname $scheduler.estate | quote }}
+            - name: SCHEDULER_POD_SELECTOR
+              value: {{ printf "app.kubernetes.io/name=workers,app.kubernetes.io/instance=%s" $root.Release.Name | quote }}
+            - name: SCHEDULER_DESIRED_CONFIG
+              value: {{ printf "%s-desired" (include "patchworks.scheduler.prefix" $root) | quote }}
+            - name: SCHEDULER_RUNTIME_CONFIG
+              value: {{ printf "%s-runtime" (include "patchworks.scheduler.prefix" $root) | quote }}
+            {{- end }}
             {{- include "patchworks.database.monoEnv" $root | nindent 12 }}
             {{- with include "patchworks.env.laravelAppKey" $root }}
             {{- . | nindent 12 }}

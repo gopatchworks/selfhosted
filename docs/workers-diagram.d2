@@ -116,6 +116,10 @@ mono: "type: mono" {
     store:    "{name}-workers-store or existing Secret\nstore.yaml\nS3 endpoint + credentials" { shape: document }
     config:   "{name}-workers-config\nconfig.yaml\nqueue: workers.mono.queue" { shape: document }
     dep:      "Deployment\n{name}-workers"                      { shape: rectangle }
+    desired: "Scheduler desired ConfigMap\nworkers.mono.scheduler.mode=kubernetes" { shape: document }
+    runtime: "Scheduler runtime ConfigMap + Leases\nMonocore-owned; shared ServiceAccount RBAC" { shape: document }
+    dep -> desired: "API read"
+    dep -> runtime: "API create / CAS"
     topology -> dep: mounts
     store    -> dep: mounts
     config   -> dep: mounts

@@ -28,6 +28,8 @@ application: "Application (components independently selectable)" {
     mono:         "mono\nMonocore Go"               { shape: rectangle }
   }
 
+  coordination: "Monocore hub scheduling\nKubernetes Leases + ConfigMaps\nworkers.mono.scheduler.mode" { shape: rectangle }
+
   migrations: "Migrations Job\npre-install / pre-upgrade" { shape: rectangle }
 }
 
@@ -79,3 +81,5 @@ application.s3manager -> infra.s3: AWS_*
 application -> infra.mysql: "mysql.* connection defaults"
 application -> infra.landlord: "Core LANDLORD_DB_* / DB_*\nMonocore DB_LANDLORD_*"
 application -> infra.tenants: "Core TENANT_DB_* / TENANT_DB_*_{id}\nMonocore DB_TENANT_* / DB_TENANT_{id}_*"
+
+application.workers.mono -> application.coordination: "shared ServiceAccount / namespace RBAC"

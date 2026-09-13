@@ -1,0 +1,57 @@
+{{- if and .Values.workers.enabled (eq .Values.workers.type "mono") .Values.workers.hub.enabled (eq .Values.workers.mono.scheduler.mode "kubernetes") }}
+{{- $prefix := include "patchworks.scheduler.prefix" . }}
+{{- $namespace := include "patchworks.workers.namespace" . }}
+{{- $shards := .Values.workers.mono.scheduler.shards }}
+{{- if or (not (regexMatch "^[0-9]+$" (toString $shards))) (lt (int $shards) 1) (gt (int $shards) 4096) }}
+{{- fail "workers.mono.scheduler.shards must be an integer from 1 to 4096" }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $prefix }}-desired
+  namespace: {{ $namespace }}
+data:
+  desired.json: {{ dict "version" 1 "shards" (int $shards) | toJson | quote }}
+{{- if .Values.workers.mono.scheduler.rbac.create }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $prefix }}
+  namespace: {{ $namespace }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "create", "update"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ printf "%s-desired" $prefix | quote }}, {{ printf "%s-runtime" $prefix | quote }}]
+    verbs: ["get", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: [{{ printf "%s-runtime" $prefix | quote }}]
+    verbs: ["update"]
+  # Kubernetes cannot restrict create by resourceNames. This permits first-start
+  # runtime creation within this namespace; existing state is never Helm-owned.
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $prefix }}
+  namespace: {{ $namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $prefix }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "patchworks.serviceAccountName" . }}
+    namespace: {{ $namespace }}
+{{- end }}
+{{- end }}

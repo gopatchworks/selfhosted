@@ -653,6 +653,19 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    terminationGracePeriodSeconds: 3660
+    # Retain durable execution when disabling scheduling until old work drains.
+    durableExecution: true
+    scheduler:
+      # Hub pods schedule; dedicated company pods only execute flows.
+      mode: kubernetes
+      shards: 3
+      interval: 5s
+      drainTimeoutSeconds: 30
+      timezone: UTC
+      estate: ""
+      rbac:
+        create: true
     # Scrape the existing internal metrics Service port (8081).
     serviceMonitor:
       enabled: false
