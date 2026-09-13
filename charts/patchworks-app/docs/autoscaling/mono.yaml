@@ -1,0 +1,24 @@
+# Install KEDA and scrape RabbitMQ metrics first.
+workers:
+  type: mono
+  mono:
+    processes: 15
+    autoscaling:
+      enabled: true
+      provider: keda
+      minReplicas: 1 # hub scheduler must remain running
+      maxReplicas: 10
+      keda:
+        prometheus:
+          enabled: true
+          serverAddress: https://prometheus.example.com
+          # Backlog in units of worker slots; target one message per slot.
+          # Do not additionally divide by existing replica count.
+          query: 'sum(rabbitmq_queue_messages{queue=__QUEUE__,vhost="/",job="rabbitmq"}) / __PROCESSES__'
+          threshold: "1"
+  companies:
+    - name: shop
+      processes: 5
+      autoscaling:
+        minReplicas: 0 # company worker does not run the hub scheduler
+        maxReplicas: 4

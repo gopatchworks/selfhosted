@@ -1481,3 +1481,131 @@ render no scheduler RBAC. Durable execution stays enabled so registered work can
 finish after scheduling is disabled. Shard changes update desired configuration
 without changing the worker checksum. Keep the same estate and runtime ConfigMap
 identity through upgrades.
+
+## Worker autoscaling
+
+Autoscaling is opt-in for `standalone`, `microservice`, and `mono` workers.
+Each enabled hub/company Deployment gets its own HPA or KEDA ScaledObject in
+its resolved namespace. Disabled autoscaling preserves fixed replicas; enabled
+autoscaling omits `spec.replicas` so Helm upgrades do not reset the scaler's count.
+This setting does not scale web, gateway/start, processor Deployments, or CronJobs.
+Remove any separately managed autoscaler on the same target before enabling it.
+
+Install KEDA and its CRDs separately before selecting `provider: keda` (examples
+use the KEDA 2.20 API). Native `provider: hpa` requires Metrics Server; CPU/memory
+utilization requires the corresponding resource requests. The chart does not
+install operators or a monitoring stack. Helm rendering intentionally works
+without CRDs for offline validation; cluster installation requires those CRDs.
+
+Examples (merge with your installation values):
+
+- [Direct RabbitMQ queue length and message rate](docs/autoscaling/rabbitmq.yaml)
+- [Prometheus queue metrics](docs/autoscaling/prometheus.yaml)
+- [Native CPU/memory HPA](docs/autoscaling/hpa.yaml)
+- [Monocore concurrency-aware queue scaling](docs/autoscaling/mono.yaml)
+
+### Configuration and inheritance
+
+Fields merge recursively in this order; later values win, including explicit
+`false` and `0`. Lists such as `extraTriggers` replace earlier lists.
+
+| Worker | Precedence, lowest to highest |
+|---|---|
+| Standalone | `workers.autoscaling` → `companies[].autoscaling` |
+| Monocore | `workers.autoscaling` → `workers.mono.autoscaling` → `companies[].autoscaling` |
+| Microservice | `workers.autoscaling` → `microservices._default.autoscaling` → `microservices.<key>.autoscaling` → `companies[].autoscaling` → `companies[].microservices.<key>.autoscaling` |
+
+Hub queues come from `workers.queue.name`, the microservice `domain`, or
+`workers.mono.queue`; company queues use `company.queue`, falling back to
+`company.name`. `keda.rabbitmq.queueName` can explicitly override the scaler's
+queue. Company microservices share a company queue: identical queue triggers
+scale every service against the same backlog. Use per-service policies or
+service-specific Prometheus queries when that is not the intended behaviour.
+
+All fields below live under the resolved `autoscaling` block:
+
+| Field | Default | Purpose |
+|---|---|---|
+| `enabled` | `false` | Enable autoscaling for this target |
+| `provider` | `keda` | `hpa` or `keda`; only one controller is rendered |
+| `minReplicas` / `maxReplicas` | `1` / `10` | Bounds; max must be positive; native HPA min must be at least one |
+| `behavior` | scale-down stabilization 300 seconds | Native HPA behavior, including scale-up/down policies; also passed to KEDA's HPA |
+| `hpa.cpu` / `hpa.memory` | `0` / `0` | Utilization percentages; zero disables that metric |
+| `keda.pollingInterval` / `cooldownPeriod` | `30` / `300` | Polling and scale-to-zero cooldown in seconds |
+| `keda.pausedReplicas` | `null` | Optional explicit pause count, including zero |
+| `keda.fallback` | `{}` | Native KEDA fallback configuration, e.g. failureThreshold and replicas; observe scaler/metric-type support |
+| `keda.extraTriggers` | `[]` | Native KEDA trigger list: CPU, memory, cron, Redis, or other supported scalers |
+| `keda.rabbitmq.enabled` | `false` | Direct broker scaling, independent of Prometheus |
+| `keda.rabbitmq.host` | `""` | Credential-free URL, or provide host through authentication |
+| `keda.rabbitmq.protocol` | `http` | `http`, `amqp`, or `auto`; MessageRate requires `http` |
+| `keda.rabbitmq.vhostName` | `/` | Broker vhost |
+| `keda.rabbitmq.unsafeSsl` | `false` | Opt-in disabling of server certificate verification |
+| `keda.rabbitmq.queueName` | `""` | Empty means resolved worker queue |
+| `keda.rabbitmq.queueLength.enabled/value/activationValue` | `true` / `"30"` / `"0"` | QueueLength trigger and independent target/activation thresholds |
+| `keda.rabbitmq.messageRate.enabled/value/activationValue` | `false` / `"22"` / `"0"` | MessageRate trigger and independent thresholds |
+| `keda.rabbitmq.authenticationRef` | `{}` | Existing TriggerAuthentication name, optionally kind ClusterTriggerAuthentication |
+| `keda.rabbitmq.existingSecret.name` | `""` | Generate a target-specific TriggerAuthentication referencing this existing Secret |
+| `keda.rabbitmq.existingSecret.hostKey/usernameKey/passwordKey` | `""` / `username` / `password` | Secret keys mapped to authentication parameters; empty key omits that parameter |
+| `keda.prometheus.enabled` | `false` | Query a Prometheus-compatible endpoint |
+| `keda.prometheus.serverAddress/query` | `""` / `""` | Required when enabled |
+| `keda.prometheus.threshold/activationThreshold` | `"30"` / `"0"` | Positive scaling target and nonnegative activation threshold |
+| `keda.prometheus.metricType` | `AverageValue` | `AverageValue` for total work divided across replicas, or `Value` for a deliberately normalized signal |
+| `keda.prometheus.ignoreNullValues` | `false` | Missing series produce scaler errors rather than silently implying no work |
+| `keda.prometheus.authenticationRef` | `{}` | Existing authentication resource for the endpoint |
+| `keda.prometheus.metadata` | `{}` | Additional native scaler metadata, including TLS, authModes, and headers; explicit fields above take precedence |
+
+RabbitMQ authentication Secrets and namespaced TriggerAuthentications must exist
+in each worker namespace. Use a ClusterTriggerAuthentication for a centrally
+managed reference. For a Secret containing a complete URL, set `hostKey` and
+clear `usernameKey`/`passwordKey` if those keys do not exist. Inline credential
+URLs in `host` are rejected. Custom CA/client certificate configuration can be
+provided through native authentication resources. External RabbitMQ management
+URLs may differ from application AMQP hosts; configure the scaler endpoint
+explicitly. QueueLength over AMQP counts ready messages; HTTP can also count
+unacknowledged work. MessageRate requires the management API.
+
+### Metrics and scaling behaviour
+
+RabbitMQ and Prometheus triggers can run together; KEDA uses the largest replica
+recommendation, not their sum. Direct RabbitMQ scaling does not require a metrics
+exporter. For Prometheus, enable `rabbitmq.metrics.enabled` in patchworks-infra,
+then configure scraping (optionally `rabbitmq.metrics.serviceMonitor.enabled`).
+External brokers need their own exporter/scrape configuration. ServiceMonitor
+resources require Prometheus Operator CRDs and matching collector selectors;
+plain Prometheus can scrape without ServiceMonitors. KEDA queries the endpoint
+directly and does not require a Prometheus Adapter.
+
+PromQL must return a single value. Queries support literal `__QUEUE__`,
+`__NAMESPACE__`, `__DEPLOYMENT__`, and `__PROCESSES__` placeholders. String
+placeholders include JSON quoting: write `queue=__QUEUE__`, not quoted tokens.
+Namespace means the worker namespace, which may differ from the broker namespace.
+Scope broker metrics by vhost, job and cluster labels appropriate to your setup
+so identically named queues in different brokers are not combined. Avoid summing
+duplicate scrape series. `rabbitmq_queue_messages` already includes unacknowledged
+messages; do not add them again. The examples divide total backlog by a per-pod
+target (or worker concurrency), without dividing by current replicas again.
+
+PHP workers do not expose HTTP metrics directly. Haberdashery-style
+`core_queues_processes` queries additionally require Core's scheduler/Pushgateway
+pipeline described in Metrics collection above. Monocore's existing ServiceMonitor
+can supply application metrics for custom queries, but is not required when the
+query uses only RabbitMQ metrics. Select thresholds appropriate to job duration,
+concurrency, downstream capacity and broker prefetch; example thresholds are not
+production sizing recommendations.
+
+Scale-to-zero is opt-in. CPU/memory-only KEDA triggers cannot wake a zero-replica
+worker. A Monocore hub with its scheduler enabled cannot scale/pause to zero;
+disable that scheduler only when scheduling is handled elsewhere. Ensure queues
+exist before scaling to zero, especially where workers normally assert topology.
+Missing metrics are not automatically converted to zero: configure fallback
+replicas if appropriate for the selected scaler.
+
+PHP worker `workers.terminationGracePeriodSeconds` defaults to `21630`, matching
+the six-hour supervisord job timeout plus a shutdown margin; companies may
+override it. Monocore retains `workers.mono.terminationGracePeriodSeconds` and its
+existing scheduler drain checks. Terminating replicas may linger while work drains.
+`workers.mono.replicaCount` now defaults to `1` and can be overridden by company
+`replicaCount` when autoscaling is disabled. Validate drain behaviour with your
+actual application image and representative long-running jobs before rollout.
+
+Run `ruby tests/autoscaling_test.rb` for offline rendering/validation coverage.

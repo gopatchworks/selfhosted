@@ -135,3 +135,17 @@ mono: "type: mono" {
 
   hub -> company: "× workers.companies[]\nbinds queues when companyFlows.enabled\ntopology + store Secret in selected namespaces"
 }
+
+# Optional scaler per resolved worker target; dependencies supplied by operator.
+standalone.hub.scaler: "Optional HPA / KEDA ScaledObject" { shape: rectangle }
+standalone.hub.scaler -> standalone.hub.dep: scales
+standalone.company.scaler: "Optional HPA / KEDA ScaledObject" { shape: rectangle }
+standalone.company.scaler -> standalone.company.dep: scales
+microservice.service.hub.scaler: "Optional HPA / KEDA ScaledObject" { shape: rectangle }
+microservice.service.hub.scaler -> microservice.service.hub.dep: scales
+microservice.service.company.scaler: "Optional HPA / KEDA ScaledObject\nShared queue; per-service overrides" { shape: rectangle }
+microservice.service.company.scaler -> microservice.service.company.dep: scales
+mono.hub.scaler: "Optional HPA / KEDA ScaledObject\nScheduler hub minimum: 1" { shape: rectangle }
+mono.hub.scaler -> mono.hub.dep: scales
+mono.company.scaler: "Optional HPA / KEDA ScaledObject" { shape: rectangle }
+mono.company.scaler -> mono.company.dep: scales

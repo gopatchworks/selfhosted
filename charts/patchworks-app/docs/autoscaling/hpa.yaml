@@ -1,0 +1,14 @@
+# Requires Metrics Server. Utilization is relative to resource requests.
+workers:
+  resources:
+    requests:
+      cpu: 500m
+      memory: 900Mi
+  autoscaling:
+    enabled: true
+    provider: hpa
+    minReplicas: 1
+    maxReplicas: 10
+    hpa:
+      cpu: 70
+      memory: 80

@@ -10,6 +10,10 @@ For manual Helm installation, use the [advanced install guide](docs/advanced-ins
 For an existing-cluster Helm or GitOps deployment, see the
 [existing-cluster guide](docs/getting-started.md).
 
+Optional [worker autoscaling](charts/patchworks-app/README.md#worker-autoscaling) supports
+KEDA with RabbitMQ/Prometheus or native CPU/memory HPA. Install KEDA or Metrics
+Server separately for the selected mode; fixed replicas remain the default.
+
 ## Getting started
 
 ### Prerequisites

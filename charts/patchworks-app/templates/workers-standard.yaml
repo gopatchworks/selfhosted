@@ -16,6 +16,8 @@ key in workers.microservices (excluding _default).
 {{- $services := list }}
 {{- if $isStandalone }}
   {{- $services = list (dict
+    "autoscaling"   .Values.workers.autoscaling
+    "serviceKey"    ""
     "slug"          "workers"
     "ns"            $hubNs
     "queue"         .Values.workers.queue.name
@@ -38,6 +40,8 @@ key in workers.microservices (excluding _default).
   {{- $enabled := dig "enabled" (dig "enabled" true $default) $ms }}
   {{- if not $enabled }}{{- continue }}{{- end }}
   {{- $svc := dict
+    "autoscaling"   (mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($default.autoscaling | default dict) ($ms.autoscaling | default dict))
+    "serviceKey"    $msKey
     "slug"          (printf "workers-%s" $msKey)
     "ns"            ($ms.namespace | default $hubNs)
     "queue"         (dig "domain" $msKey $ms)
@@ -97,6 +101,8 @@ key in workers.microservices (excluding _default).
   {{- $tolerations  = $company.tolerations    | default $svc.tolerations }}
   {{- $affinity     = $company.affinity       | default $svc.affinity }}
 {{- end }}
+{{- $autoscaling := mergeOverwrite (deepCopy $svc.autoscaling) ($company.autoscaling | default dict) (dig "microservices" $svc.serviceKey "autoscaling" (dict) $company) }}
+{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -125,7 +131,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if not $autoscaling.enabled }}
   replicas: {{ $replicas }}
+  {{- end }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:
@@ -140,6 +148,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      terminationGracePeriodSeconds: {{ dig "terminationGracePeriodSeconds" $root.Values.workers.terminationGracePeriodSeconds $company }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
       {{- with $root.Values.image.pullSecrets }}
       imagePullSecrets:

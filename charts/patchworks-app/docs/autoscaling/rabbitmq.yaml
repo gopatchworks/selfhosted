@@ -1,0 +1,22 @@
+# Install KEDA first. Create this Secret in each worker namespace.
+# Keys username/password authenticate to the management endpoint.
+workers:
+  autoscaling:
+    enabled: true
+    provider: keda
+    minReplicas: 1
+    maxReplicas: 10
+    keda:
+      rabbitmq:
+        enabled: true
+        host: https://rabbitmq.example.com:15671/
+        protocol: http
+        vhostName: /
+        existingSecret:
+          name: rabbitmq-scaler
+        queueLength:
+          value: "30"
+          activationValue: "0"
+        messageRate:
+          enabled: true
+          value: "22"

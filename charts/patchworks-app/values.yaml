@@ -522,6 +522,61 @@ workers:
     tag: ""
     pullPolicy: ""
 
+  # Overrides: mono.autoscaling or microservices._default/service.autoscaling,
+  # then companies[].autoscaling and companies[].microservices.<key>.autoscaling.
+  autoscaling:
+    enabled: false
+    provider: keda # hpa | keda
+    minReplicas: 1
+    maxReplicas: 10
+    behavior:
+      scaleDown:
+        stabilizationWindowSeconds: 300
+    hpa:
+      cpu: 0 # target utilization percentage; requires a CPU request
+      memory: 0 # target utilization percentage; requires a memory request
+    keda:
+      pollingInterval: 30
+      cooldownPeriod: 300
+      pausedReplicas: null
+      fallback: {} # e.g. {failureThreshold: 3, replicas: 2}
+      rabbitmq:
+        enabled: false
+        host: "" # credential-free URL; HTTP management or AMQP endpoint
+        protocol: http
+        vhostName: /
+        unsafeSsl: false
+        queueName: "" # empty resolves to this deployment's queue
+        queueLength:
+          enabled: true
+          value: "30"
+          activationValue: "0"
+        messageRate:
+          enabled: false
+          value: "22"
+          activationValue: "0"
+        authenticationRef: {} # name and optional kind: ClusterTriggerAuthentication
+        existingSecret:
+          name: ""
+          hostKey: "" # optional complete connection URL stored in Secret
+          usernameKey: username
+          passwordKey: password
+      prometheus:
+        enabled: false
+        serverAddress: ""
+        # One scalar/vector element. Literal placeholders: __QUEUE__, __NAMESPACE__,
+        # __DEPLOYMENT__, __PROCESSES__ (string placeholders are JSON quoted).
+        query: ""
+        threshold: "30"
+        activationThreshold: "0"
+        metricType: AverageValue
+        ignoreNullValues: false
+        authenticationRef: {}
+        metadata: {} # TLS/authModes/headers and other KEDA scaler metadata
+      extraTriggers: [] # native KEDA triggers, including CPU, memory, cron, Redis
+  # Match supervisord stopwaitsecs and allow a small shutdown margin.
+  terminationGracePeriodSeconds: 21630
+
   replicaCount: 1
   processes: 15
   resources:
@@ -569,6 +624,7 @@ workers:
   # must be created manually — see the workers.companies note above.
   microservices:
     _default:
+      autoscaling: {}
       enabled: true
       replicas: 1
       processes: 15
@@ -653,6 +709,8 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    autoscaling: {}
+    replicaCount: 1
     terminationGracePeriodSeconds: 3660
     # Retain durable execution when disabling scheduling until old work drains.
     durableExecution: true
@@ -735,7 +793,7 @@ workers:
   # - name: molten-core           # used for K8s resource names
   #   namespace: ""               # deploys to a separate namespace (defaults to workers.namespace)
   #   queue: moltencore           # queue name to consume (defaults to name)
-  #   replicaCount: 1             # standalone only; defaults to workers.replicaCount
+  #   replicaCount: 1             # fixed replicas when autoscaling is disabled
   #   processes: 5                # standalone/microservice: numprocs in supervisord.conf (defaults to workers.processes / microservice processes)
   #   resources: {}               # defaults to workers.resources
   #   extraEnv: []
@@ -745,6 +803,7 @@ workers:
   #   nodeSelector: {}
   #   tolerations: []
   #   affinity: {}
+  #   autoscaling: {}             # overrides resolved worker autoscaling
   #   processes: 5                # mono: defaults to workers.mono.processes
 
 # ── RabbitMQ ───────────────────────────────────────────────────────────────────

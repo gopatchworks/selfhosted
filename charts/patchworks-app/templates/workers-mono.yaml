@@ -222,6 +222,11 @@ spec:
   {{- $resources = $company.resources | default $root.Values.workers.resources }}
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
 {{- end }}
+{{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($mono.autoscaling | default dict) ($company.autoscaling | default dict) }}
+{{- if and $autoscaling.enabled $isHub (ne $scheduler.mode "disabled") (or (eq (int $autoscaling.minReplicas) 0) (and (ne $autoscaling.keda.pausedReplicas nil) (eq (int $autoscaling.keda.pausedReplicas) 0))) }}
+{{- fail "Monocore hub with scheduler enabled cannot scale or pause to zero; disable its scheduler first" }}
+{{- end }}
+{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
 {{- $topoCMName := printf "%s-workers-topology" $fullname }}
 
 {{/* Each active worker namespace needs one local topology ConfigMap. */}}
@@ -393,7 +398,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  replicas: 1
+  {{- if not $autoscaling.enabled }}
+  replicas: {{ dig "replicaCount" $mono.replicaCount $company }}
+  {{- end }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:

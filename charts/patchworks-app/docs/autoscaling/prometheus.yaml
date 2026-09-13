@@ -1,0 +1,15 @@
+# Install KEDA and scrape RabbitMQ per-object metrics first.
+# Adjust namespace/job/vhost selectors to match your collector labels.
+workers:
+  autoscaling:
+    enabled: true
+    provider: keda
+    keda:
+      prometheus:
+        enabled: true
+        serverAddress: https://prometheus.example.com
+        # rabbitmq_queue_messages already includes unacknowledged messages.
+        # AverageValue: total backlog / target per pod determines replica count.
+        query: 'sum(rabbitmq_queue_messages{queue=__QUEUE__,vhost="/",job="rabbitmq"})'
+        threshold: "30"
+        ignoreNullValues: false

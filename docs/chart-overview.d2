@@ -83,3 +83,10 @@ application -> infra.landlord: "Core LANDLORD_DB_* / DB_*\nMonocore DB_LANDLORD_
 application -> infra.tenants: "Core TENANT_DB_* / TENANT_DB_*_{id}\nMonocore DB_TENANT_* / DB_TENANT_{id}_*"
 
 application.workers.mono -> application.coordination: "shared ServiceAccount / namespace RBAC"
+
+optional.scaling: "Optional worker autoscaling\nHPA or KEDA ScaledObject per target\nKEDA / Metrics Server installed separately" { shape: rectangle }
+optional.prometheus: "External Prometheus-compatible endpoint\nOptional RabbitMQ scrape / ServiceMonitor" { shape: cylinder }
+optional.scaling -> application.workers: scales
+optional.scaling -> infra.rabbitmq: "KEDA queue length / message rate"
+optional.scaling -> optional.prometheus: "KEDA PromQL"
+optional.prometheus -> infra.rabbitmq: "optional metrics scrape"

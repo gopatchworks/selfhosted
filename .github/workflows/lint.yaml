@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - "charts/**"
+      - "tests/**"
       - ".github/workflows/lint.yaml"
 
 jobs:
@@ -53,3 +54,6 @@ jobs:
             --set kubefaas.enabled=true \
             --set dashboard.enabled=true \
             > /dev/null
+
+      - name: Worker autoscaling render tests
+        run: ruby tests/autoscaling_test.rb
