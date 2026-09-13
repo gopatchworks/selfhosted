@@ -1,5 +1,6 @@
 # Run: ruby tests/mono_scheduler_test.rb (requires Helm; no cluster access).
 require 'yaml'
+require 'json'
 require 'open3'
 chart = File.expand_path('../charts/patchworks-app', __dir__)
 def assert(value, message)
@@ -41,3 +42,8 @@ assert(company.dig('spec','template') == worker(changed,'workers-shop').dig('spe
   assert(!docs.any? { |r| %w[Role RoleBinding].include?(r['kind']) && r.dig('metadata','name').end_with?('-scheduler') }, 'local/disabled mode must omit scheduler permissions')
 end
 puts 'Selfhosted scheduler: defaults, modes, namespaces, company isolation and live shard configuration passed'
+
+desired = baseline.find { |r| r['kind'] == 'ConfigMap' && r.fetch('data', {}).key?('desired.json') }
+assert(JSON.parse(desired['data']['desired.json']) == {'version'=>2, 'shards'=>1, 'server_shards'=>{}}, 'per-server default configuration mismatch')
+overridden = render(chart, 'workers.mono.scheduler.serverShards.7=5')
+assert(hub.dig('spec','template') == worker(overridden,'workers').dig('spec','template'), 'server overrides must not roll pods')

@@ -12,6 +12,7 @@
 {{- end }}
 {{- $checksumWorkers := deepCopy .Values.workers }}
 {{- $_ := unset $checksumWorkers.mono.scheduler "shards" }}
+{{- $_ := unset $checksumWorkers.mono.scheduler "serverShards" }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $hubNs := include "patchworks.workers.namespace" . }}
 {{- $mainQueue := $mono.queue | default .Values.workers.queue.name }}

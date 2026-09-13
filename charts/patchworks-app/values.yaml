@@ -659,7 +659,9 @@ workers:
     scheduler:
       # Hub pods schedule; dedicated company pods only execute flows.
       mode: kubernetes
-      shards: 3
+      # Default per database server; overrides use Fabric server IDs.
+      shards: 1
+      serverShards: {}
       interval: 5s
       drainTimeoutSeconds: 30
       timezone: UTC
