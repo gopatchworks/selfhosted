@@ -477,7 +477,6 @@ spec:
               mountPath: /etc/monocore
               readOnly: true
           env:
-            {{- include "patchworks.mono.tinkerEnv" $root | nindent 12 }}
             - name: SCHEDULER_MODE
               value: {{ ternary $scheduler.mode "disabled" $w.isHub | quote }}
             - name: WORKER_ENABLE_DURABLE_EXECUTION

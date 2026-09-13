@@ -537,13 +537,6 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.scheduler.timezone` | `UTC` | Must match Core's application timezone |
 | `workers.mono.scheduler.estate` | fullname | Stable scheduling estate identity |
 | `workers.mono.scheduler.rbac.create` | `true` | Bind scheduler permissions to the shared service account in the hub namespace |
-| `workers.mono.tinker.fabricApiUrl` | `""` | Fabric API base URL; defaults to the Fabric Service and port in its resolved namespace, with `/api/v2` |
-| `workers.mono.tinker.coreApiUrl` | `""` | Core API base URL; defaults to the resolved `fabric.core.gatewayUrl` plus `/api/v1/patchworks` |
-| `workers.mono.tinker.generateApiToken` | `false` | Opt in to an API key created directly in Fabric by the tinker command and retained by default |
-| `workers.mono.tinker.revokeGeneratedApiToken` | `false` | Opt in to revoking the generated key on completion, failure or cancellation |
-| `workers.mono.tinker.apiTokenUserId` | `0` | Required positive existing Fabric user ID when generating a token; uses that user's permissions |
-| `workers.mono.tinker.existingSecret.name` | `""` | Optional existing Secret for `PATCHWORKS_API_TOKEN`; create it in every worker namespace |
-| `workers.mono.tinker.existingSecret.tokenKey` | `patchworks-api-token` | Secret key containing the bearer token |
 | `workers.mono.store.existingSecret.name` | `""` | Existing Secret containing monocore's `store.yaml`; skips the generated store Secret hook |
 | `workers.mono.store.existingSecret.key` | `store.yaml` | Secret key to mount as `/etc/monocore/store.yaml` |
 | `workers.mono.rabbitmq.flowExchange` | `""` | Flow publish exchange. Empty defaults to `workers.mono.queue` when `companyFlows.enabled=false`, or `customer-flows` when enabled |
@@ -576,60 +569,6 @@ Mapping document storage is used by PHP core and monocore. Monocore defaults to 
 | `mapping.elasticsearch.existingSecret.apiKeyKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_API_KEY` |
 | `mapping.elasticsearch.existingSecret.usernameKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_USERNAME` |
 | `mapping.elasticsearch.existingSecret.passwordKey` | `""` | Secret key for `MAPPING_ELASTICSEARCH_PASSWORD` |
-
-### Test company provisioning from a Monocore worker
-
-The chart supplies `FABRIC_API_URL` and `CORE_API_URL` to hub and company Monocore
-workers. For external APIs, override `workers.mono.tinker.fabricApiUrl` and
-`coreApiUrl` with complete API base URLs. To supply a bearer token from a Secret:
-
-```yaml
-workers:
-  type: mono
-  mono:
-    tinker:
-      existingSecret:
-        name: patchworks-tinker
-        tokenKey: patchworks-api-token
-```
-
-The Secret must exist in each worker namespace. The token needs company listing
-and creation permissions in Fabric and database provisioning permissions in Core.
-Without a Secret, pass `--patchworks-api-token` (bearer) or `--patchworks-api-key`
-(raw Fabric API key) to the command. Alternatively, let the command create a
-API key directly in Fabric:
-
-```yaml
-workers:
-  type: mono
-  mono:
-    tinker:
-      generateApiToken: true
-      apiTokenUserId: 1  # Select an existing user with the required permissions.
-```
-
-This sets `GENERATE_API_TOKEN` and `API_TOKEN_USER_ID` for the tinker command;
-the worker does not generate a token during startup. Generation and an existing
-token Secret are mutually exclusive. The command links the generated key to the
-selected user without changing their permissions and retains it by default.
-Set `revokeGeneratedApiToken: true` (or pass `--revoke-generated-api-token`) to
-revoke it on completion, failure or cancellation. The key is never printed.
-Fabric has no API-key name field, so generation creates a fresh key; pass a
-retained key from Fabric through `--patchworks-api-key` for explicit reuse.
-A hard process kill can bypass cleanup. Revoke keys rather than deleting them:
-Fabric's key delete hook also deletes the associated user.
-
-Run from the Monocore worker's configured working directory:
-
-```sh
-monocore tinker create-test-companies --count 100 --test-flows basic --basic-test-flows-count 100
-```
-
-Use a Monocore image that contains `create-test-companies`. Fabric and Core must
-point at the same databases configured for the worker. The command reuses numbered
-companies, provisions their databases through Core, and optionally upserts basic
-flows. Omitting `--test-flows` creates companies without flows. Chart installation
-does not execute the command or create test companies.
 
 ## Monocore API
 
