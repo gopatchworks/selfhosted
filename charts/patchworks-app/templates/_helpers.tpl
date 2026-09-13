@@ -2537,3 +2537,36 @@ annotations:
 {{- define "patchworks.scheduler.prefix" -}}
 {{- printf "%s-scheduler" (include "patchworks.fullname" . | trunc 40 | trimSuffix "-") -}}
 {{- end -}}
+
+{{/* API connection settings for administrative tinker commands in mono workers. */}}
+{{- define "patchworks.mono.tinkerEnv" -}}
+{{- $tinker := .Values.workers.mono.tinker -}}
+{{- if and $tinker.revokeGeneratedApiToken (not $tinker.generateApiToken) -}}
+{{- fail "workers.mono.tinker.revokeGeneratedApiToken requires generateApiToken" -}}
+{{- end -}}
+{{- if and $tinker.generateApiToken $tinker.existingSecret.name -}}
+{{- fail "workers.mono.tinker: select generateApiToken or existingSecret, not both" -}}
+{{- end -}}
+{{- if and $tinker.generateApiToken (le (int $tinker.apiTokenUserId) 0) -}}
+{{- fail "workers.mono.tinker.apiTokenUserId must be positive when generateApiToken is enabled" -}}
+{{- end -}}
+
+{{- $fabricUrl := printf "http://%s-fabric.%s.svc.cluster.local:%d/api/v2" (include "patchworks.fullname" .) (include "patchworks.fabric.namespace" .) (int .Values.fabric.service.port) -}}
+{{- $coreUrl := printf "%s/api/v1/patchworks" (trimSuffix "/" (include "patchworks.fabric.core.gatewayUrl" .)) -}}
+- name: FABRIC_API_URL
+  value: {{ $tinker.fabricApiUrl | default $fabricUrl | quote }}
+- name: CORE_API_URL
+  value: {{ $tinker.coreApiUrl | default $coreUrl | quote }}
+{{- if $tinker.generateApiToken }}
+- name: GENERATE_API_TOKEN
+  value: "true"
+- name: API_TOKEN_USER_ID
+  value: {{ $tinker.apiTokenUserId | quote }}
+- name: REVOKE_GENERATED_API_TOKEN
+  value: {{ $tinker.revokeGeneratedApiToken | quote }}
+{{- end }}
+{{- if $tinker.existingSecret.name }}
+{{- $tokenKey := required "workers.mono.tinker.existingSecret.tokenKey is required when a Secret name is set" $tinker.existingSecret.tokenKey }}
+{{- include "patchworks.secretEnv" (dict "name" "PATCHWORKS_API_TOKEN" "value" "" "secret" (dict "name" $tinker.existingSecret.name "key" $tokenKey)) | nindent 0 }}
+{{- end }}
+{{- end }}

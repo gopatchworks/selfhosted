@@ -748,6 +748,22 @@ workers:
     queue: flows
     processes: 15
     extraEnv: []
+    # Defaults target this release's Fabric and Core Gateway Services.
+    # Used when executing monocore tinker create-test-companies in a worker.
+    tinker:
+      fabricApiUrl: ""
+      coreApiUrl: ""
+      # Opt in to a DB-created API key for an existing Fabric user.
+      generateApiToken: false
+      apiTokenUserId: 0
+      # Generated keys are retained unless this option is enabled.
+      revokeGeneratedApiToken: false
+      # Optional bearer token; incompatible with generateApiToken.
+      # Without either option, pass --patchworks-api-token or --patchworks-api-key.
+      # The Secret must exist in each configured worker namespace.
+      existingSecret:
+        name: ""
+        tokenKey: patchworks-api-token
     store:
       # Use an existing Secret containing monocore's store.yaml instead of
       # generating one from s3.* values. For cross-namespace company workers,
