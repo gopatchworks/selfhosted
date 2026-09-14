@@ -113,6 +113,7 @@ func databaseAppSeparateConnections(values map[string]any) {
 		"tenant": map[string]any{
 			"host": "tenant-default.example.test", "readHost": "tenant-default-read.example.test", "port": 3308,
 			"username": "default_user", "existingSecret": map[string]any{"name": "tenant-default", "passwordKey": "custom-default-password"},
+			"pool":            map[string]any{"maxSizePerServer": 23},
 			"primaryServerId": 17,
 			"servers": map[string]any{
 				"blue": map[string]any{
@@ -166,7 +167,7 @@ func TestDatabaseAppCorePodsAndLifecycleShareConnections(t *testing.T) {
 		"LANDLORD_DB_READ_HOST": "landlord-read.example.test",
 		"TENANT_DB_HOST":        "tenant-default.example.test", "TENANT_DB_PORT": "3308", "TENANT_DB_USERNAME": "default_user",
 		"TENANT_DB_PASSWORD": "secret:tenant-default/custom-default-password", "TENANT_DB_DATABASE": "information_schema",
-		"TENANT_DB_READ_HOST": "tenant-default-read.example.test", "PRIMARY_TENANT_DATABASE_SERVER_ID": "17",
+		"TENANT_DB_READ_HOST": "tenant-default-read.example.test", "DATABASE_POOL_MAX_SIZE": "23", "PRIMARY_TENANT_DATABASE_SERVER_ID": "17",
 		"TENANT_DB_HOST_blue": "tenant-blue.example.test", "TENANT_DB_PORT_blue": "3306", "TENANT_DB_USERNAME_blue": "blue_user",
 		"TENANT_DB_PASSWORD_blue": "blue-inline-test-password", "TENANT_DB_READ_HOST_blue": "tenant-blue-read.example.test",
 		"TENANT_DB_HOST_Green_2": "tenant-green.example.test", "TENANT_DB_PORT_Green_2": "3310", "TENANT_DB_USERNAME_Green_2": "green_user",
@@ -394,5 +395,22 @@ func TestDatabaseAppRejectsInvalidServerConfiguration(t *testing.T) {
 				t.Fatalf("expected an actionable database.tenant.servers validation error, got %v", err)
 			}
 		})
+	}
+}
+
+func TestDatabaseAppRejectsInvalidPoolSize(t *testing.T) {
+	values := databaseAppValues(t)
+	componentSelectionSet(values, map[string]any{"maxSizePerServer": -1}, "database", "tenant", "pool")
+	chart, err := helmloader.Load(filepath.Join("..", "..", "charts", "patchworks-app"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	renderValues, err := chartutil.ToRenderValues(chart, values, common.ReleaseOptions{Name: "databases", Namespace: "databases", Revision: 1, IsInstall: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = engine.Render(chart, renderValues)
+	if err == nil || !strings.Contains(err.Error(), "database.tenant.pool.maxSizePerServer") {
+		t.Fatalf("expected an actionable database.tenant.pool.maxSizePerServer validation error, got %v", err)
 	}
 }

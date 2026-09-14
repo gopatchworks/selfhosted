@@ -61,6 +61,14 @@ Their credentials are independent of the default connection.
 {{- end -}}
 
 {{- define "patchworks.database.coreConfigData" -}}
+{{- $poolSize := dig "tenant" "pool" "maxSizePerServer" nil (.Values.database | default dict) -}}
+{{- if not (kindIs "invalid" $poolSize) }}
+{{- $poolSizeString := toString $poolSize -}}
+{{- if not (regexMatch "^[0-9]+$" $poolSizeString) -}}
+  {{- fail "database.tenant.pool.maxSizePerServer must be a non-negative integer" -}}
+{{- end }}
+DATABASE_POOL_MAX_SIZE: {{ $poolSizeString | quote }}
+{{- end }}
 {{- with dig "tenant" "primaryServerId" "" (.Values.database | default dict) }}
 PRIMARY_TENANT_DATABASE_SERVER_ID: {{ . | quote }}
 {{- end }}

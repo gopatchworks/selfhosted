@@ -806,6 +806,7 @@ Fabric's own database remains configured through `fabric.mysql.*`.
 | `database.tenant.existingSecret.passwordKey` | `password` | Password key in the default tenant Secret |
 | `database.tenant.readHost` | `""` | Optional Core default tenant read host; empty uses the write host. Monocore uses the write host |
 | `database.tenant.primaryServerId` | `""` | Optional Fabric database-server record ID for Core new tenant placement; distinct from a credential ID. Skips the default-endpoint seed database Job |
+| `database.tenant.pool.maxSizePerServer` | `null` | Optional number of warm tenant databases Core maintains on each eligible Fabric database server. `0` stops replenishment; null leaves the landlord setting in control |
 | `database.tenant.servers` | `{}` | Map of additional tenant server connections keyed by the application's database server credential ID |
 
 An explicitly supplied password, including `""`, clears an inherited MySQL

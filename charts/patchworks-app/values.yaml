@@ -1118,6 +1118,10 @@ database:
       name: ""
       passwordKey: password
     readHost: ""
+    # Warm tenant databases maintained on each eligible Fabric database server.
+    # null leaves Core's landlord setting in control; 0 stops replenishment.
+    pool:
+      maxSizePerServer: null
     # Fabric database_servers.id for new tenant placement (Core only).
     primaryServerId: ""
     # Keys are exact Fabric database_servers.credential_id values, not server IDs.
