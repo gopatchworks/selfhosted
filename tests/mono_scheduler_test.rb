@@ -47,3 +47,8 @@ desired = baseline.find { |r| r['kind'] == 'ConfigMap' && r.fetch('data', {}).ke
 assert(JSON.parse(desired['data']['desired.json']) == {'version'=>2, 'shards'=>1, 'server_shards'=>{}}, 'per-server default configuration mismatch')
 overridden = render(chart, 'workers.mono.scheduler.serverShards.7=5')
 assert(hub.dig('spec','template') == worker(overridden,'workers').dig('spec','template'), 'server overrides must not roll pods')
+
+%w[kubernetes standalone disabled].each do |mode|
+  docs = render(chart, "workers.mono.scheduler.mode=#{mode}", 'workers.mono.durableExecution=false')
+  assert(env(worker(docs,'workers')).dig('WORKER_ENABLE_DURABLE_EXECUTION','value') == 'false', 'scheduling must not override explicit durable execution setting')
+end

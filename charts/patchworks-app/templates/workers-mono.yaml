@@ -480,7 +480,7 @@ spec:
             - name: SCHEDULER_MODE
               value: {{ ternary $scheduler.mode "disabled" $w.isHub | quote }}
             - name: WORKER_ENABLE_DURABLE_EXECUTION
-              value: {{ or $mono.durableExecution (ne $scheduler.mode "disabled") | quote }}
+              value: {{ $mono.durableExecution | quote }}
             {{- if and $w.isHub (ne $scheduler.mode "disabled") }}
             - name: SCHEDULER_INTERVAL
               value: {{ $scheduler.interval | quote }}
