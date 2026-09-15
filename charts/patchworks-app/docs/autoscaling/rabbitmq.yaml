@@ -14,9 +14,8 @@ workers:
         vhostName: /
         existingSecret:
           name: rabbitmq-scaler
-        queueLength:
-          value: "30"
-          activationValue: "0"
-        messageRate:
-          enabled: true
-          value: "22"
+        # The default trigger scales against estimated drain time, including
+        # queued and unacknowledged messages. It requires pollingInterval: 1.
+        expectedQueueConsumptionTime:
+          value: "10"
+          activationValue: "1"

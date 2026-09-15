@@ -536,7 +536,8 @@ workers:
       cpu: 0 # target utilization percentage; requires a CPU request
       memory: 0 # target utilization percentage; requires a memory request
     keda:
-      pollingInterval: 30
+      # ExpectedQueueConsumptionTime requires one-second polling.
+      pollingInterval: 1
       cooldownPeriod: 300
       pausedReplicas: null
       fallback: {} # e.g. {failureThreshold: 3, replicas: 2}
@@ -548,13 +549,19 @@ workers:
         unsafeSsl: false
         queueName: "" # empty resolves to this deployment's queue
         queueLength:
-          enabled: true
+          enabled: false
           value: "30"
           activationValue: "0"
         messageRate:
           enabled: false
           value: "22"
           activationValue: "0"
+        # Default: scale only when the broker estimates that queued and
+        # unacknowledged work will take longer than this many seconds to drain.
+        expectedQueueConsumptionTime:
+          enabled: true
+          value: "10"
+          activationValue: "1"
         authenticationRef: {} # name and optional kind: ClusterTriggerAuthentication
         existingSecret:
           name: ""

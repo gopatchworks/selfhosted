@@ -45,7 +45,8 @@ spec:
 {{- if and (ne $k.pausedReplicas nil) (lt (int $k.pausedReplicas) 0) }}{{ fail "KEDA pausedReplicas must be nonnegative" }}{{ end -}}
 {{- if $r.enabled -}}
 {{- if not (has $r.protocol (list "http" "amqp" "auto")) }}{{ fail "RabbitMQ scaler protocol must be http, amqp or auto" }}{{ end -}}
-{{- if and $r.messageRate.enabled (ne $r.protocol "http") }}{{ fail "RabbitMQ MessageRate requires protocol: http" }}{{ end -}}
+{{- if and (or $r.messageRate.enabled $r.expectedQueueConsumptionTime.enabled) (ne $r.protocol "http") }}{{ fail "RabbitMQ MessageRate and ExpectedQueueConsumptionTime require protocol: http" }}{{ end -}}
+{{- if and $r.expectedQueueConsumptionTime.enabled (ne (int $k.pollingInterval) 1) }}{{ fail "RabbitMQ ExpectedQueueConsumptionTime requires keda.pollingInterval: 1" }}{{ end -}}
 {{- if and $r.existingSecret.name $auth.name }}{{ fail "Choose rabbitmq.existingSecret or authenticationRef, not both" }}{{ end -}}
 {{- if and (not $r.host) (not $auth.name) (not (and $r.existingSecret.name $r.existingSecret.hostKey)) }}{{ fail "RabbitMQ scaler requires host, authenticationRef, or existingSecret.hostKey" }}{{ end -}}
 {{- if contains "@" $r.host }}{{ fail "RabbitMQ scaler credentials must use a Secret, not an inline host URL" }}{{ end -}}
@@ -66,12 +67,13 @@ metadata:
 spec:
   secretTargetRef: {{ toYaml $refs | nindent 4 }}
 {{- end -}}
-{{- range $item := list (dict "mode" "QueueLength" "config" $r.queueLength) (dict "mode" "MessageRate" "config" $r.messageRate) -}}
+{{- range $item := list (dict "mode" "QueueLength" "config" $r.queueLength) (dict "mode" "MessageRate" "config" $r.messageRate) (dict "mode" "ExpectedQueueConsumptionTime" "metricType" "Value" "config" $r.expectedQueueConsumptionTime) -}}
 {{- if $item.config.enabled -}}
 {{- if or (le (float64 $item.config.value) 0.0) (lt (float64 $item.config.activationValue) 0.0) }}{{ fail "RabbitMQ target must be positive and activationValue nonnegative" }}{{ end -}}
 {{- $metadata := dict "protocol" $r.protocol "mode" $item.mode "value" (toString $item.config.value) "activationValue" (toString $item.config.activationValue) "queueName" ($r.queueName | default $.queue) "vhostName" $r.vhostName "unsafeSsl" (toString $r.unsafeSsl) -}}
 {{- if $r.host }}{{ $_ := set $metadata "host" $r.host }}{{ end -}}
 {{- $trigger := dict "type" "rabbitmq" "metadata" $metadata -}}
+{{- if $item.metricType }}{{ $_ := set $trigger "metricType" $item.metricType }}{{ end -}}
 {{- if $auth.name }}{{ $_ := set $trigger "authenticationRef" $auth }}{{ end -}}
 {{- $triggers = append $triggers $trigger -}}
 {{- end -}}

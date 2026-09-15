@@ -30,8 +30,12 @@ end
     dep = docs.find { |d| d['kind'] == 'Deployment' && d.dig('metadata', 'name') == s.dig('spec', 'scaleTargetRef', 'name') && d.dig('metadata', 'namespace') == s.dig('metadata', 'namespace') }
     assert(dep && !dep['spec'].key?('replicas'), 'Scaler target or replica ownership incorrect')
     t = s.dig('spec', 'triggers').first
+    assert(t.dig('metadata', 'mode') == 'ExpectedQueueConsumptionTime', 'Consumption-time scaling must be the RabbitMQ default')
+    assert(t['metricType'] == 'Value', 'Consumption-time scaling must use a global Value target')
+    assert(t.dig('metadata', 'value') == '10', 'Consumption-time target changed')
     assert(t.dig('metadata', 'unsafeSsl') == 'false', 'TLS verification must default on')
-    assert(t.dig('metadata', 'activationValue') == '0', 'Zero activation lost')
+    assert(t.dig('metadata', 'activationValue') == '1', 'Consumption-time activation changed')
+    assert(s.dig('spec', 'pollingInterval') == 1, 'Consumption-time scaling requires one-second polling')
     if s.dig('metadata', 'namespace') == 'customer'
       assert(t.dig('metadata', 'queueName') == 'orders', 'Company queue resolution incorrect')
     end
@@ -69,8 +73,23 @@ v['workers']['mono'] = {'scheduler' => {'mode' => 'disabled'}}
 render(v)
 v = config
 v['workers']['autoscaling']['keda']['rabbitmq']['protocol'] = 'amqp'
-v['workers']['autoscaling']['keda']['rabbitmq']['messageRate'] = {'enabled' => true}
-render(v, failure: 'MessageRate requires')
+render(v, failure: 'ExpectedQueueConsumptionTime require')
+v = config
+r = v['workers']['autoscaling']['keda']['rabbitmq']
+r['protocol'] = 'amqp'
+r['expectedQueueConsumptionTime'] = {'enabled' => false}
+r['messageRate'] = {'enabled' => true}
+render(v, failure: 'MessageRate and ExpectedQueueConsumptionTime require')
+v = config
+v['workers']['autoscaling']['keda']['pollingInterval'] = 5
+render(v, failure: 'ExpectedQueueConsumptionTime requires keda.pollingInterval: 1')
+v = config
+r = v['workers']['autoscaling']['keda']['rabbitmq']
+r['expectedQueueConsumptionTime'] = {'enabled' => false}
+r['queueLength'] = {'enabled' => true, 'value' => '30', 'activationValue' => '0'}
+docs = render(v)
+t = docs.find { |d| d['kind'] == 'ScaledObject' }.dig('spec', 'triggers').first
+assert(t.dig('metadata', 'mode') == 'QueueLength' && !t.key?('metricType'), 'Explicit QueueLength compatibility lost')
 v = config
 v['workers']['autoscaling']['keda']['rabbitmq']['enabled'] = false
 render(v, failure: 'at least one enabled trigger')

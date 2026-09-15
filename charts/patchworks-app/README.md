@@ -1500,7 +1500,7 @@ without CRDs for offline validation; cluster installation requires those CRDs.
 
 Examples (merge with your installation values):
 
-- [Direct RabbitMQ queue length and message rate](docs/autoscaling/rabbitmq.yaml)
+- [Direct RabbitMQ estimated consumption time](docs/autoscaling/rabbitmq.yaml)
 - [Prometheus queue metrics](docs/autoscaling/prometheus.yaml)
 - [Native CPU/memory HPA](docs/autoscaling/hpa.yaml)
 - [Monocore concurrency-aware queue scaling](docs/autoscaling/mono.yaml)
@@ -1532,18 +1532,19 @@ All fields below live under the resolved `autoscaling` block:
 | `minReplicas` / `maxReplicas` | `1` / `10` | Bounds; max must be positive; native HPA min must be at least one |
 | `behavior` | scale-down stabilization 300 seconds | Native HPA behavior, including scale-up/down policies; also passed to KEDA's HPA |
 | `hpa.cpu` / `hpa.memory` | `0` / `0` | Utilization percentages; zero disables that metric |
-| `keda.pollingInterval` / `cooldownPeriod` | `30` / `300` | Polling and scale-to-zero cooldown in seconds |
+| `keda.pollingInterval` / `cooldownPeriod` | `1` / `300` | Polling and scale-to-zero cooldown in seconds; consumption-time scaling requires one-second polling |
 | `keda.pausedReplicas` | `null` | Optional explicit pause count, including zero |
 | `keda.fallback` | `{}` | Native KEDA fallback configuration, e.g. failureThreshold and replicas; observe scaler/metric-type support |
 | `keda.extraTriggers` | `[]` | Native KEDA trigger list: CPU, memory, cron, Redis, or other supported scalers |
 | `keda.rabbitmq.enabled` | `false` | Direct broker scaling, independent of Prometheus |
 | `keda.rabbitmq.host` | `""` | Credential-free URL, or provide host through authentication |
-| `keda.rabbitmq.protocol` | `http` | `http`, `amqp`, or `auto`; MessageRate requires `http` |
+| `keda.rabbitmq.protocol` | `http` | `http`, `amqp`, or `auto`; MessageRate and ExpectedQueueConsumptionTime require `http` |
 | `keda.rabbitmq.vhostName` | `/` | Broker vhost |
 | `keda.rabbitmq.unsafeSsl` | `false` | Opt-in disabling of server certificate verification |
 | `keda.rabbitmq.queueName` | `""` | Empty means resolved worker queue |
-| `keda.rabbitmq.queueLength.enabled/value/activationValue` | `true` / `"30"` / `"0"` | QueueLength trigger and independent target/activation thresholds |
+| `keda.rabbitmq.queueLength.enabled/value/activationValue` | `false` / `"30"` / `"0"` | QueueLength trigger and independent target/activation thresholds |
 | `keda.rabbitmq.messageRate.enabled/value/activationValue` | `false` / `"22"` / `"0"` | MessageRate trigger and independent thresholds |
+| `keda.rabbitmq.expectedQueueConsumptionTime.enabled/value/activationValue` | `true` / `"10"` / `"1"` | Default trigger: scale when estimated broker drain time exceeds the target seconds; rendered with `metricType: Value` |
 | `keda.rabbitmq.authenticationRef` | `{}` | Existing TriggerAuthentication name, optionally kind ClusterTriggerAuthentication |
 | `keda.rabbitmq.existingSecret.name` | `""` | Generate a target-specific TriggerAuthentication referencing this existing Secret |
 | `keda.rabbitmq.existingSecret.hostKey/usernameKey/passwordKey` | `""` / `username` / `password` | Secret keys mapped to authentication parameters; empty key omits that parameter |
@@ -1562,8 +1563,14 @@ clear `usernameKey`/`passwordKey` if those keys do not exist. Inline credential
 URLs in `host` are rejected. Custom CA/client certificate configuration can be
 provided through native authentication resources. External RabbitMQ management
 URLs may differ from application AMQP hosts; configure the scaler endpoint
-explicitly. QueueLength over AMQP counts ready messages; HTTP can also count
-unacknowledged work. MessageRate requires the management API.
+explicitly. ExpectedQueueConsumptionTime uses the management API's publish and
+delivery rates plus ready and unacknowledged messages to estimate broker drain
+time. It is the default because short queue spikes that existing consumers can
+drain quickly should not request replicas that arrive after the spike. QueueLength
+over AMQP counts ready messages; HTTP can also count unacknowledged work.
+MessageRate requires the management API. When enabling QueueLength or MessageRate
+instead, explicitly disable ExpectedQueueConsumptionTime unless both independent
+signals are intended; KEDA follows the largest replica recommendation.
 
 ### Metrics and scaling behaviour
 
