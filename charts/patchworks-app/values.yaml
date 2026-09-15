@@ -534,7 +534,15 @@ workers:
         stabilizationWindowSeconds: 0
         tolerance: "0.02"
       scaleDown:
-        stabilizationWindowSeconds: 300
+        stabilizationWindowSeconds: 120
+        selectPolicy: Max
+        policies:
+          - type: Percent
+            value: 25
+            periodSeconds: 60
+          - type: Pods
+            value: 5
+            periodSeconds: 60
     hpa:
       cpu: 0 # target utilization percentage; requires a CPU request
       memory: 0 # target utilization percentage; requires a memory request
@@ -564,7 +572,7 @@ workers:
         expectedQueueConsumptionTime:
           enabled: true
           value: "4"
-          activationValue: "1"
+          activationValue: "0"
         authenticationRef: {} # name and optional kind: ClusterTriggerAuthentication
         existingSecret:
           name: ""
