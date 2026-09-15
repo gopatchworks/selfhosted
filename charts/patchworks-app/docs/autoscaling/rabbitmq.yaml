@@ -17,5 +17,5 @@ workers:
         # The default trigger scales against estimated drain time, including
         # queued and unacknowledged messages. It requires pollingInterval: 1.
         expectedQueueConsumptionTime:
-          value: "10"
+          value: "4"
           activationValue: "1"
