@@ -563,7 +563,7 @@ workers:
         # unacknowledged work will take longer than this many seconds to drain.
         expectedQueueConsumptionTime:
           enabled: true
-          value: "10"
+          value: "4"
           activationValue: "1"
         authenticationRef: {} # name and optional kind: ClusterTriggerAuthentication
         existingSecret:
