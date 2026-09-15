@@ -532,7 +532,7 @@ workers:
     behavior:
       scaleUp:
         stabilizationWindowSeconds: 0
-        tolerance: 0.02
+        tolerance: "0.02"
       scaleDown:
         stabilizationWindowSeconds: 300
     hpa:
