@@ -202,6 +202,10 @@ func TestDatabaseAppCorePodsAndLifecycleShareConnections(t *testing.T) {
 func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 	values := databaseAppValues(t)
 	databaseAppSeparateConnections(values)
+	componentSelectionSet(values, map[string]any{
+		"host": "tenant-db100000.example.test", "readHost": "tenant-db100000-read.example.test", "port": 3311,
+		"username": "db100000_user", "existingSecret": map[string]any{"name": "tenant-db100000", "passwordKey": "db-password"},
+	}, "database", "tenant", "servers", "db100000")
 	componentSelectionSet(values, false, "web", "gateway", "enabled")
 	componentSelectionSet(values, true, "workers", "enabled")
 	componentSelectionSet(values, "mono", "workers", "type")
@@ -239,10 +243,12 @@ func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 			"DB_TENANT_blue_PASSWORD":  "blue-inline-test-password",
 			"DB_TENANT_Green_2_HOST":   "tenant-green.example.test", "DB_TENANT_Green_2_PORT": "3310", "DB_TENANT_Green_2_USERNAME": "green_user",
 			"DB_TENANT_Green_2_PASSWORD": "secret:tenant-green/custom-green-password",
-			"DB_FABRIC_HOST":             "fabric-db.example.test", "DB_FABRIC_READ_HOST": "fabric-db-read.example.test",
+			"DB_TENANT_db100000_HOST":    "tenant-db100000.example.test", "DB_TENANT_db100000_PORT": "3311", "DB_TENANT_db100000_USERNAME": "db100000_user",
+			"DB_TENANT_db100000_READ_HOST": "tenant-db100000-read.example.test", "DB_TENANT_db100000_PASSWORD": "secret:tenant-db100000/db-password",
+			"DB_FABRIC_HOST": "fabric-db.example.test", "DB_FABRIC_READ_HOST": "fabric-db-read.example.test",
 			"DB_FABRIC_PASSWORD": "secret:external-fabric-db/password",
 		})
-		for _, id := range []string{"", "blue", "Green_2"} {
+		for _, id := range []string{"", "blue", "Green_2", "db100000"} {
 			prefix, suffix := "DB_TENANT", ""
 			if id != "" {
 				prefix += "_" + id
@@ -253,6 +259,11 @@ func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 			}
 			if readHost, ok := env[prefix+"_READ_HOST"]; ok {
 				assertDatabaseAppEnv(t, env, map[string]string{"TENANT_DB_READ_HOST" + suffix: readHost})
+			}
+		}
+		for _, name := range []string{"DB_TENANT_Green_2_READ_HOST", "TENANT_DB_READ_HOST_Green_2"} {
+			if _, ok := env[name]; ok {
+				t.Errorf("empty assigned-server read host rendered %s and would prevent write-host fallback", name)
 			}
 		}
 		container := componentSelectionMap(object, "spec", "template", "spec")["containers"].([]any)[0].(map[string]any)

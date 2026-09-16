@@ -830,7 +830,10 @@ Helm values does not create these registry records or assign tenants to it.
 
 Each `database.tenant.servers.<id>` entry has the following fields. IDs must
 contain only letters, digits and underscores (`A-Za-z0-9_`). Server credentials
-are independent of `mysql.*` and the default tenant connection.
+are independent of `mysql.*` and the default tenant connection. The chart
+iterates this map; adding any valid credential ID such as `db4` or `db100000`
+automatically emits both the Core and Monocore environment-variable families
+without a template change.
 
 | Key | Default | Description |
 |-----|---------|-------------|
