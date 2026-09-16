@@ -265,10 +265,10 @@ Each key in `workers.microservices` (except `_default`) produces a Deployment na
 
 Required per-service fields:
 - `name` → `APP_NAME` env var
-- `domain` → `APP_DOMAIN` env var and the hub queue name (`--queue=<domain>`)
+- `domain` → `APP_DOMAIN` env var and the default hub queue name
 
 Optional per-service overrides (fall back to `_default` then `workers.*`):
-`enabled`, `replicas`, `processes`, `namespace`, `resources`, `extraEnv`, `extraEnvFrom`, `podAnnotations`, `nodeSelector`, `tolerations`, `affinity`
+`queue`, `enabled`, `replicas`, `processes`, `namespace`, `resources`, `extraEnv`, `extraEnvFrom`, `podAnnotations`, `nodeSelector`, `tolerations`, `affinity`. `queue` overrides the hub queue (`--queue=<queue>`) while leaving `APP_DOMAIN` unchanged.
 
 `processes` maps to `HORIZON_MAX_PROCESSES` (worker concurrency within the container).
 
@@ -278,7 +278,7 @@ The full list of microservices is derived from the haberdashery `apps/core/overl
 
 `workers.companies[]` is shared across all three worker types. Each entry adds one extra Deployment per service (for `microservice`) or one extra Deployment overall (for `standalone`/`mono`).
 
-- Hub queue: the service's `domain` (microservice), `workers.queue.name` (standalone), or `workers.mono.queue` (mono)
+- Hub queue: the service's `queue | default domain` (microservice), `workers.queue.name` (standalone), or `workers.mono.queue` (mono)
 - Company queue: `company.queue | default company.name`
 
 Company deployments set the same `APP_NAME`/`APP_DOMAIN` as their hub (for `microservice`). The queue name is the company's queue — all microservice types for a given company share one queue.

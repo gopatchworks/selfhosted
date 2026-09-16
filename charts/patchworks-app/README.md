@@ -459,7 +459,7 @@ default `logging` processor disables its scheduler because it only consumes
 application broadcast/logging work. A
 pre-install/pre-upgrade hook also asserts these RabbitMQ queues, plus the active
 PHP worker hub queues: `workers.queue.name` for `workers.type=standalone`, or
-each enabled `workers.microservices[*].domain` for
+each enabled `workers.microservices[*].queue` (falling back to `domain`) for
 `workers.type=microservice`. Queue creation works with either the bundled broker
 or a user-provided external RabbitMQ instance.
 
@@ -524,7 +524,8 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | Field | Description |
 |-------|-------------|
 | `name` | `APP_NAME` env var |
-| `domain` | `APP_DOMAIN` env var and the RabbitMQ queue name |
+| `domain` | `APP_DOMAIN` env var and, when `queue` is unset, the RabbitMQ queue name |
+| `queue` | Optional RabbitMQ queue override; defaults to `domain` |
 | `processes` | Worker concurrency — overrides `_default.processes` |
 | `replicas` | Replica count — overrides `_default.replicas` |
 | `enabled` | Set `false` to suppress the Deployment without removing the key |
@@ -1534,9 +1535,9 @@ Fields merge recursively in this order; later values win, including explicit
 | Monocore | `workers.autoscaling` → `workers.mono.autoscaling` → `companies[].autoscaling` |
 | Microservice | `workers.autoscaling` → `microservices._default.autoscaling` → `microservices.<key>.autoscaling` → `companies[].autoscaling` → `companies[].microservices.<key>.autoscaling` |
 
-Hub queues come from `workers.queue.name`, the microservice `domain`, or
-`workers.mono.queue`; company queues use `company.queue`, falling back to
-`company.name`. `keda.rabbitmq.queueName` can explicitly override the scaler's
+Hub queues come from `workers.queue.name`, the microservice `queue` (falling
+back to `domain`), or `workers.mono.queue`; company queues use `company.queue`,
+falling back to `company.name`. `keda.rabbitmq.queueName` can explicitly override the scaler's
 queue. Company microservices share a company queue: identical queue triggers
 scale every service against the same backlog. Use per-service policies or
 service-specific Prometheus queries when that is not the intended behaviour.

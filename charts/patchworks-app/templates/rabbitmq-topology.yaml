@@ -27,7 +27,7 @@
 {{- if eq $msKey "_default" }}{{- continue }}{{- end }}
 {{- $enabled := dig "enabled" (dig "enabled" true $default) $ms }}
 {{- if not $enabled }}{{- continue }}{{- end }}
-{{- $queue := dig "domain" $msKey $ms }}
+{{- $queue := dig "queue" (dig "domain" $msKey $ms) $ms }}
 {{- if not (hasKey $queueSet $queue) }}
 {{- $queues = append $queues $queue }}
 {{- $_ := set $queueSet $queue true }}

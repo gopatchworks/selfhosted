@@ -44,7 +44,7 @@ key in workers.microservices (excluding _default).
     "serviceKey"    $msKey
     "slug"          (printf "workers-%s" $msKey)
     "ns"            ($ms.namespace | default $hubNs)
-    "queue"         (dig "domain" $msKey $ms)
+    "queue"         (dig "queue" (dig "domain" $msKey $ms) $ms)
     "name"          (dig "name"   $msKey $ms)
     "domain"        (dig "domain" $msKey $ms)
     "replicas"      (dig "replicas"  (dig "replicas"  1  $default) $ms)

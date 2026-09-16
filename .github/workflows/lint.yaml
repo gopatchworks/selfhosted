@@ -57,3 +57,6 @@ jobs:
 
       - name: Worker autoscaling render tests
         run: ruby tests/autoscaling_test.rb
+
+      - name: Microservice queue render tests
+        run: ruby tests/microservice_queue_test.rb

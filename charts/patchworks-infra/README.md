@@ -283,7 +283,8 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | Field | Description |
 |-------|-------------|
 | `name` | `APP_NAME` env var |
-| `domain` | `APP_DOMAIN` env var and the RabbitMQ queue name |
+| `domain` | `APP_DOMAIN` env var and, when `queue` is unset, the RabbitMQ queue name |
+| `queue` | Optional RabbitMQ queue override; defaults to `domain` |
 | `processes` | Worker concurrency — overrides `_default.processes` |
 | `replicas` | Replica count — overrides `_default.replicas` |
 | `enabled` | Set `false` to suppress the Deployment without removing the key |

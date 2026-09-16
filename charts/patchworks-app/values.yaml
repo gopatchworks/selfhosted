@@ -639,7 +639,8 @@ workers:
   # service; everything else falls back to _default then workers.* globals.
   #
   # name   → APP_NAME env var
-  # domain → APP_DOMAIN env var and the hub queue name
+  # domain → APP_DOMAIN env var; also the hub queue name unless queue is set
+  # queue  → optional hub queue name override
   # processes → numprocs in generated supervisord.conf (worker concurrency)
   #
   # Company workers (workers.companies) consume company.queue | default
@@ -725,6 +726,7 @@ workers:
     translate:
       name: Translate
       domain: translate
+      queue: map
 
     try-catch:
       name: Try Catch

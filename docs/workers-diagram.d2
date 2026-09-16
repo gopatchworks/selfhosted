@@ -83,7 +83,7 @@ microservice: "type: microservice" {
 
     hub: "Hub (workers.hub.enabled)" {
       direction: right
-      cm: "{name}-workers-{svc}-supervisord\nqueue: domain" { shape: document }
+      cm: "{name}-workers-{svc}-supervisord\nqueue: queue | domain" { shape: document }
       dep: "Deployment\n{name}-workers-{svc}" { shape: rectangle }
       cm -> dep: mounts
     }
