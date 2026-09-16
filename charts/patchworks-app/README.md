@@ -254,7 +254,7 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
 | `fabric.mysql.maxConnections` | `1000` | `max_connections` for dedicated bundled Fabric MySQL when `fabric.mysql.enabled=true` |
-| `fabric.mysql.external.readHost` | `""` | Optional external Fabric read host for Monocore; empty uses the write host |
+| `fabric.mysql.external.readHost` | `""` | Optional external Fabric read host for Fabric, Core, and Monocore; empty uses the write host |
 
 Fabric's Core settings reach its web and init containers, migration Jobs and
 seed Jobs. Changes also update the Fabric Deployment's configuration checksum.
@@ -855,7 +855,7 @@ without a template change.
 | Default tenant host, port, username, password | `TENANT_DB_HOST`, `TENANT_DB_PORT`, `TENANT_DB_USERNAME`, `TENANT_DB_PASSWORD` | `DB_TENANT_HOST`, `DB_TENANT_PORT`, `DB_TENANT_USERNAME`, `DB_TENANT_PASSWORD` |
 | Assigned server `<id>` | `TENANT_DB_HOST_<id>`, `TENANT_DB_PORT_<id>`, `TENANT_DB_USERNAME_<id>`, `TENANT_DB_PASSWORD_<id>` | `DB_TENANT_<id>_HOST`, `DB_TENANT_<id>_PORT`, `DB_TENANT_<id>_USERNAME`, `DB_TENANT_<id>_PASSWORD` |
 | Read host | `LANDLORD_DB_READ_HOST`, `TENANT_DB_READ_HOST`, `TENANT_DB_READ_HOST_<id>` | `DB_LANDLORD_READ_HOST`, `DB_TENANT_READ_HOST`, `DB_TENANT_<id>_READ_HOST` |
-| Fabric read host | Not used | `DB_FABRIC_READ_HOST` from `fabric.mysql.external.readHost` |
+| Fabric read host | `FABRIC_DB_READ_HOST` from `fabric.mysql.external.readHost` | `DB_FABRIC_READ_HOST` from `fabric.mysql.external.readHost` |
 | New tenant placement | `PRIMARY_TENANT_DATABASE_SERVER_ID` | Not used |
 
 Core receives `LANDLORD_DB_CONNECTION=landlord`, the Laravel connection name.
@@ -865,6 +865,10 @@ Monocore also receives the Core `TENANT_DB_*` naming family, including read
 hosts, as compatibility aliases for versions before the environment-variable
 rename; canonical `DB_TENANT_*` variables take precedence. Empty read hosts are
 omitted so each runtime falls back to its write host.
+
+Fabric itself receives the same configured endpoint as `DB_READ_HOST`, matching
+its Laravel database configuration. Core receives it as `FABRIC_DB_READ_HOST`,
+and Monocore receives it as `DB_FABRIC_READ_HOST`.
 
 Monocore receives `DB_LANDLORD_*` and `DB_FABRIC_*` component variables, plus
 the compatibility `DB_LANDLORD_DSN` and `DB_FABRIC_DSN` values. The DSN templates

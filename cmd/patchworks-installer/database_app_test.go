@@ -172,6 +172,7 @@ func TestDatabaseAppCorePodsAndLifecycleShareConnections(t *testing.T) {
 		"TENANT_DB_PASSWORD_blue": "blue-inline-test-password", "TENANT_DB_READ_HOST_blue": "tenant-blue-read.example.test",
 		"TENANT_DB_HOST_Green_2": "tenant-green.example.test", "TENANT_DB_PORT_Green_2": "3310", "TENANT_DB_USERNAME_Green_2": "green_user",
 		"TENANT_DB_PASSWORD_Green_2": "secret:tenant-green/custom-green-password", "FABRIC_DB_HOST": "fabric-db.example.test",
+		"FABRIC_DB_READ_HOST": "fabric-db-read.example.test",
 	}
 	seen := map[string]bool{}
 	for _, object := range objects {
@@ -196,6 +197,50 @@ func TestDatabaseAppCorePodsAndLifecycleShareConnections(t *testing.T) {
 		if !seen[component] {
 			t.Errorf("missing %s workload", component)
 		}
+	}
+}
+
+func TestDatabaseAppFabricReadHostRouting(t *testing.T) {
+	for _, readHost := range []string{"fabric-db-read.example.test", ""} {
+		name := "configured"
+		if readHost == "" {
+			name = "empty"
+		}
+		t.Run(name, func(t *testing.T) {
+			values := databaseAppValues(t)
+			componentSelectionSet(values, true, "fabric", "enabled")
+			componentSelectionSet(values, true, "fabric", "migrations", "enabled")
+			componentSelectionSet(values, readHost, "fabric", "mysql", "external", "readHost")
+			objects := renderComponentSelection(t, "databases", "databases", values)
+			seenConfig, seenMigration := false, false
+			for _, object := range objects {
+				metadata := componentSelectionMap(object, "metadata")
+				component := fmt.Sprint(componentSelectionMap(metadata, "labels")["app.kubernetes.io/component"])
+				if object["kind"] == "ConfigMap" && metadata["name"] == "databases-fabric-config" {
+					data := componentSelectionMap(object, "data")
+					actual, present := data["DB_READ_HOST"]
+					if readHost == "" && present {
+						t.Errorf("empty Fabric read host rendered DB_READ_HOST=%v and would prevent write-host fallback", actual)
+					} else if readHost != "" && (!present || actual != readHost) {
+						t.Errorf("Fabric ConfigMap DB_READ_HOST = %v (present=%v), want %q", actual, present, readHost)
+					}
+					seenConfig = true
+				}
+				if object["kind"] == "Job" && component == "fabric-migrations" {
+					env := databaseAppEnvironment(t, objects, object)
+					actual, present := env["DB_READ_HOST"]
+					if readHost == "" && present {
+						t.Errorf("empty Fabric migration read host rendered DB_READ_HOST=%q and would prevent write-host fallback", actual)
+					} else if readHost != "" && (!present || actual != readHost) {
+						t.Errorf("Fabric migration DB_READ_HOST = %q (present=%v), want %q", actual, present, readHost)
+					}
+					seenMigration = true
+				}
+			}
+			if !seenConfig || !seenMigration {
+				t.Fatalf("missing Fabric read-host consumers: config=%v migrations=%v", seenConfig, seenMigration)
+			}
+		})
 	}
 }
 

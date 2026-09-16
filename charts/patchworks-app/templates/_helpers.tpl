@@ -1443,6 +1443,9 @@ PAYLOAD_REDIS_HOST: {{ include "patchworks.redis.host" . | quote }}
 PAYLOAD_REDIS_PORT: {{ include "patchworks.redis.port" . | quote }}
 FABRIC_DB_CONNECTION: "fabric"
 FABRIC_DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+{{- with include "patchworks.fabric.mysql.readHost" . }}
+FABRIC_DB_READ_HOST: {{ . | quote }}
+{{- end }}
 FABRIC_DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
 FABRIC_DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
 FABRIC_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
@@ -1517,6 +1520,9 @@ APP_URL: {{ .Values.app.url | quote }}
 {{ include "patchworks.licenseConfigData" . }}
 DB_CONNECTION: "mysql"
 DB_HOST: {{ include "patchworks.fabric.mysql.host" . | quote }}
+{{- with include "patchworks.fabric.mysql.readHost" . }}
+DB_READ_HOST: {{ . | quote }}
+{{- end }}
 DB_PORT: {{ include "patchworks.fabric.mysql.port" . | quote }}
 DB_DATABASE: {{ include "patchworks.fabric.mysql.database" . | quote }}
 DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
@@ -2286,6 +2292,10 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: fabric
 - name: FABRIC_DB_HOST
   value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+{{- with include "patchworks.fabric.mysql.readHost" . }}
+- name: FABRIC_DB_READ_HOST
+  value: {{ . | quote }}
+{{- end }}
 - name: FABRIC_DB_PORT
   value: {{ include "patchworks.fabric.mysql.port" . | quote }}
 - name: FABRIC_DB_DATABASE
@@ -2355,6 +2365,10 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
   value: mysql
 - name: DB_HOST
   value: {{ include "patchworks.fabric.mysql.host" . | quote }}
+{{- with include "patchworks.fabric.mysql.readHost" . }}
+- name: DB_READ_HOST
+  value: {{ . | quote }}
+{{- end }}
 - name: DB_PORT
   value: {{ include "patchworks.fabric.mysql.port" . | quote }}
 - name: DB_DATABASE
