@@ -71,6 +71,27 @@ Name of the app ServiceAccount.
 {{- end }}
 
 {{/*
+Resolve the optional APP_PREVIOUS_KEYS source. The key field is deliberately
+opt-in so existing APP_KEY Secrets do not need to contain it.
+*/}}
+{{- define "patchworks.appPreviousKeysSecret" -}}
+{{- if and .Values.app.existingSecret.name .Values.app.existingSecret.previousKeysKey -}}
+{{- dict "name" .Values.app.existingSecret.name "key" .Values.app.existingSecret.previousKeysKey | toJson -}}
+{{- else -}}
+{{- dict "name" "" "key" "APP_PREVIOUS_KEYS" | toJson -}}
+{{- end -}}
+{{- end }}
+
+{{/* Render APP_PREVIOUS_KEYS only when an inline list or Secret key is configured. */}}
+{{- define "patchworks.appPreviousKeysEnv" -}}
+{{- $secret := fromJson (include "patchworks.appPreviousKeysSecret" .) -}}
+{{- $value := join "," (.Values.app.previousKeys | default (list)) -}}
+{{- if or $value $secret.name -}}
+{{ include "patchworks.secretEnv" (dict "name" "APP_PREVIOUS_KEYS" "value" $value "secret" $secret) }}
+{{- end -}}
+{{- end }}
+
+{{/*
 Monocore API URL consumed by Core. Defaults to the hub monocore worker Service
 rendered by workers-mono.yaml.
 */}}
@@ -1760,6 +1781,10 @@ Each key is only included when NOT backed by an existingSecret.
 {{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
+{{- $previousKeysSecret := fromJson (include "patchworks.appPreviousKeysSecret" .) }}
+{{- if and (not $previousKeysSecret.name) .Values.app.previousKeys }}
+APP_PREVIOUS_KEYS: {{ join "," .Values.app.previousKeys | quote }}
+{{- end }}
 {{ include "patchworks.licenseSecretData" . }}
 {{ include "patchworks.database.coreSecretData" . }}
 {{- $fabricDbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
@@ -1861,6 +1886,14 @@ KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
     secretKeyRef:
       name: {{ $appKeySecret.name }}
       key: {{ $appKeySecret.key }}
+{{- end }}
+{{- $previousKeysSecret := fromJson (include "patchworks.appPreviousKeysSecret" .) }}
+{{- if $previousKeysSecret.name }}
+- name: APP_PREVIOUS_KEYS
+  valueFrom:
+    secretKeyRef:
+      name: {{ $previousKeysSecret.name }}
+      key: {{ $previousKeysSecret.key }}
 {{- end }}
 {{ include "patchworks.licenseSecretEnvRefs" . }}
 {{ include "patchworks.database.coreSecretEnv" (dict "root" . "refsOnly" true) }}
@@ -1999,6 +2032,10 @@ Same as appSecretData but uses Fabric MySQL/Redis password helpers.
 {{- if not $appKeySecret.name }}
 APP_KEY: {{ .Values.app.key | quote }}
 {{- end }}
+{{- $previousKeysSecret := fromJson (include "patchworks.appPreviousKeysSecret" .) }}
+{{- if and (not $previousKeysSecret.name) .Values.app.previousKeys }}
+APP_PREVIOUS_KEYS: {{ join "," .Values.app.previousKeys | quote }}
+{{- end }}
 {{ include "patchworks.licenseSecretData" . }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
 {{- if not $dbSecret.name }}
@@ -2057,6 +2094,14 @@ Fabric does not connect to RabbitMQ.
     secretKeyRef:
       name: {{ $appKeySecret.name }}
       key: {{ $appKeySecret.key }}
+{{- end }}
+{{- $previousKeysSecret := fromJson (include "patchworks.appPreviousKeysSecret" .) }}
+{{- if $previousKeysSecret.name }}
+- name: APP_PREVIOUS_KEYS
+  valueFrom:
+    secretKeyRef:
+      name: {{ $previousKeysSecret.name }}
+      key: {{ $previousKeysSecret.key }}
 {{- end }}
 {{ include "patchworks.licenseSecretEnvRefs" . }}
 {{- $dbSecret := fromJson (include "patchworks.fabric.mysql.existingSecret" .) }}
@@ -2144,6 +2189,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 {{- define "patchworks.appEnv" -}}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
+{{ include "patchworks.appPreviousKeysEnv" . }}
 - name: APP_ENV
   value: {{ .Values.app.env | quote }}
 - name: APP_DEBUG
@@ -2297,6 +2343,7 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
   value: {{ include "patchworks.fabric.core.gatewayUrl" . | quote }}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
 {{ include "patchworks.secretEnv" (dict "name" "APP_KEY" "value" .Values.app.key "secret" $appKeySecret) }}
+{{ include "patchworks.appPreviousKeysEnv" . }}
 - name: APP_ENV
   value: {{ .Values.app.env | quote }}
 - name: APP_DEBUG

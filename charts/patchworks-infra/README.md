@@ -8,7 +8,7 @@ Use it with the `patchworks-app` chart and pass the same values file to both:
 
 ```bash
 helm upgrade --install patchworks-infra ./charts/patchworks-infra -f values.yaml
-helm upgrade --install patchworks-app ./charts/patchworks-app -f values.yaml --set app.key="$APP_KEY"
+helm upgrade --install patchworks-app ./charts/patchworks-app -f values.yaml
 ```
 
 Resource names default to the stable `patchworks` prefix, not the Helm release
@@ -111,9 +111,11 @@ Shared configuration injected into every application pod (web, workers, migratio
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `app.key` | `""` | Laravel `APP_KEY` — required. Generate with `php artisan key:generate --show` |
+| `app.key` | `""` | Laravel `APP_KEY`; the app chart generates a stable key when omitted |
+| `app.previousKeys` | `[]` | Older Laravel keys passed through to the app chart as `APP_PREVIOUS_KEYS` |
 | `app.existingSecret.name` | `""` | Secret to source `APP_KEY` from instead of the inline value |
-| `app.existingSecret.key` | `app-key` | Key within the above secret |
+| `app.existingSecret.key` | `APP_KEY` | Key within the above secret |
+| `app.existingSecret.previousKeysKey` | `""` | Optional key containing comma-separated `APP_PREVIOUS_KEYS` |
 | `app.env` | `production` | `APP_ENV` |
 | `app.debug` | `"false"` | `APP_DEBUG` |
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
@@ -897,14 +899,16 @@ Every credential has a companion `existingSecret` block with named key fields. W
 
 ```yaml
 # kubectl create secret generic patchworks-secrets \
-#   --from-literal=app-key="base64:..." \
+#   --from-literal=APP_KEY="base64:..." \
+#   --from-literal=APP_PREVIOUS_KEYS="base64:...,base64:..." \
 #   --from-literal=db-password="s3cr3t" \
 #   --from-literal=minio-password="s3cr3t"
 
 app:
   existingSecret:
     name: patchworks-secrets
-    key: app-key            # single-credential secrets use "key"
+    key: APP_KEY
+    previousKeysKey: APP_PREVIOUS_KEYS
 
 mysql:
   auth:
@@ -1056,7 +1060,7 @@ workers:
 
 ```bash
 kubectl create secret generic patchworks-secrets \
-  --from-literal=app-key="base64:$(openssl rand -base64 32)" \
+  --from-literal=APP_KEY="base64:$(openssl rand -base64 32)" \
   --from-literal=db-password="$(openssl rand -base64 24)" \
   --from-literal=minio-root-password="$(openssl rand -base64 24)"
 ```
@@ -1065,7 +1069,7 @@ kubectl create secret generic patchworks-secrets \
 app:
   existingSecret:
     name: patchworks-secrets
-    key: app-key
+    key: APP_KEY
 
 mysql:
   auth:

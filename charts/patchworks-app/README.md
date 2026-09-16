@@ -22,6 +22,11 @@ a stable `patchworks-app-key` Secret for enabled APP_KEY consumers, with a value
 echo "base64:$(openssl rand -base64 32)"
 ```
 
+For graceful Laravel key rotation, keep the replacement in `app.key`/`APP_KEY`
+and provide older keys through `app.previousKeys` or the optional
+`app.existingSecret.previousKeysKey`. New values use the replacement key while
+Laravel can still decrypt ciphertext written with any previous key.
+
 Migrations run as `pre-install,pre-upgrade` hooks. Seeders run as `pre-install`
 hooks only. The first-install order is: Fabric migrations, Fabric seeders,
 Fabric company seeder, Core migrations, Core seeders, then application startup.
@@ -215,8 +220,10 @@ Shared configuration injected into every application pod (web, workers, migratio
 | Key | Default | Description |
 |-----|---------|-------------|
 | `app.key` | `""` | Laravel `APP_KEY`. Leave empty to auto-generate a stable key Secret |
+| `app.previousKeys` | `[]` | Older Laravel keys rendered as comma-separated `APP_PREVIOUS_KEYS` for graceful rotation |
 | `app.existingSecret.name` | `""` | Secret to source `APP_KEY` from instead of the inline value |
 | `app.existingSecret.key` | `APP_KEY` | Key within the above secret |
+| `app.existingSecret.previousKeysKey` | `""` | Optional key containing comma-separated `APP_PREVIOUS_KEYS`; empty omits the variable |
 | `app.env` | `production` | `APP_ENV` |
 | `app.debug` | `"false"` | `APP_DEBUG` |
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
@@ -1279,13 +1286,15 @@ Every credential has a companion `existingSecret` block with named key fields. W
 ```yaml
 # kubectl create secret generic patchworks-secrets \
 #   --from-literal=APP_KEY="base64:..." \
+#   --from-literal=APP_PREVIOUS_KEYS="base64:...,base64:..." \
 #   --from-literal=db-password="s3cr3t" \
 #   --from-literal=minio-password="s3cr3t"
 
 app:
   existingSecret:
     name: patchworks-secrets
-    key: APP_KEY            # single-credential secrets use "key"
+    key: APP_KEY
+    previousKeysKey: APP_PREVIOUS_KEYS
 
 mysql:
   auth:

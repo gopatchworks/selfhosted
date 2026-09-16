@@ -45,11 +45,15 @@ app:
   # Laravel APP_KEY. Leave empty to auto-generate a stable key Secret on install.
   # To provide one manually: echo "base64:$(openssl rand -base64 32)"
   key: ""
+  # Laravel APP_PREVIOUS_KEYS. New writes use app.key; these keys remain
+  # available for decrypting values written with an older APP_KEY.
+  previousKeys: []
   # Use an existing Secret instead of the inline key value above.
-  # When both name and key are set, APP_KEY is sourced via secretKeyRef.
+  # Set previousKeysKey only when the Secret also contains APP_PREVIOUS_KEYS.
   existingSecret:
     name: ""
     key: APP_KEY
+    previousKeysKey: ""
   env: production
   debug: "false"
   url: "http://localhost"

@@ -178,6 +178,63 @@ func componentSelectionWorkloads(objects []map[string]any) []string {
 	return got
 }
 
+func componentSelectionContainerEnv(object map[string]any) map[string]map[string]any {
+	podSpec := componentSelectionMap(object, "spec", "template", "spec")
+	result := map[string]map[string]any{}
+	for _, rawContainer := range podSpec["containers"].([]any) {
+		container := rawContainer.(map[string]any)
+		for _, rawEnv := range container["env"].([]any) {
+			env := rawEnv.(map[string]any)
+			result[env["name"].(string)] = env
+		}
+	}
+	return result
+}
+
+func TestAppPreviousKeys(t *testing.T) {
+	t.Run("omitted by default for existing APP_KEY secrets", func(t *testing.T) {
+		values := componentSelectionValues(t)
+		componentSelectionSet(values, true, "web", "gateway", "enabled")
+		for _, object := range renderComponentSelection(t, "previous-keys", "apps", values) {
+			if object["kind"] == "Deployment" && componentSelectionMap(object, "metadata", "labels")["app.kubernetes.io/component"] == "gateway" {
+				if _, found := componentSelectionContainerEnv(object)["APP_PREVIOUS_KEYS"]; found {
+					t.Fatal("APP_PREVIOUS_KEYS should be absent until explicitly configured")
+				}
+			}
+		}
+	})
+
+	t.Run("existing secret key", func(t *testing.T) {
+		values := componentSelectionValues(t)
+		componentSelectionSet(values, true, "web", "gateway", "enabled")
+		componentSelectionSet(values, "APP_PREVIOUS_KEYS", "app", "existingSecret", "previousKeysKey")
+		for _, object := range renderComponentSelection(t, "previous-keys", "apps", values) {
+			if object["kind"] != "Deployment" || componentSelectionMap(object, "metadata", "labels")["app.kubernetes.io/component"] != "gateway" {
+				continue
+			}
+			ref := componentSelectionMap(componentSelectionContainerEnv(object)["APP_PREVIOUS_KEYS"], "valueFrom", "secretKeyRef")
+			if ref["name"] != "external-app-key" || ref["key"] != "APP_PREVIOUS_KEYS" {
+				t.Fatalf("unexpected previous key Secret reference: %v", ref)
+			}
+		}
+	})
+
+	t.Run("inline list for lifecycle jobs", func(t *testing.T) {
+		values := componentSelectionValues(t)
+		componentSelectionSet(values, true, "migrations", "enabled")
+		componentSelectionSet(values, []any{"base64:old-one", "base64:old-two"}, "app", "previousKeys")
+		for _, object := range renderComponentSelection(t, "previous-keys", "apps", values) {
+			if object["kind"] != "Job" || componentSelectionMap(object, "metadata", "labels")["app.kubernetes.io/component"] != "core-migrations" {
+				continue
+			}
+			env := componentSelectionContainerEnv(object)["APP_PREVIOUS_KEYS"]
+			if env["value"] != "base64:old-one,base64:old-two" {
+				t.Fatalf("unexpected inline APP_PREVIOUS_KEYS: %v", env)
+			}
+		}
+	})
+}
+
 func TestComponentSelectionDefaultCompatibility(t *testing.T) {
 	// Resource identities recorded from the unchanged app chart at ab709c44400.
 	// This protects ordinary monolithic installs while allowing new annotations
