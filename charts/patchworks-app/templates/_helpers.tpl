@@ -483,6 +483,13 @@ Resolve Fabric's MySQL connection details with three fallback modes:
 {{- end -}}
 {{- end }}
 
+{{/* Fabric only has a distinct read endpoint in external MySQL mode. */}}
+{{- define "patchworks.fabric.mysql.readHost" -}}
+{{- if .Values.fabric.mysql.external.host -}}
+{{- .Values.fabric.mysql.external.readHost | default "" -}}
+{{- end -}}
+{{- end }}
+
 {{- define "patchworks.fabric.mysql.port" -}}
 {{- if .Values.fabric.mysql.enabled -}}3306
 {{- else if .Values.fabric.mysql.external.host -}}{{ .Values.fabric.mysql.external.port }}

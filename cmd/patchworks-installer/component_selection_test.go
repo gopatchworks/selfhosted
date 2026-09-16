@@ -95,6 +95,7 @@ fabric:
     enabled: false
     external:
       host: fabric-db.example.test
+      readHost: fabric-db-read.example.test
       existingSecret: {name: external-fabric-db}
 workers:
   enabled: false

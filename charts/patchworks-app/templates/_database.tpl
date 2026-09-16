@@ -121,13 +121,17 @@ aliases for binaries predating the canonical DB_TENANT_* naming.
 */}}
 {{- define "patchworks.database.monoEnv" -}}
 {{- $connections := dict "DB_LANDLORD" (fromJson (include "patchworks.database.connection" (dict "root" . "role" "landlord"))) "DB_TENANT" (fromJson (include "patchworks.database.connection" (dict "root" . "role" "tenant"))) -}}
-{{- $_ := set $connections "DB_FABRIC" (dict "host" (include "patchworks.fabric.mysql.host" .) "port" (include "patchworks.fabric.mysql.port" .) "database" (include "patchworks.fabric.mysql.database" .) "username" (include "patchworks.fabric.mysql.username" .) "password" (include "patchworks.fabric.mysql.password" .) "existingSecret" (fromJson (include "patchworks.fabric.mysql.existingSecret" .))) -}}
+{{- $_ := set $connections "DB_FABRIC" (dict "host" (include "patchworks.fabric.mysql.host" .) "readHost" (include "patchworks.fabric.mysql.readHost" .) "port" (include "patchworks.fabric.mysql.port" .) "database" (include "patchworks.fabric.mysql.database" .) "username" (include "patchworks.fabric.mysql.username" .) "password" (include "patchworks.fabric.mysql.password" .) "existingSecret" (fromJson (include "patchworks.fabric.mysql.existingSecret" .))) -}}
 {{- range $id, $cfg := fromJson (include "patchworks.database.servers" .) -}}
   {{- $_ := set $connections (printf "DB_TENANT_%s" $id) $cfg -}}
 {{- end -}}
 {{- range $prefix, $cfg := $connections }}
 - name: {{ $prefix }}_HOST
   value: {{ $cfg.host | quote }}
+{{- if $cfg.readHost }}
+- name: {{ $prefix }}_READ_HOST
+  value: {{ $cfg.readHost | quote }}
+{{- end }}
 - name: {{ $prefix }}_PORT
   value: {{ $cfg.port | quote }}
 - name: {{ $prefix }}_USERNAME
@@ -147,6 +151,10 @@ aliases for binaries predating the canonical DB_TENANT_* naming.
 {{- $cfg := $entry.config }}
 - name: TENANT_DB_HOST{{ $entry.suffix }}
   value: {{ $cfg.host | quote }}
+{{- if $cfg.readHost }}
+- name: TENANT_DB_READ_HOST{{ $entry.suffix }}
+  value: {{ $cfg.readHost | quote }}
+{{- end }}
 - name: TENANT_DB_PORT{{ $entry.suffix }}
   value: {{ $cfg.port | quote }}
 - name: TENANT_DB_USERNAME{{ $entry.suffix }}

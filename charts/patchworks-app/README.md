@@ -247,6 +247,7 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
 | `fabric.mysql.maxConnections` | `1000` | `max_connections` for dedicated bundled Fabric MySQL when `fabric.mysql.enabled=true` |
+| `fabric.mysql.external.readHost` | `""` | Optional external Fabric read host for Monocore; empty uses the write host |
 
 Fabric's Core settings reach its web and init containers, migration Jobs and
 seed Jobs. Changes also update the Fabric Deployment's configuration checksum.
@@ -797,14 +798,14 @@ Fabric's own database remains configured through `fabric.mysql.*`.
 | `database.landlord.password` | `null` | Landlord password; null/unset inherits the resolved MySQL password/Secret; explicit `""` uses an empty password |
 | `database.landlord.existingSecret.name` | `""` | Secret containing the landlord password; overrides inline/inherited password |
 | `database.landlord.existingSecret.passwordKey` | `password` | Password key in the landlord Secret |
-| `database.landlord.readHost` | `""` | Optional Core landlord read host; empty uses the write host. Monocore uses the write host |
+| `database.landlord.readHost` | `""` | Optional landlord read host for Core and Monocore; empty uses the write host |
 | `database.tenant.host` | `""` | Default tenant MySQL host; empty inherits the resolved `mysql.*` host |
 | `database.tenant.port` | `0` | Default tenant port; zero inherits the resolved MySQL port |
 | `database.tenant.username` | `""` | Default tenant username; empty inherits the resolved MySQL username |
 | `database.tenant.password` | `null` | Default tenant password; null/unset inherits the resolved MySQL password/Secret; explicit `""` uses an empty password |
 | `database.tenant.existingSecret.name` | `""` | Secret containing the default tenant password; overrides inline/inherited password |
 | `database.tenant.existingSecret.passwordKey` | `password` | Password key in the default tenant Secret |
-| `database.tenant.readHost` | `""` | Optional Core default tenant read host; empty uses the write host. Monocore uses the write host |
+| `database.tenant.readHost` | `""` | Optional default tenant read host for Core and Monocore; empty uses the write host |
 | `database.tenant.primaryServerId` | `""` | Optional Fabric database-server record ID for Core new tenant placement; distinct from a credential ID. Skips the default-endpoint seed database Job |
 | `database.tenant.pool.maxSizePerServer` | `null` | Optional number of warm tenant databases Core maintains on each eligible Fabric database server. `0` stops replenishment; null leaves the landlord setting in control |
 | `database.tenant.servers` | `{}` | Map of additional tenant server connections keyed by the application's database server credential ID |
@@ -832,7 +833,7 @@ are independent of `mysql.*` and the default tenant connection.
 | `database.tenant.servers.<id>.password` | `""` | Nonempty server password required unless an existing Secret is supplied |
 | `database.tenant.servers.<id>.existingSecret.name` | `""` | Secret containing this server's password |
 | `database.tenant.servers.<id>.existingSecret.passwordKey` | `password` | Password key in this server's Secret |
-| `database.tenant.servers.<id>.readHost` | `""` | Optional Core read host; empty uses this server's write host. Monocore uses the write host |
+| `database.tenant.servers.<id>.readHost` | `""` | Optional Core and Monocore read host; empty uses this server's write host |
 
 ### Core and Monocore variables
 
@@ -843,16 +844,17 @@ are independent of `mysql.*` and the default tenant connection.
 | Landlord schema | `LANDLORD_DB_DATABASE` | `DB_LANDLORD_DATABASE` and `db.landlord.name` in generated `config.yaml` |
 | Default tenant host, port, username, password | `TENANT_DB_HOST`, `TENANT_DB_PORT`, `TENANT_DB_USERNAME`, `TENANT_DB_PASSWORD` | `DB_TENANT_HOST`, `DB_TENANT_PORT`, `DB_TENANT_USERNAME`, `DB_TENANT_PASSWORD` |
 | Assigned server `<id>` | `TENANT_DB_HOST_<id>`, `TENANT_DB_PORT_<id>`, `TENANT_DB_USERNAME_<id>`, `TENANT_DB_PASSWORD_<id>` | `DB_TENANT_<id>_HOST`, `DB_TENANT_<id>_PORT`, `DB_TENANT_<id>_USERNAME`, `DB_TENANT_<id>_PASSWORD` |
-| Read host | `LANDLORD_DB_READ_HOST`, `TENANT_DB_READ_HOST`, `TENANT_DB_READ_HOST_<id>` | No read-host override; uses the write host |
+| Read host | `LANDLORD_DB_READ_HOST`, `TENANT_DB_READ_HOST`, `TENANT_DB_READ_HOST_<id>` | `DB_LANDLORD_READ_HOST`, `DB_TENANT_READ_HOST`, `DB_TENANT_<id>_READ_HOST` |
+| Fabric read host | Not used | `DB_FABRIC_READ_HOST` from `fabric.mysql.external.readHost` |
 | New tenant placement | `PRIMARY_TENANT_DATABASE_SERVER_ID` | Not used |
 
 Core receives `LANDLORD_DB_CONNECTION=landlord`, the Laravel connection name.
 Monocore receives tenant connection settings through process environment
 variables; putting them only in `db.tenant` in `config.yaml` is insufficient.
-Monocore also receives the Core `TENANT_DB_*` naming family as compatibility
-aliases for versions before the environment-variable rename; canonical
-`DB_TENANT_*` variables take precedence. Read-host settings are meaningful only
-for Core.
+Monocore also receives the Core `TENANT_DB_*` naming family, including read
+hosts, as compatibility aliases for versions before the environment-variable
+rename; canonical `DB_TENANT_*` variables take precedence. Empty read hosts are
+omitted so each runtime falls back to its write host.
 
 Monocore receives `DB_LANDLORD_*` and `DB_FABRIC_*` component variables, plus
 the compatibility `DB_LANDLORD_DSN` and `DB_FABRIC_DSN` values. The DSN templates
@@ -935,7 +937,7 @@ database:
         existingSecret:
           name: tenant-eu-db
           passwordKey: password
-        readHost: tenants-eu-read.example.com  # Core only
+        readHost: tenants-eu-read.example.com
 ```
 
 An application's server registry entry with `credential_id: eu_1` must refer

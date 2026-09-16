@@ -261,6 +261,7 @@ fabric:
     database: fabric
     external:
       host: ""
+      readHost: ""
       port: 3306
       database: fabric
       username: fabric
@@ -1126,7 +1127,7 @@ database:
     existingSecret:
       name: ""
       passwordKey: password
-    readHost: ""  # Core read replica; Monocore uses the write host
+    readHost: ""
   tenant:
     host: ""
     port: 0
@@ -1144,7 +1145,7 @@ database:
     primaryServerId: ""
     # Keys are exact Fabric database_servers.credential_id values, not server IDs.
     # Each server requires host, username and password or existingSecret.name.
-    # Optional port defaults to 3306; readHost is Core-only.
+    # Optional port defaults to 3306; readHost configures the read replica.
     servers: {}
     # servers:
     #   blue:

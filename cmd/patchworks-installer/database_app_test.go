@@ -229,14 +229,18 @@ func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 		env := databaseAppEnvironment(t, objects, object)
 		assertDatabaseAppEnv(t, env, map[string]string{
 			"DB_LANDLORD_HOST": "landlord.example.test", "DB_LANDLORD_PORT": "3307", "DB_LANDLORD_DATABASE": "landlord_shared",
-			"DB_LANDLORD_USERNAME": "landlord_user", "DB_LANDLORD_PASSWORD": "landlord-inline-test-password",
+			"DB_LANDLORD_READ_HOST": "landlord-read.example.test",
+			"DB_LANDLORD_USERNAME":  "landlord_user", "DB_LANDLORD_PASSWORD": "landlord-inline-test-password",
 			"DB_TENANT_HOST": "tenant-default.example.test", "DB_TENANT_PORT": "3308", "DB_TENANT_USERNAME": "default_user",
+			"DB_TENANT_READ_HOST": "tenant-default-read.example.test",
 			"DB_TENANT_PASSWORD":  "secret:tenant-default/custom-default-password",
 			"DB_TENANT_blue_HOST": "tenant-blue.example.test", "DB_TENANT_blue_PORT": "3306", "DB_TENANT_blue_USERNAME": "blue_user",
-			"DB_TENANT_blue_PASSWORD": "blue-inline-test-password",
-			"DB_TENANT_Green_2_HOST":  "tenant-green.example.test", "DB_TENANT_Green_2_PORT": "3310", "DB_TENANT_Green_2_USERNAME": "green_user",
+			"DB_TENANT_blue_READ_HOST": "tenant-blue-read.example.test",
+			"DB_TENANT_blue_PASSWORD":  "blue-inline-test-password",
+			"DB_TENANT_Green_2_HOST":   "tenant-green.example.test", "DB_TENANT_Green_2_PORT": "3310", "DB_TENANT_Green_2_USERNAME": "green_user",
 			"DB_TENANT_Green_2_PASSWORD": "secret:tenant-green/custom-green-password",
-			"DB_FABRIC_HOST":             "fabric-db.example.test", "DB_FABRIC_PASSWORD": "secret:external-fabric-db/password",
+			"DB_FABRIC_HOST":             "fabric-db.example.test", "DB_FABRIC_READ_HOST": "fabric-db-read.example.test",
+			"DB_FABRIC_PASSWORD": "secret:external-fabric-db/password",
 		})
 		for _, id := range []string{"", "blue", "Green_2"} {
 			prefix, suffix := "DB_TENANT", ""
@@ -246,6 +250,9 @@ func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 			}
 			for _, field := range []string{"HOST", "PORT", "USERNAME", "PASSWORD"} {
 				assertDatabaseAppEnv(t, env, map[string]string{"TENANT_DB_" + field + suffix: env[prefix+"_"+field]})
+			}
+			if readHost, ok := env[prefix+"_READ_HOST"]; ok {
+				assertDatabaseAppEnv(t, env, map[string]string{"TENANT_DB_READ_HOST" + suffix: readHost})
 			}
 		}
 		container := componentSelectionMap(object, "spec", "template", "spec")["containers"].([]any)[0].(map[string]any)
@@ -272,6 +279,29 @@ func TestDatabaseAppMonocoreHubAndCompanyConnections(t *testing.T) {
 	if len(namespaces) != 2 || !namespaces["hub"] || !namespaces["acme-workers"] || configs != 2 {
 		t.Fatalf("expected hub and company connection/config coverage, got namespaces=%v configs=%d", namespaces, configs)
 	}
+}
+
+func TestDatabaseAppMonocoreOmitsEmptyReadHosts(t *testing.T) {
+	values := databaseAppValues(t)
+	componentSelectionSet(values, "", "fabric", "mysql", "external", "readHost")
+	componentSelectionSet(values, true, "workers", "enabled")
+	componentSelectionSet(values, "mono", "workers", "type")
+	objects := renderComponentSelection(t, "databases", "databases", values)
+	for _, object := range objects {
+		if object["kind"] != "Deployment" {
+			continue
+		}
+		env := databaseAppEnvironment(t, objects, object)
+		for _, name := range []string{
+			"DB_FABRIC_READ_HOST", "DB_LANDLORD_READ_HOST", "DB_TENANT_READ_HOST", "TENANT_DB_READ_HOST",
+		} {
+			if _, ok := env[name]; ok {
+				t.Errorf("empty read host rendered %s and would prevent write-host fallback", name)
+			}
+		}
+		return
+	}
+	t.Fatal("Monocore Deployment was not rendered")
 }
 
 func TestDatabaseAppInitialTenantCreationUsesTenantCredentials(t *testing.T) {
