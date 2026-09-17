@@ -69,6 +69,26 @@ app:
       keyKey: LICENSE_KEY
       # Optional key containing the license server URL. Used for both LICENSE_SERVER_URL and LICENSE_URL.
       serverUrlKey: ""
+  # Core runtime tuning. Each key maps to one Core env var. Values are strings
+  # so that "false" and "0" are emitted rather than treated as unset; leave a
+  # key empty to omit the variable entirely and fall back to the application
+  # default compiled into config/.
+  #
+  # mediaDisk                 → MEDIA_DISK (app default: local, i.e. ephemeral
+  #                             pod storage — set to s3 for any real deployment)
+  # sessionDriver             → SESSION_DRIVER
+  # broadcastDriver           → BROADCAST_DRIVER
+  # flowConcurrencyLimit      → FLOW_CONCURRENCY_LIMIT (app default: false)
+  # payloadMetaMaxBytes       → PAYLOAD_META_MAX_BYTES (app default: 10240)
+  # secretVarCacheLockTimeout → SECRET_VAR_CACHE_LOCK_TIMEOUT (app default: 30)
+  # connectionPoolHoldTimeout → CONNECTION_POOL_HOLD_TIMEOUT
+  mediaDisk: ""
+  sessionDriver: ""
+  broadcastDriver: ""
+  flowConcurrencyLimit: ""
+  payloadMetaMaxBytes: ""
+  secretVarCacheLockTimeout: ""
+  connectionPoolHoldTimeout: ""
   # Extra env vars injected into every app pod.
   extraEnv: []
   # Extra envFrom (secretRef / configMapRef) injected into every app pod.
@@ -631,6 +651,21 @@ workers:
   queue:
     connection: rabbitmq
     name: default
+    # AMQP heartbeat in seconds. 0 disables heartbeats, so a silently dropped
+    # TCP connection is never detected: the worker keeps its consumer
+    # registration on the broker while receiving nothing. With heartbeats
+    # disabled the restart bounds below are the only thing that recovers such a
+    # worker, so do not leave both heartbeat and restartAfterSeconds at 0.
+    heartbeat: 0
+    # Recycle each worker process after this many seconds. 0 disables the time
+    # bound, which means an idle worker is never replaced.
+    restartAfterSeconds: 3600
+    # Recycle each worker process after this many jobs. Bounded worker lifetime
+    # also limits how long a worker can hold per-tenant state (database
+    # connections, resolved feature flags) picked up on an earlier job.
+    restartAfterJobs: 100
+    # Recycle after this many bytes of resident memory. 0 disables the bound.
+    restartAfterMemory: 0
 
   # ── type: microservice ───────────────────────────────────────────────────
   # Each key (except _default) creates one or more Deployments — one for the

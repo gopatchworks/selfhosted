@@ -1405,7 +1405,31 @@ RABBITMQ_HOST: {{ include "patchworks.rabbitmq.host" . | quote }}
 RABBITMQ_PORT: {{ include "patchworks.rabbitmq.port" . | quote }}
 RABBITMQ_USER: {{ include "patchworks.rabbitmq.username" . | quote }}
 RABBITMQ_VHOST: {{ include "patchworks.rabbitmq.vhost" . | quote }}
-RABBITMQ_HEARTBEAT: "0"
+RABBITMQ_HEARTBEAT: {{ .Values.workers.queue.heartbeat | default 0 | quote }}
+RABBITMQ_RESTART_AFTER_SECONDS: {{ .Values.workers.queue.restartAfterSeconds | default 0 | quote }}
+RABBITMQ_RESTART_AFTER_JOBS: {{ .Values.workers.queue.restartAfterJobs | default 10000 | quote }}
+RABBITMQ_RESTART_AFTER_MEMORY: {{ .Values.workers.queue.restartAfterMemory | default 0 | quote }}
+{{- with .Values.app.mediaDisk }}
+MEDIA_DISK: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.sessionDriver }}
+SESSION_DRIVER: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.broadcastDriver }}
+BROADCAST_DRIVER: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.flowConcurrencyLimit }}
+FLOW_CONCURRENCY_LIMIT: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.payloadMetaMaxBytes }}
+PAYLOAD_META_MAX_BYTES: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.secretVarCacheLockTimeout }}
+SECRET_VAR_CACHE_LOCK_TIMEOUT: {{ . | quote }}
+{{- end }}
+{{- with .Values.app.connectionPoolHoldTimeout }}
+CONNECTION_POOL_HOLD_TIMEOUT: {{ . | quote }}
+{{- end }}
 ELASTIC_SEARCH_HOSTS: {{ include "patchworks.elasticsearch.url" . | quote }}
 ELASTICSEARCH_HOST: {{ include "patchworks.elasticsearch.url" . | quote }}
 {{- if and (not .Values.elasticsearch.enabled) .Values.elasticsearch.external.cloudId }}
