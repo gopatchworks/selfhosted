@@ -697,9 +697,9 @@ workers:
       name: Filter
       domain: filter
 
-    manual-input:
-      name: Manual Input
-      domain: manual-input
+    manual-payload:
+      name: Manual Payload
+      domain: manual-payload
 
     notify:
       name: Notify
