@@ -725,10 +725,9 @@ workers:
       name: Track
       domain: track
 
-    translate:
-      name: Translate
-      domain: translate
-      queue: map
+    map:
+      name: Map
+      domain: map
 
     try-catch:
       name: Try Catch
