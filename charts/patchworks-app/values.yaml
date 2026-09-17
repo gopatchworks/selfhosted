@@ -664,9 +664,9 @@ workers:
       tolerations: []
       affinity: {}
 
-    assert:
-      name: Assert
-      domain: assert
+    assert-payload:
+      name: Assert Payload
+      domain: assert-payload
 
     batch:
       name: Batch
