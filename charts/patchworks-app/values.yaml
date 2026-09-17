@@ -651,18 +651,19 @@ workers:
   queue:
     connection: rabbitmq
     name: default
-    # AMQP heartbeat in seconds. 0 disables heartbeats, so a silently dropped
-    # TCP connection is never detected: the worker keeps its consumer
-    # registration on the broker while receiving nothing. With heartbeats
-    # disabled the restart bounds below are the only thing that recovers such a
-    # worker, so do not leave both heartbeat and restartAfterSeconds at 0.
+    # AMQP heartbeat in seconds. This must stay 0. PHP does not service AMQP
+    # heartbeats while a job is executing, so any non-zero value makes the
+    # broker treat a long-running job as a dropped connection, close the
+    # channel and requeue the in-flight message — duplicating work indefinitely.
+    # Production runs 0 for exactly this reason. Do not "fix" this.
     heartbeat: 0
     # Recycle each worker process after this many seconds. 0 disables the time
-    # bound, which means an idle worker is never replaced.
+    # bound. Bounding worker lifetime limits how long a worker can hold
+    # per-tenant state (database connections, resolved feature flags) picked up
+    # on an earlier job.
     restartAfterSeconds: 3600
-    # Recycle each worker process after this many jobs. Bounded worker lifetime
-    # also limits how long a worker can hold per-tenant state (database
-    # connections, resolved feature flags) picked up on an earlier job.
+    # Recycle each worker process after this many jobs. Same rationale as the
+    # time bound above.
     restartAfterJobs: 100
     # Recycle after this many bytes of resident memory. 0 disables the bound.
     restartAfterMemory: 0
