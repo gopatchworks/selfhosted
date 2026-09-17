@@ -1489,11 +1489,14 @@ Core ownership guards and the existing runtime tables before enabling company
 `monocore-scheduler` flags. Installing this chart does not transfer company ownership.
 No scheduler schema migration is added.
 
-The chart renders only desired configuration. Monocore creates and updates its own
-runtime ConfigMap; do not delete it to recover a stuck pass. Namespace-scoped RBAC
-permits Lease get/create/update, pod get/list/watch, named desired/runtime ConfigMap
-get/watch, named runtime update and ConfigMap creation for first-start bootstrap.
-Kubernetes cannot restrict create permission by resource name. Set
+The chart renders only desired configuration. Monocore creates and updates one
+runtime ConfigMap per database group, named `<prefix>-runtime-<group>` where group
+is `default` or `server-<fabric server id>`; do not delete them to recover a stuck
+pass. Because groups are discovered from Fabric at runtime, the chart cannot
+enumerate those names and Kubernetes RBAC has no resource-name prefix match.
+Namespace-scoped RBAC therefore permits Lease get/create/update, pod
+get/list/watch, named desired ConfigMap get/watch, and namespace-scoped ConfigMap
+get/update/create for the per-group runtime state. Set
 `workers.mono.scheduler.rbac.create=false` if those grants are managed externally;
 `serviceAccount.name` and `serviceAccount.create` retain their usual behavior.
 

@@ -16,7 +16,7 @@ metadata:
   name: {{ $prefix }}-desired
   namespace: {{ $namespace }}
 data:
-  desired.json: {{ dict "version" 2 "shards" (int $shards) "server_shards" (.Values.workers.mono.scheduler.serverShards | default dict) | toJson | quote }}
+  desired.json: {{ dict "version" 3 "shards" (int $shards) "server_shards" (.Values.workers.mono.scheduler.serverShards | default dict) | toJson | quote }}
 {{- if .Values.workers.mono.scheduler.rbac.create }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -33,14 +33,15 @@ rules:
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    resourceNames: [{{ printf "%s-desired" $prefix | quote }}, {{ printf "%s-runtime" $prefix | quote }}]
+    resourceNames: [{{ printf "%s-desired" $prefix | quote }}]
     verbs: ["get", "watch"]
   - apiGroups: [""]
     resources: ["configmaps"]
-    resourceNames: [{{ printf "%s-runtime" $prefix | quote }}]
-    verbs: ["update"]
+    verbs: ["get", "update"]
   # Kubernetes cannot restrict create by resourceNames. This permits first-start
-  # runtime creation within this namespace; existing state is never Helm-owned.
+  # per-group runtime creation within this namespace; existing state is never
+  # Helm-owned. Kubernetes RBAC also has no resource-name prefix restriction,
+  # so dynamic per-group runtime reads and updates share the namespace scope.
   - apiGroups: [""]
     resources: ["configmaps"]
     verbs: ["create"]
