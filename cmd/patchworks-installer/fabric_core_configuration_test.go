@@ -54,9 +54,11 @@ func TestFabricCoreDatabaseProvisioning(t *testing.T) {
 			if tc.disabled {
 				// Explicit false must survive Helm's value merging.
 				componentSelectionSet(values, false, "fabric", "core", "initialiseDatabases")
+				componentSelectionSet(values, false, "fabric", "core", "createSubscription")
 			}
 			want := map[string]string{
 				"CORE_INITIALISE_DATABASES": fmt.Sprint(!tc.disabled),
+				"CORE_CREATE_SUBSCRIPTION":  fmt.Sprint(!tc.disabled),
 				"CORE_GATEWAY_URL":          tc.wantURL,
 			}
 			assertEnv := func(location string, env map[string]any) {

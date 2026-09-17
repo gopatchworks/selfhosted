@@ -250,6 +250,7 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 | `fabric.enabled` | `true` | Deploy Fabric web resources; does not control migrations/seeds |
 | `fabric.deploymentAnnotations` | `{}` | Deployment metadata annotations |
 | `fabric.core.initialiseDatabases` | `true` | Set `CORE_INITIALISE_DATABASES` so Fabric asks Core to create and migrate databases for new companies |
+| `fabric.core.createSubscription` | `true` | Set `CORE_CREATE_SUBSCRIPTION` so Fabric asks Core to create a subscription for new companies |
 | `fabric.core.gatewayUrl` | `""` | Set `CORE_GATEWAY_URL`; empty resolves the Gateway Service name, namespace and port |
 | `fabric.session.driver` | `redis` | Fabric web `SESSION_DRIVER`; applied only to the Fabric PHP-FPM container |
 | `fabric.session.lifetime` | `10080` | Fabric web `SESSION_LIFETIME` in minutes |
@@ -263,7 +264,8 @@ namespace cascade and `web.gateway.service.port` (falling back to
 `web.service.port`). Port 80 is omitted. When Gateway is managed separately,
 set `fabric.core.gatewayUrl` to its reachable base URL, even if
 `web.gateway.enabled=false` in this release. Set
-`fabric.core.initialiseDatabases=false` to leave provisioning to an operator.
+`fabric.core.initialiseDatabases=false` or `fabric.core.createSubscription=false`
+to leave provisioning to an operator.
 
 Enabling automatic provisioning applies to new company creation requests; it
 does not backfill databases for companies already recorded in Fabric. The

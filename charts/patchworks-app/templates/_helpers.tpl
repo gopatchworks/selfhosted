@@ -1513,6 +1513,7 @@ Like appConfigData but uses fabric MySQL/Redis helpers.
 */}}
 {{- define "patchworks.fabricConfigData" -}}
 CORE_INITIALISE_DATABASES: {{ .Values.fabric.core.initialiseDatabases | quote }}
+CORE_CREATE_SUBSCRIPTION: {{ .Values.fabric.core.createSubscription | quote }}
 CORE_GATEWAY_URL: {{ include "patchworks.fabric.core.gatewayUrl" . | quote }}
 APP_ENV: {{ .Values.app.env | quote }}
 APP_DEBUG: {{ .Values.app.debug | quote }}
@@ -2349,6 +2350,8 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 {{- define "patchworks.fabricEnv" -}}
 - name: CORE_INITIALISE_DATABASES
   value: {{ .Values.fabric.core.initialiseDatabases | quote }}
+- name: CORE_CREATE_SUBSCRIPTION
+  value: {{ .Values.fabric.core.createSubscription | quote }}
 - name: CORE_GATEWAY_URL
   value: {{ include "patchworks.fabric.core.gatewayUrl" . | quote }}
 {{- $appKeySecret := fromJson (include "patchworks.appKeySecret" .) }}
