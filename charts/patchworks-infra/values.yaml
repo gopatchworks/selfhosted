@@ -577,9 +577,9 @@ workers:
       name: Callback
       domain: callback
 
-    custom-script:
-      name: Custom Script
-      domain: custom-script
+    script:
+      name: Script
+      domain: script
 
     dedupe:
       name: Dedupe
