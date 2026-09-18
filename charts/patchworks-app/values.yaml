@@ -771,6 +771,11 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    # Component slug for the hub: its Deployment and Service are
+    # <fullname>-<nameSuffix>, and its config, topology and companies take the
+    # same prefix. "workers" keeps the historical <fullname>-workers names, so
+    # changing it renames live objects and needs a deliberate cutover.
+    nameSuffix: workers
     autoscaling: {}
     replicaCount: 1
     terminationGracePeriodSeconds: 3660

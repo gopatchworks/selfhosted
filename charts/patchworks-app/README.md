@@ -536,6 +536,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 
 | Key | Default | Description |
 |-----|---------|-------------|
+| `workers.mono.nameSuffix` | `workers` | Hub component slug. Its Deployment, Service, ServiceMonitor, config and topology ConfigMaps are `<fullname>-<nameSuffix>`, companies are `<fullname>-<nameSuffix>-<company>`, and the scheduler selects its own pods by it. Changing it renames live objects; see below |
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
@@ -557,11 +558,37 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.otel.serviceName` | `monocore` | Service name reported to the collector |
 
 When `workers.type=mono`, a pre-install/pre-upgrade hook creates a
-`<fullname>-workers-store` Secret containing monocore's `store.yaml`, unless
+`<fullname>-workers-store` Secret containing monocore's `store.yaml` (this
+Secret keeps the `-workers` name whatever `workers.mono.nameSuffix` is), unless
 `workers.mono.store.existingSecret.name` is set. The generated file includes the
 resolved S3 endpoint, bucket names, region, path-style setting, and access
 credentials for both the `default` and `customer_cache` stores. Existing store
 Secrets must exist in every namespace where monocore worker pods run.
+
+### Renaming the hub
+
+`workers.mono.nameSuffix` defaults to `workers`, which is why the hub is
+`<fullname>-workers` — and `workers-workers` when the release is itself named
+`workers`. Setting it renames the Deployment, Service, ServiceMonitor,
+autoscaler, config and topology ConfigMaps, and any company workers, and changes
+the hub pods' `app.kubernetes.io/name` label. The scheduler's pod selector
+follows the same value, so sharding keeps finding its own pods.
+
+It is a rename of live objects, not a relabel:
+
+- A Deployment's selector is immutable, so the new name is a new Deployment. The
+  old one is **not** deleted unless the installation prunes; scale it to zero or
+  delete it as part of the cutover, or two hubs will schedule the same estate
+  and consume the same queues.
+- Anything referring to the old names by hand — dashboards, VPA or PDB
+  `targetRef`s, `kubectl` runbooks, pods mounting the config or topology
+  ConfigMaps — has to move with it.
+- `monocore.url` is derived from the suffix, so in-cluster callers follow
+  automatically. An explicitly set `monocore.url` does not.
+- The slug is excluded from the config checksum, so adding the value without
+  changing it does not roll existing pods.
+
+The `<fullname>-workers-store` Secret and the storegen hook keep their names.
 
 ## Mapping documents
 
@@ -588,7 +615,7 @@ When `workers.type=mono`, Core app pods receive `MONOCORE_URL` and
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `monocore.url` | `""` | Override the Monocore API URL. Defaults to `http://<fullname>-workers.<workers namespace>.svc.cluster.local:8080` |
+| `monocore.url` | `""` | Override the Monocore API URL. Defaults to `http://<fullname>-<workers.mono.nameSuffix>.<workers namespace>.svc.cluster.local:8080` |
 | `monocore.timeout` | `120` | Monocore request timeout in seconds |
 
 **Multi-company workers**

@@ -13,7 +13,15 @@
 {{- $checksumWorkers := deepCopy .Values.workers }}
 {{- $_ := unset $checksumWorkers.mono.scheduler "shards" }}
 {{- $_ := unset $checksumWorkers.mono.scheduler "serverShards" }}
+{{/* Renaming builds a new Deployment, so the slug need not roll the old one. */}}
+{{- $_ := unset $checksumWorkers.mono "nameSuffix" }}
 {{- $fullname := include "patchworks.fullname" . }}
+{{/*
+The hub's component slug. Its Deployment, Service, ConfigMaps and companies are
+all named from it, and the scheduler selects its own pods by it, so it is
+resolved once here rather than repeated as a literal.
+*/}}
+{{- $hubSlug := $mono.nameSuffix | default "workers" }}
 {{- $hubNs := include "patchworks.workers.namespace" . }}
 {{- $mainQueue := $mono.queue | default .Values.workers.queue.name }}
 {{- $flowExchange := include "patchworks.mono.flowExchange" (dict "root" . "queueName" $mainQueue) }}
@@ -45,11 +53,11 @@ kind: ConfigMap
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-30"
-  name: {{ $fullname }}-workers-topology
+  name: {{ $fullname }}-{{ $hubSlug }}-topology
   namespace: {{ $hubNs }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
-    app.kubernetes.io/component: workers
+    app.kubernetes.io/component: {{ $hubSlug }}
 data:
   topology.yaml: |
 {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $mainQueue) | indent 4 }}
@@ -208,14 +216,14 @@ spec:
 {{- $company := $w.company }}
 
 {{/* Resolve per-worker configuration. */}}
-{{- $slug := "workers" }}
+{{- $slug := $hubSlug }}
 {{- $wNs := $hubNs }}
 {{- $queue := $mainQueue }}
 {{- $processes := $mono.processes }}
 {{- $resources := $root.Values.workers.resources }}
-{{- $configMapName := printf "%s-workers-config" $fullname }}
+{{- $configMapName := printf "%s-%s-config" $fullname $hubSlug }}
 {{- if not $isHub }}
-  {{- $slug = printf "workers-%s" $company.name }}
+  {{- $slug = printf "%s-%s" $hubSlug $company.name }}
   {{- $wNs = $company.namespace | default $hubNs }}
   {{- $queue = $company.queue | default $company.name }}
   {{- $processes = dig "processes" $mono.processes $company }}
@@ -227,7 +235,7 @@ spec:
 {{- fail "Monocore hub with scheduler enabled cannot scale or pause to zero; disable its scheduler first" }}
 {{- end }}
 {{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
-{{- $topoCMName := printf "%s-workers-topology" $fullname }}
+{{- $topoCMName := printf "%s-%s-topology" $fullname $hubSlug }}
 
 {{/* Each active worker namespace needs one local topology ConfigMap. */}}
 {{- if not (hasKey $topologyNamespaces $wNs) }}
@@ -505,7 +513,7 @@ spec:
             - name: SCHEDULER_ESTATE
               value: {{ default $fullname $scheduler.estate | quote }}
             - name: SCHEDULER_POD_SELECTOR
-              value: {{ printf "app.kubernetes.io/name=workers,app.kubernetes.io/instance=%s" $root.Release.Name | quote }}
+              value: {{ printf "app.kubernetes.io/name=%s,app.kubernetes.io/instance=%s" $hubSlug $root.Release.Name | quote }}
             - name: SCHEDULER_DESIRED_CONFIG
               value: {{ printf "%s-desired" (include "patchworks.scheduler.prefix" $root) | quote }}
             - name: SCHEDULER_RUNTIME_CONFIG
