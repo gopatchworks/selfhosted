@@ -1,0 +1,37 @@
+{{- if and .Values.workers.enabled (eq .Values.workers.type "mono") .Values.workers.hub.enabled .Values.workers.mono.operatorKey.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $namespace := include "patchworks.workers.namespace" . }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $fullname }}-workers-operator-key
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers-operator-key
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ .Values.workers.mono.operatorKey.secretName | quote }}]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullname }}-workers-operator-key
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: workers-operator-key
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "patchworks.serviceAccountName" . }}
+    namespace: {{ $namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullname }}-workers-operator-key
+{{- end }}

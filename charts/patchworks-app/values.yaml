@@ -781,6 +781,15 @@ workers:
     terminationGracePeriodSeconds: 3660
     # Retain durable execution when disabling scheduling until old work drains.
     durableExecution: true
+    platformApi:
+      # Empty values derive the in-cluster Fabric and Core Gateway service URLs.
+      fabricUrl: ""
+      coreUrl: ""
+    operatorKey:
+      # Grants the hub worker access to a retained operator API-key Secret.
+      # The chart grants RBAC but never creates the Secret.
+      enabled: false
+      secretName: monocore-operator-api-key
     scheduler:
       # Hub pods schedule; dedicated company pods only execute flows.
       mode: kubernetes

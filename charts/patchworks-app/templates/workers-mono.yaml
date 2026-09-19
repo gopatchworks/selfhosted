@@ -425,7 +425,7 @@ spec:
     spec:
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
       terminationGracePeriodSeconds: {{ $mono.terminationGracePeriodSeconds }}
-      automountServiceAccountToken: {{ and $w.isHub (eq $scheduler.mode "kubernetes") }}
+      automountServiceAccountToken: {{ and $w.isHub (or (eq $scheduler.mode "kubernetes") $mono.operatorKey.enabled) }}
       {{- with $root.Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
@@ -485,6 +485,14 @@ spec:
               mountPath: /etc/monocore
               readOnly: true
           env:
+            {{- if and $w.isHub $mono.operatorKey.enabled }}
+            - name: FABRIC_API_URL
+              value: {{ $mono.platformApi.fabricUrl | default (printf "http://%s-fabric.%s.svc.cluster.local/api/v2" $fullname (include "patchworks.fabric.namespace" $root)) | quote }}
+            - name: CORE_API_URL
+              value: {{ $mono.platformApi.coreUrl | default (printf "%s/api/v1/patchworks" (include "patchworks.fabric.core.gatewayUrl" $root)) | quote }}
+            - name: API_KEY_SECRET
+              value: {{ $mono.operatorKey.secretName | quote }}
+            {{- end }}
             - name: SCHEDULER_MODE
               value: {{ ternary $scheduler.mode "disabled" $w.isHub | quote }}
             - name: WORKER_ENABLE_DURABLE_EXECUTION

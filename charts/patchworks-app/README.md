@@ -542,6 +542,10 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.processes` | `15` | Worker goroutine count |
 | `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed scheduler drain by more than 10 seconds |
 | `workers.mono.durableExecution` | `true` | Durable execution claims and recovery; retain while registered work drains |
+| `workers.mono.platformApi.fabricUrl` | `""` | Fabric API base URL for operator-run tinker commands; empty derives the in-cluster Fabric service `/api/v2` URL |
+| `workers.mono.platformApi.coreUrl` | `""` | Core API base URL for operator-run tinker commands; empty derives the in-cluster Gateway `/api/v1/patchworks` URL |
+| `workers.mono.operatorKey.enabled` | `false` | Grant the hub worker service account permission to get the named retained operator-key Secret and create it when absent |
+| `workers.mono.operatorKey.secretName` | `monocore-operator-api-key` | Retained Secret containing `PATCHWORKS_API_KEY`; the chart does not create it |
 | `workers.mono.scheduler.mode` | `kubernetes` | Hub scheduling mode: kubernetes, standalone or disabled; company pods remain execution-only |
 | `workers.mono.scheduler.shards` | `3` | Shared desired shard count, updated without rolling worker pods |
 | `workers.mono.scheduler.interval` | `5s` | Scheduling and coordination poll interval |
