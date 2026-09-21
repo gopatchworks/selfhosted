@@ -236,14 +236,14 @@ func TestAppPreviousKeys(t *testing.T) {
 }
 
 func TestComponentSelectionDefaultCompatibility(t *testing.T) {
-	// Resource identities recorded from the unchanged app chart at ab709c44400.
+	// Baseline identities plus the CPT-6321 scheduler processor and CronJob.
 	// This protects ordinary monolithic installs while allowing new annotations
 	// and selective namespace ownership to evolve without a full YAML snapshot.
 	wantByKind := map[string][]string{
-		"ConfigMap":      {"config", "fabric-config", "fabric-nginx", "processor-start-supervisord", "processor-gateway-supervisord", "processor-short-processor-supervisord", "processor-medium-processor-supervisord", "processor-long-processor-supervisord", "processor-logging-supervisord", "s3-manager-config", "workers-supervisord", "rabbitmq-topology"},
+		"ConfigMap":      {"config", "fabric-config", "fabric-nginx", "processor-scheduler-supervisord", "processor-start-supervisord", "processor-gateway-supervisord", "processor-short-processor-supervisord", "processor-medium-processor-supervisord", "processor-long-processor-supervisord", "processor-logging-supervisord", "s3-manager-config", "workers-supervisord", "rabbitmq-topology"},
 		"Service":        {"fabric", "gateway", "s3-manager", "start"},
-		"Deployment":     {"fabric", "gateway", "processor-start", "processor-gateway", "processor-short-processor", "processor-medium-processor", "processor-long-processor", "processor-logging", "s3-manager", "start", "workers"},
-		"CronJob":        {"start-scheduler", "gateway-scheduler", "short-processor-scheduler", "medium-processor-scheduler", "long-processor-scheduler"},
+		"Deployment":     {"fabric", "gateway", "processor-scheduler", "processor-start", "processor-gateway", "processor-short-processor", "processor-medium-processor", "processor-long-processor", "processor-logging", "s3-manager", "start", "workers"},
+		"CronJob":        {"scheduler-scheduler", "start-scheduler", "gateway-scheduler", "short-processor-scheduler", "medium-processor-scheduler", "long-processor-scheduler"},
 		"ServiceAccount": {"", "app-keygen", "passport-keygen", "pusher-auth-generator"},
 		"Role":           {"app-keygen", "passport-keygen", "pusher-auth-generator"},
 		"RoleBinding":    {"app-keygen", "passport-keygen", "pusher-auth-generator"},
@@ -301,8 +301,8 @@ func componentSelectionProfiles() []componentSelectionProfile {
 		{"start", []string{"web", "start", "enabled"}, "", []string{"Deployment/start"}},
 		{"fabric", []string{"fabric", "enabled"}, "", []string{"Deployment/fabric"}},
 		{"dashboard", []string{"dashboard", "enabled"}, "", []string{"Deployment/dashboard"}},
-		{"scheduler", []string{"scheduler", "enabled"}, "", []string{"CronJob/start-scheduler", "CronJob/gateway-scheduler", "CronJob/short-processor-scheduler", "CronJob/medium-processor-scheduler", "CronJob/long-processor-scheduler"}},
-		{"processors", []string{"processorDeployments", "enabled"}, "", []string{"Deployment/processor-start", "Deployment/processor-gateway", "Deployment/processor-short-processor", "Deployment/processor-medium-processor", "Deployment/processor-long-processor", "Deployment/processor-logging"}},
+		{"scheduler", []string{"scheduler", "enabled"}, "", []string{"CronJob/scheduler-scheduler", "CronJob/start-scheduler", "CronJob/gateway-scheduler", "CronJob/short-processor-scheduler", "CronJob/medium-processor-scheduler", "CronJob/long-processor-scheduler"}},
+		{"processors", []string{"processorDeployments", "enabled"}, "", []string{"Deployment/processor-scheduler", "Deployment/processor-start", "Deployment/processor-gateway", "Deployment/processor-short-processor", "Deployment/processor-medium-processor", "Deployment/processor-long-processor", "Deployment/processor-logging"}},
 		{"workers", []string{"workers", "enabled"}, "standalone", []string{"Deployment/workers"}},
 		{"monocore", []string{"workers", "enabled"}, "mono", []string{"Deployment/workers"}},
 		{"microservices", []string{"workers", "enabled"}, "microservice", []string{"Deployment/workers-assert"}},

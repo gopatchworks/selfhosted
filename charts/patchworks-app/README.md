@@ -454,7 +454,7 @@ separate from `workers.type`: even when `workers.type=mono`, processor queues
 are still handled by PHP Core worker Deployments because Monocore does not run
 these jobs.
 
-The default list creates `start`, `gateway`, `short-processor`,
+The default list creates `scheduler`, `start`, `gateway`, `short-processor`,
 `medium-processor`, `long-processor`, and `logging` workers. Scheduler CronJobs
 are created for processors unless `processors[].scheduler.enabled=false`; the
 default `logging` processor disables its scheduler because it only consumes
@@ -464,6 +464,21 @@ PHP worker hub queues: `workers.queue.name` for `workers.type=standalone`, or
 each enabled `workers.microservices[*].queue` (falling back to `domain`) for
 `workers.type=microservice`. Queue creation works with either the bundled broker
 or a user-provided external RabbitMQ instance.
+
+The `scheduler` processor isolates flow scheduling and scheduled flow initialisation
+(CPT-6321). It runs one CronJob and a PHP worker pool on the `scheduler` queue.
+Its `extraEnv` sets `REDIS_QUEUE=scheduler` so nested jobs use this queue even
+when the shared standalone-worker configuration selects `default`.
+`FLOW_SCHEDULER_SEGMENTS` defaults to `1` in that same processor's `extraEnv`;
+change it to `4`, for example, to dispatch four groups of companies onto the
+same queue. It does not create four CronJobs or reserve four pods. Keep both
+environment entries when replacing `extraEnv`, because Helm replaces lists.
+When replacing the entire `processors` list, include the scheduler entry and
+retain start/medium/long cron runners for their other domain tasks.
+Provision the queue and compatible consumers before releasing Core's scheduler
+domain gates. On rollback, retain compatible consumers until queued segment
+jobs and their descendants drain. Monocore scheduler shards are configured
+separately and are unaffected by this PHP setting.
 
 For external RabbitMQ, the AMQP endpoint must be reachable from the cluster and
 the configured user must be allowed to declare queues in the configured vhost.

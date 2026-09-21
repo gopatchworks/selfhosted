@@ -20,7 +20,7 @@ processors: "processors[] (always PHP Core)" {
   style.fill: "#FFF8E6"
   direction: down
 
-  desc: "Background processor queues are independent of workers.type.\nprocessorDeployments.enabled and scheduler.enabled independently select Deployments and CronJobs.\nrabbitmq.topology.enabled independently selects the queue assertion hook.\nDatabase connections: LANDLORD_DB_* and TENANT_DB_* / TENANT_DB_*_{id}." {
+  desc: "Background processor queues are independent of workers.type.\nIncludes scheduler: one CronJob; FLOW_SCHEDULER_SEGMENTS controls queued dispatch jobs.\nprocessorDeployments.enabled and scheduler.enabled independently select Deployments and CronJobs.\nrabbitmq.topology.enabled independently selects the queue assertion hook.\nDatabase connections: LANDLORD_DB_* and TENANT_DB_* / TENANT_DB_*_{id}." {
     shape: text
   }
 

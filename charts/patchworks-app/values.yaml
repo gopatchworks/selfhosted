@@ -208,7 +208,18 @@ processorDeployments:
   enabled: true
 
 processors:
-  # Used to schedule flows.
+  # CPT-6321: one cron and a PHP worker pool for the complete scheduling chain.
+  - name: Scheduler
+    queue: scheduler
+    enabled: true
+    extraEnv:
+      # Overrides the shared standalone-worker queue for nested InitialiseFlow jobs.
+      - name: REDIS_QUEUE
+        value: scheduler
+      # Increase dispatch parallelism without adding CronJobs.
+      - name: FLOW_SCHEDULER_SEGMENTS
+        value: "1"
+  # Retains heartbeats, broker health checks and other start-domain tasks.
   - name: Start
     queue: start
     enabled: true
