@@ -17,6 +17,8 @@
 {{- $nodeSelector := $processor.nodeSelector | default $root.Values.workers.nodeSelector }}
 {{- $tolerations := $processor.tolerations | default $root.Values.workers.tolerations }}
 {{- $affinity := $processor.affinity | default $root.Values.workers.affinity }}
+{{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($root.Values.processorDeployments.autoscaling | default (dict)) ($processor.autoscaling | default (dict)) }}
+{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-processor-%s" $fullname $slug) "namespace" $namespace "queue" $queue "processes" $processes "resources" $resources) }}
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -44,7 +46,9 @@ metadata:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
+  {{- if not $autoscaling.enabled }}
   replicas: {{ $replicas }}
+  {{- end }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
   selector:
     matchLabels:

@@ -35,6 +35,8 @@ processors: "processors[] (always PHP Core)" {
     topology -> queue: declares
     cm -> dep: mounts
     dep -> queue: consumes
+    scaler: "Optional HPA / KEDA ScaledObject\nprocessorDeployments / processors[].autoscaling" { shape: rectangle }
+    scaler -> dep: scales
     cron -> queue: APP_DOMAIN
   }
 }

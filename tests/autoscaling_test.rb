@@ -32,9 +32,9 @@ end
     t = s.dig('spec', 'triggers').first
     assert(t.dig('metadata', 'mode') == 'ExpectedQueueConsumptionTime', 'Consumption-time scaling must be the RabbitMQ default')
     assert(t['metricType'] == 'Value', 'Consumption-time scaling must use a global Value target')
-    assert(t.dig('metadata', 'value') == '10', 'Consumption-time target changed')
+    assert(t.dig('metadata', 'value') == '4', 'Consumption-time target changed')
     assert(t.dig('metadata', 'unsafeSsl') == 'false', 'TLS verification must default on')
-    assert(t.dig('metadata', 'activationValue') == '1', 'Consumption-time activation changed')
+    assert(t.dig('metadata', 'activationValue') == '0', 'Consumption-time activation changed')
     assert(s.dig('spec', 'pollingInterval') == 1, 'Consumption-time scaling requires one-second polling')
     if s.dig('metadata', 'namespace') == 'customer'
       assert(t.dig('metadata', 'queueName') == 'orders', 'Company queue resolution incorrect')
@@ -130,4 +130,56 @@ Dir[File.join(CHART, 'docs/autoscaling/*.yaml')].each do |path|
   docs = render(YAML.load_file(path))
   assert(docs.any? { |d| %w[ScaledObject HorizontalPodAutoscaler].include?(d['kind']) }, "Example did not render scaler: #{path}")
 end
-puts 'Autoscaling: worker modes, target ownership, HPA, KEDA, authentication, queries, inheritance and validation passed'
+# Processors opt in independently, even when worker autoscaling is enabled.
+docs = render(config)
+processor_deployments = docs.select { |d| d['kind'] == 'Deployment' && d.dig('metadata', 'name').include?('-processor-') }
+assert(!processor_deployments.empty? && processor_deployments.all? { |d| d['spec'].key?('replicas') }, 'Worker policy unexpectedly enabled processor autoscaling')
+assert(docs.none? { |d| d['kind'] == 'ScaledObject' && d.dig('metadata', 'name').include?('-processor-') }, 'Processors must opt in independently')
+v = config
+v['workers']['enabled'] = false
+v['processorDeployments'] = {'autoscaling' => {'enabled' => true, 'minReplicas' => 2, 'maxReplicas' => 9, 'keda' => {
+  'pollingInterval' => 30,
+  'rabbitmq' => {'expectedQueueConsumptionTime' => {'enabled' => false}, 'messageRate' => {'enabled' => true, 'value' => '12'}, 'queueLength' => {'enabled' => true, 'value' => '200'}},
+  'extraTriggers' => [{'type' => 'cron', 'metadata' => {'timezone' => 'UTC', 'start' => '0 9 * * *', 'end' => '0 17 * * *', 'desiredReplicas' => '4'}}]
+}}}
+v['processors'] = [
+  {'queue' => 'custom.queue', 'namespace' => 'processor-custom', 'processes' => 7, 'resources' => {'requests' => {'cpu' => '100m'}}},
+  {'queue' => 'second', 'namespace' => 'processor-second', 'autoscaling' => {'maxReplicas' => 11, 'keda' => {'extraTriggers' => [], 'rabbitmq' => {'messageRate' => {'value' => '5'}}}}},
+  {'queue' => 'fixed', 'replicas' => 5, 'autoscaling' => {'enabled' => false}},
+  {'queue' => 'disabled', 'enabled' => false}
+]
+docs = render(v)
+scalers = docs.select { |d| d['kind'] == 'ScaledObject' }
+assert(scalers.size == 2, 'Processor enable/disable or worker independence failed')
+scalers.each do |s|
+  dep = docs.find { |d| d['kind'] == 'Deployment' && d.dig('metadata', 'name') == s.dig('spec', 'scaleTargetRef', 'name') && d.dig('metadata', 'namespace') == s.dig('metadata', 'namespace') }
+  assert(dep && !dep['spec'].key?('replicas'), 'Processor scaler target/replica ownership incorrect')
+  expected_queue = s.dig('metadata', 'namespace') == 'processor-custom' ? 'custom.queue' : 'second'
+  rabbit = s.dig('spec', 'triggers').select { |t| t['type'] == 'rabbitmq' }
+  assert(rabbit.map { |t| t.dig('metadata', 'mode') }.sort == %w[MessageRate QueueLength], 'Processor RabbitMQ modes missing')
+  assert(rabbit.all? { |t| t.dig('metadata', 'queueName') == expected_queue }, 'Processor queue resolution incorrect')
+  auth = docs.find { |d| d['kind'] == 'TriggerAuthentication' && d.dig('metadata', 'name') == rabbit.first.dig('authenticationRef', 'name') }
+  assert(auth && auth.dig('metadata', 'namespace') == s.dig('metadata', 'namespace'), 'Processor authentication namespace incorrect')
+end
+custom = scalers.find { |s| s.dig('metadata', 'namespace') == 'processor-custom' }
+assert(custom.dig('spec', 'scaleTargetRef', 'name') == 'patchworks-processor-custom-queue', 'Processor target slug incorrect')
+assert(custom.dig('spec', 'maxReplicaCount') == 9 && custom.dig('spec', 'pollingInterval') == 30, 'Global processor policy missing')
+assert(custom.dig('spec', 'triggers').any? { |t| t['type'] == 'cron' }, 'Processor cron prewarming missing')
+second = scalers.find { |s| s.dig('metadata', 'namespace') == 'processor-second' }
+assert(second.dig('spec', 'maxReplicaCount') == 11 && second.dig('spec', 'triggers').size == 2, 'Per-processor scalar/list overrides lost')
+assert(custom.dig('spec', 'triggers').find { |t| t.dig('metadata', 'mode') == 'MessageRate' }.dig('metadata', 'value') == '12', 'Processor override leaked into sibling')
+assert(docs.find { |d| d['kind'] == 'Deployment' && d.dig('metadata', 'name') == 'patchworks-processor-fixed' }.dig('spec', 'replicas') == 5, 'Fixed processor replica count lost')
+assert(docs.any? { |d| d['kind'] == 'CronJob' }, 'Processor autoscaling changed scheduler selection')
+# Per-queue HPA uses that queue's resource requests, not only worker defaults.
+v['processors'][0]['autoscaling'] = {'provider' => 'hpa', 'hpa' => {'cpu' => 70}}
+docs = render(v)
+hpa, = docs.select { |d| d['kind'] == 'HorizontalPodAutoscaler' }
+assert(hpa.dig('spec', 'scaleTargetRef', 'name') == 'patchworks-processor-custom-queue', 'Processor HPA target incorrect')
+assert(hpa.dig('spec', 'metrics', 0, 'resource', 'target', 'averageUtilization') == 70, 'Processor HPA metric incorrect')
+assert(docs.count { |d| d['kind'] == 'ScaledObject' } == 1, 'Processor emitted competing scalers')
+v['processors'][0].delete('resources')
+render(v, failure: 'requests.cpu')
+v['processorDeployments']['enabled'] = false
+assert(render(v).none? { |d| %w[ScaledObject HorizontalPodAutoscaler TriggerAuthentication].include?(d['kind']) }, 'Disabled processor Deployments still emit scalers')
+
+puts 'Autoscaling: processors, worker modes, target ownership, HPA, KEDA, authentication, queries, inheritance and validation passed'

@@ -206,6 +206,10 @@ scheduler:
 # The processors list remains the shared queue/processor inventory.
 processorDeployments:
   enabled: true
+  # Inherit the workers.autoscaling API/defaults but opt in independently.
+  # Each processors[].autoscaling overrides this policy for its queue.
+  autoscaling:
+    enabled: false
 
 processors:
   # CPT-6321: one cron and a PHP worker pool for the complete scheduling chain.

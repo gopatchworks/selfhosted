@@ -1559,7 +1559,9 @@ Autoscaling is opt-in for `standalone`, `microservice`, and `mono` workers.
 Each enabled hub/company Deployment gets its own HPA or KEDA ScaledObject in
 its resolved namespace. Disabled autoscaling preserves fixed replicas; enabled
 autoscaling omits `spec.replicas` so Helm upgrades do not reset the scaler's count.
-This setting does not scale web, gateway/start, processor Deployments, or CronJobs.
+Processor Deployments use the same API, with independent opt-in through
+`processorDeployments.autoscaling.enabled` or `processors[].autoscaling.enabled`.
+This setting does not scale web Deployments or scheduler CronJobs.
 Remove any separately managed autoscaler on the same target before enabling it.
 
 Install KEDA and its CRDs separately before selecting `provider: keda` (examples
@@ -1582,9 +1584,18 @@ Fields merge recursively in this order; later values win, including explicit
 
 | Worker | Precedence, lowest to highest |
 |---|---|
+| Processors | `workers.autoscaling` → `processorDeployments.autoscaling` → `processors[].autoscaling` |
 | Standalone | `workers.autoscaling` → `companies[].autoscaling` |
 | Monocore | `workers.autoscaling` → `workers.mono.autoscaling` → `companies[].autoscaling` |
 | Microservice | `workers.autoscaling` → `microservices._default.autoscaling` → `microservices.<key>.autoscaling` → `companies[].autoscaling` → `companies[].microservices.<key>.autoscaling` |
+
+`processorDeployments.autoscaling.enabled` defaults to `false`, so enabling
+worker autoscaling alone leaves processor replicas fixed. Each enabled
+processor scaler uses its resolved Deployment name, namespace, queue and
+process count; HPA request validation uses that processor's resources.
+Set `processors[].autoscaling.enabled: false` to keep an individual pool fixed.
+Disabling `processorDeployments.enabled` suppresses both Deployments and their
+scalers, while scheduler CronJobs remain independently selectable.
 
 Hub queues come from `workers.queue.name`, the microservice `queue` (falling
 back to `domain`), or `workers.mono.queue`; company queues use `company.queue`,
