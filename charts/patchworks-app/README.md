@@ -151,6 +151,15 @@ same prefix is safe, provided no cluster-scoped resources collide (the mono
 store generator owns cluster RBAC; supplying its existing store Secret avoids
 that generator). Existing Secrets must exist in each destination namespace.
 
+PHP Core workers and processors use `<fullname>-<component>` unless the full name
+already equals the component, in which case it is emitted once. For example,
+`fullnameOverride: workers-manual-payload` with microservice `manual-payload`
+creates Deployment `workers-manual-payload`, ConfigMap
+`workers-manual-payload-supervisord`, ScaledObject
+`workers-manual-payload-autoscaler`, and TriggerAuthentication
+`workers-manual-payload-autoscaler-rabbitmq`. Names longer than 63 characters are
+shortened with a hash suffix; references use the same resolved name.
+
 Default service URLs are release-local. Set `dashboard.coreUrl`,
 `dashboard.startUrl`, `dashboard.fabricUrl` and `dashboard.mcpUrl` to the actual
 public endpoints; set `monocore.url` for Core releases using a separately
@@ -453,6 +462,10 @@ Shared defaults for processor scheduler CronJobs. Each enabled entry in
 separate from `workers.type`: even when `workers.type=mono`, processor queues
 are still handled by PHP Core worker Deployments because Monocore does not run
 these jobs.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `processors[].deploymentName` | derived from fullname and queue | Optional Deployment name, also used for its supervisord ConfigMap and autoscaler names. Does not change queue names, pod selectors, or scheduler CronJob identities. Must be unique within the namespace. |
 
 The default list creates `scheduler`, `start`, `gateway`, `short-processor`,
 `medium-processor`, `long-processor`, and `logging` workers. Scheduler CronJobs
@@ -1563,6 +1576,17 @@ Processor Deployments use the same API, with independent opt-in through
 `processorDeployments.autoscaling.enabled` or `processors[].autoscaling.enabled`.
 This setting does not scale web Deployments or scheduler CronJobs.
 Remove any separately managed autoscaler on the same target before enabling it.
+
+The chart explicitly sets KEDA's HPA name, retaining `keda-hpa-<scaledobject>`
+when it fits and adding a hash suffix when it exceeds 63 characters. ScaledObject,
+TriggerAuthentication and native HPA names use the same length protection.
+
+Upgrading from duplicated Core names creates replacement Deployments and
+scalers. Verify the new targets become Ready and prune the old ScaledObjects,
+TriggerAuthentications, Deployments and supervisord ConfigMaps through their
+owning release; two Deployment names can otherwise consume the same queue.
+Monocore resource names are unchanged by the Core naming fix.
+
 
 Install KEDA and its CRDs separately before selecting `provider: keda` (examples
 use the KEDA 2.20 API). Native `provider: hpa` requires Metrics Server; CPU/memory

@@ -18,12 +18,14 @@
 {{- $tolerations := $processor.tolerations | default $root.Values.workers.tolerations }}
 {{- $affinity := $processor.affinity | default $root.Values.workers.affinity }}
 {{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($root.Values.processorDeployments.autoscaling | default (dict)) ($processor.autoscaling | default (dict)) }}
-{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-processor-%s" $fullname $slug) "namespace" $namespace "queue" $queue "processes" $processes "resources" $resources) }}
+{{- $deploymentName := include "patchworks.resourceName" ($processor.deploymentName | default (include "patchworks.workloadName" (dict "fullname" $fullname "component" (printf "processor-%s" $slug)))) }}
+{{- $supervisordName := include "patchworks.resourceName" (printf "%s-supervisord" $deploymentName) }}
+{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" $deploymentName "namespace" $namespace "queue" $queue "processes" $processes "resources" $resources) }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ $fullname }}-processor-{{ $slug }}-supervisord
+  name: {{ $supervisordName }}
   namespace: {{ $namespace }}
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
@@ -36,7 +38,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-processor-{{ $slug }}
+  name: {{ $deploymentName }}
   namespace: {{ $namespace }}
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
@@ -121,7 +123,7 @@ spec:
       volumes:
         - name: supervisord-conf
           configMap:
-            name: {{ $fullname }}-processor-{{ $slug }}-supervisord
+            name: {{ $supervisordName }}
       {{- with $nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

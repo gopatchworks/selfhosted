@@ -4,7 +4,7 @@
 {{- if $a.enabled -}}
 {{- if not (has $a.provider (list "hpa" "keda")) }}{{ fail "autoscaling.provider must be hpa or keda" }}{{ end -}}
 {{- if or (lt (int $a.minReplicas) 0) (lt (int $a.maxReplicas) 1) (gt (int $a.minReplicas) (int $a.maxReplicas)) }}{{ fail "autoscaling requires 0 <= minReplicas <= maxReplicas and maxReplicas >= 1" }}{{ end -}}
-{{- $name := printf "%s-autoscaler" .name -}}
+{{- $name := include "patchworks.resourceName" (printf "%s-autoscaler" .name) -}}
 {{- if eq $a.provider "hpa" -}}
 {{- if lt (int $a.minReplicas) 1 }}{{ fail "HPA minReplicas must be at least 1" }}{{ end -}}
 {{- $metrics := list -}}
@@ -51,7 +51,7 @@ spec:
 {{- if and (not $r.host) (not $auth.name) (not (and $r.existingSecret.name $r.existingSecret.hostKey)) }}{{ fail "RabbitMQ scaler requires host, authenticationRef, or existingSecret.hostKey" }}{{ end -}}
 {{- if contains "@" $r.host }}{{ fail "RabbitMQ scaler credentials must use a Secret, not an inline host URL" }}{{ end -}}
 {{- if $r.existingSecret.name -}}
-{{- $auth = dict "name" (printf "%s-rabbitmq" $name) -}}
+{{- $auth = dict "name" (include "patchworks.resourceName" (printf "%s-rabbitmq" $name)) -}}
 {{- $refs := list -}}
 {{- range $param := list "host" "username" "password" -}}
 {{- $key := index $r.existingSecret (printf "%sKey" $param) -}}
@@ -118,11 +118,12 @@ spec:
   {{- with $k.fallback }}
   fallback: {{ toYaml . | nindent 4 }}
   {{- end }}
-  {{- with $a.behavior }}
   advanced:
     horizontalPodAutoscalerConfig:
+      name: {{ include "patchworks.resourceName" (printf "keda-hpa-%s" $name) }}
+      {{- with $a.behavior }}
       behavior: {{ toYaml . | nindent 8 }}
-  {{- end }}
+      {{- end }}
   triggers: {{ toYaml $triggers | nindent 4 }}
 {{- end -}}
 {{- end -}}

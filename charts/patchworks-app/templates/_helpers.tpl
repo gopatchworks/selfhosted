@@ -16,6 +16,24 @@ Create a default fully qualified app name.
 {{- end }}
 {{- end }}
 
+{{/* Keep names valid for DNS labels without collapsing distinct long names. */}}
+{{- define "patchworks.resourceName" -}}
+{{- if gt (len .) 63 -}}
+{{- printf "%s-%s" (trunc 54 . | trimSuffix "-") (sha256sum . | trunc 8) -}}
+{{- else -}}
+{{- . | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+
+{{/* A component-specific fullname already contains the workload name. */}}
+{{- define "patchworks.workloadName" -}}
+{{- $name := .fullname -}}
+{{- if ne .fullname .component -}}
+{{- $name = printf "%s-%s" .fullname .component -}}
+{{- end -}}
+{{- include "patchworks.resourceName" $name -}}
+{{- end -}}
+
 {{/*
 Name of the Secret containing PASSPORT_PRIVATE_KEY / PASSPORT_PUBLIC_KEY.
 Shared between Core and Fabric. Returns the existingSecret name if configured,

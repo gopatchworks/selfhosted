@@ -102,14 +102,16 @@ key in workers.microservices (excluding _default).
   {{- $affinity     = $company.affinity       | default $svc.affinity }}
 {{- end }}
 {{- $autoscaling := mergeOverwrite (deepCopy $svc.autoscaling) ($company.autoscaling | default dict) (dig "microservices" $svc.serviceKey "autoscaling" (dict) $company) }}
-{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
+{{- $deploymentName := include "patchworks.workloadName" (dict "fullname" $fullname "component" $slug) }}
+{{- $supervisordName := include "patchworks.resourceName" (printf "%s-supervisord" $deploymentName) }}
+{{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" $deploymentName "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "-30"
-  name: {{ $fullname }}-{{ $slug }}-supervisord
+  name: {{ $supervisordName }}
   namespace: {{ $wNs }}
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
@@ -121,7 +123,7 @@ data:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ $fullname }}-{{ $slug }}
+  name: {{ $deploymentName }}
   namespace: {{ $wNs }}
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
@@ -216,7 +218,7 @@ spec:
       volumes:
         - name: supervisord-conf
           configMap:
-            name: {{ $fullname }}-{{ $slug }}-supervisord
+            name: {{ $supervisordName }}
       {{- with $nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

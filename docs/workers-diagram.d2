@@ -29,7 +29,7 @@ processors: "processors[] (always PHP Core)" {
     direction: right
     topology: "Job\n{name}-rabbitmq-topology" { shape: rectangle }
     cm: "{name}-processor-{queue}-supervisord\nqueue: processors[].queue" { shape: document }
-    dep: "Deployment\n{name}-processor-{queue}" { shape: rectangle }
+    dep: "Deployment\n{name}-processor-{queue}\nOr processors[].deploymentName" { shape: rectangle }
     cron: "CronJob\n{name}-{queue}-scheduler" { shape: rectangle }
     queue: "RabbitMQ queue\nquorum durable" { shape: queue }
     topology -> queue: declares
@@ -54,7 +54,7 @@ standalone: "type: standalone" {
   hub: "Hub (workers.hub.enabled)" {
     direction: right
     cm: "{name}-workers-supervisord\nqueue: workers.queue.name" { shape: document }
-    dep: "Deployment\n{name}-workers" { shape: rectangle }
+    dep: "Deployment\n{name}-workers\nPHP: omit repeated name" { shape: rectangle }
     cm -> dep: mounts
   }
 
@@ -62,7 +62,7 @@ standalone: "type: standalone" {
     style.stroke-dash: 4
     direction: right
     cm: "{name}-workers-{co}-supervisord\nqueue: company.queue" { shape: document }
-    dep: "Deployment\n{name}-workers-{co}" { shape: rectangle }
+    dep: "Deployment\n{name}-workers-{co}\nPHP: omit repeated name" { shape: rectangle }
     cm -> dep: mounts
   }
 
@@ -86,7 +86,7 @@ microservice: "type: microservice" {
     hub: "Hub (workers.hub.enabled)" {
       direction: right
       cm: "{name}-workers-{svc}-supervisord\nqueue: queue | domain" { shape: document }
-      dep: "Deployment\n{name}-workers-{svc}" { shape: rectangle }
+      dep: "Deployment\n{name}-workers-{svc}\nOmit repeated name" { shape: rectangle }
       cm -> dep: mounts
     }
 
@@ -94,7 +94,7 @@ microservice: "type: microservice" {
       style.stroke-dash: 4
       direction: right
       cm: "{name}-workers-{svc}-{co}-supervisord\nqueue: company.queue" { shape: document }
-      dep: "Deployment\n{name}-workers-{svc}-{co}" { shape: rectangle }
+      dep: "Deployment\n{name}-workers-{svc}-{co}\nOmit repeated name" { shape: rectangle }
       cm -> dep: mounts
     }
 

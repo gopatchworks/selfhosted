@@ -211,6 +211,7 @@ processorDeployments:
   autoscaling:
     enabled: false
 
+# Each entry may set deploymentName to separate Kubernetes identity from queue name.
 processors:
   # CPT-6321: one cron and a PHP worker pool for the complete scheduling chain.
   - name: Scheduler
