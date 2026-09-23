@@ -1,3 +1,7 @@
+# Optional pod DNS ndots. No value means no DNS override; 0 is supported.
+# Sections and services can override this with their own ndots value.
+ndots: null
+
 # ── Global image config ────────────────────────────────────────────────────────
 # Applies to all Patchworks application images (web, workers,
 # migrations, monocore). Infrastructure images (mysql, redis, etc.) use
@@ -37,6 +41,7 @@ serviceAccount:
 # ── Application shared config ──────────────────────────────────────────────────
 # Injected into all Patchworks application pods (web, workers, migrations).
 app:
+  ndots: null  # inherits the enclosing section / top-level ndots
   # Laravel APP_KEY. Leave empty to auto-generate a stable key Secret on install.
   # To provide one manually: echo "base64:$(openssl rand -base64 32)"
   key: ""
@@ -76,6 +81,7 @@ app:
 # upgrades and uninstalls.
 # Set existingSecret.name to bring your own key pair instead.
 passport:
+  ndots: null  # inherits the enclosing section / top-level ndots
   existingSecret:
     name: ""
     privateKeyKey: PASSPORT_PRIVATE_KEY
@@ -92,8 +98,10 @@ namespace: ""
 # by the infra chart and stored in Kubernetes Secrets. The app chart resolves
 # the same shared values to those Secret names.
 credentials:
+  ndots: null  # inherits the enclosing section / top-level ndots
   autoGenerate: true
   generator:
+    ndots: null  # inherits the enclosing section / top-level ndots
     image:
       repository: alpine/kubectl
       tag: 1.36.1
@@ -104,6 +112,7 @@ credentials:
 # Any field under web.gateway.* or web.start.* overrides the corresponding
 # web.* default for that sub-component only.
 web:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""
   frankenphp: {}
   image:
@@ -128,11 +137,13 @@ web:
 
   # Gateway — primary API / MCP-facing service.
   gateway:
+    ndots: null  # inherits the enclosing section / top-level ndots
     queue: gateway
     frankenphp: {}
 
   # Start — webhook, callback, and start-trigger service.
   start:
+    ndots: null  # inherits the enclosing section / top-level ndots
     queue: start
     frankenphp: {}
 
@@ -141,6 +152,7 @@ web:
 # values so one shared values file can be used for both charts; it does not
 # render scheduler resources.
 scheduler:
+  ndots: null  # inherits the enclosing section / top-level ndots
   enabled: true
   frankenphp: {}
   schedule: "*/1 * * * *"
@@ -209,6 +221,7 @@ processors:
 # ── Fabric ─────────────────────────────────────────────────────────────────────
 # PHP-FPM application fronted by an Nginx sidecar. Required component.
 fabric:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""
   frankenphp: {}
   image:
@@ -218,6 +231,7 @@ fabric:
     pullPolicy: ""
   # Fabric migrations run before Core migrations as Helm hooks.
   migrations:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: true
     frankenphp: {}
     command: "php artisan migrate --force"
@@ -245,6 +259,7 @@ fabric:
   # If the main mysql is disabled and neither of the above is configured,
   # the chart will fail with a validation error.
   mysql:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: false
     # Database name used when sharing the main MySQL instance (mode 3).
     database: fabric
@@ -289,6 +304,7 @@ fabric:
   #   2. fabric.redis.external.host  — connect to an existing Redis instance.
   #   3. (default) shared            — use the main Redis instance.
   redis:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: false
     external:
       host: ""
@@ -322,6 +338,7 @@ fabric:
 # ── Dashboard ──────────────────────────────────────────────────────────────────
 # Optional dashboard UI deployment.
 dashboard:
+  ndots: null  # inherits the enclosing section / top-level ndots
   enabled: false
   namespace: ""
   image:
@@ -373,6 +390,7 @@ dashboard:
 # Runs as a Helm pre-install/pre-upgrade hook Job to apply database migrations
 # before the application pods start.
 migrations:
+  ndots: null  # inherits the enclosing section / top-level ndots
   enabled: true
   namespace: ""  # overrides global namespace for migration jobs
   frankenphp: {}
@@ -400,6 +418,7 @@ migrations:
 # install.
 # Seed Jobs can have side effects before failing, so they do not retry by default.
 seeds:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""  # overrides global namespace; defaults to migrations namespace
   restartPolicy: Never
   backoffLimit: 0
@@ -411,6 +430,7 @@ seeds:
   # Runs before the Fabric company seeder, Core migrations, and Core seeds.
   # Must complete before core migrations and core seeds run.
   fabric:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: false
     frankenphp: {}
     command: >-
@@ -429,6 +449,7 @@ seeds:
   # Tier must be one of: Trial, App Store, Standard, Professional, Custom,
   # Partner Sandbox, Veeqo
   tenant:
+    ndots: null  # inherits the enclosing section / top-level ndots
     companyName: ""
     # Tenant database created by the app chart before core seeds run. Defaults
     # to companyName lowercased with non-alphanumeric characters removed.
@@ -449,6 +470,7 @@ seeds:
 
   # Core seeder — runs on pre-install only (not upgrade), after Core migrations.
   core:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: false
     frankenphp: {}
     command: "php artisan db:seed --force && php artisan migrate:tenants --create --no-interaction"
@@ -486,6 +508,7 @@ monocore:
 
 # ── Workers ───────────────────────────────────────────────────────────────────
 workers:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""  # overrides global namespace for worker resources
   frankenphp: {}
   # Deployment type:
@@ -549,6 +572,7 @@ workers:
   # must be created manually — see the workers.companies note above.
   microservices:
     _default:
+      ndots: null  # inherits the enclosing section / top-level ndots
       enabled: true
       replicas: 1
       processes: 15
@@ -632,6 +656,7 @@ workers:
 
   # ── type: mono ────────────────────────────────────────────────────────────
   mono:
+    ndots: null  # inherits the enclosing section / top-level ndots
     # Monocore is a separate Go binary on its own release cycle.
     # Set tag independently from the PHP app image.tag.
     image:
@@ -704,6 +729,7 @@ workers:
 # external.* to use an existing RabbitMQ instance.
 # RABBITMQ_HOST/PORT/USER/PASSWORD/VHOST are injected into app pods and monocore workers.
 rabbitmq:
+  ndots: null  # inherits the enclosing section / top-level ndots
   metrics:
     # Enable the built-in rabbitmq_prometheus plugin and internal metrics Service.
     enabled: false
@@ -719,6 +745,7 @@ rabbitmq:
   namespace: ""  # overrides global namespace for RabbitMQ resources
   enabled: true
   topology:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: true
     command:
       - monocore
@@ -770,12 +797,14 @@ rabbitmq:
 # and function execution namespaces). Set to false and populate host/builderHost
 # to connect workers to an existing KubeFaaS installation.
 kubefaas:
+  ndots: null  # inherits the enclosing section / top-level ndots
   enabled: false
   # Namespace for the KubeFaaS control plane (controller, builder, Redis).
   # Defaults to "kubefaas" regardless of global/release namespace.
   namespace: kubefaas
 
   controller:
+    ndots: null  # inherits the enclosing section / top-level ndots
     serviceMonitor:
       enabled: false
       additionalLabels: {}
@@ -798,6 +827,7 @@ kubefaas:
         memory: 128Mi
 
   builder:
+    ndots: null  # inherits the enclosing section / top-level ndots
     serviceMonitor:
       enabled: false
       additionalLabels: {}
@@ -875,6 +905,7 @@ kubefaas:
   # Redis used by the controller and builder for function lifecycle tracking.
   # Set enabled: false and populate external.* to use an existing Redis.
   redis:
+    ndots: null  # inherits the enclosing section / top-level ndots
     enabled: true
     external:
       host: ""
@@ -928,6 +959,7 @@ kubefaas:
 # No PUSHER_* env vars are injected when neither enabled nor external.host is set
 # and no credentials are provided.
 pusher:
+  ndots: null  # inherits the enclosing section / top-level ndots
   enabled: true
   # App credentials. For in-cluster Soketi, omitted values are generated when
   # credentials.autoGenerate=true. Injected as PUSHER_APP_* env vars into app pods.
@@ -1056,6 +1088,7 @@ database:
 
 # ── MySQL ──────────────────────────────────────────────────────────────────────
 mysql:
+  ndots: null  # inherits the enclosing section / top-level ndots
   # Additional schemas created/granted by the infra chart on install/upgrade.
   # Names: 1–64 letters, digits, underscores or hyphens. External MySQL is unmanaged.
   databases: []
@@ -1100,6 +1133,7 @@ mysql:
 
 # ── Redis ──────────────────────────────────────────────────────────────────────
 redis:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""  # overrides global namespace for Redis resources
   # Set to true to deploy Valkey (Redis-compatible) in-cluster. Set to false
   # and populate external.* to use an existing Redis/Valkey instance.
@@ -1136,6 +1170,7 @@ redis:
 
 # ── Elasticsearch ──────────────────────────────────────────────────────────────
 elasticsearch:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""  # overrides global namespace for Elasticsearch resources
   # Set to true to deploy Elasticsearch in-cluster. Set to false and
   # populate external.* to use an existing Elasticsearch cluster.
@@ -1189,6 +1224,7 @@ elasticsearch:
 # populate external.* to use any S3-compatible object storage.
 # When enabled, a post-install/post-upgrade Job creates the baseline bucket.
 s3:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""  # overrides global namespace for S3/MinIO resources
   enabled: true
   external:
@@ -1241,6 +1277,7 @@ s3:
 # values so one shared values file can be used for both charts; it does not render
 # S3 Manager resources.
 s3Manager:
+  ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""
   enabled: true
   external:
@@ -1315,6 +1352,7 @@ s3Manager:
 # Native in-cluster Pusher-compatible WebSocket server. Enabled via
 # pusher.enabled and configured from pusher.* credentials.
 soketi:
+  ndots: null  # inherits the enclosing section / top-level ndots
   metrics:
     # Native Soketi metrics listener and internal Service on port 9601.
     enabled: false

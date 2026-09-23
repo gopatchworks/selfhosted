@@ -91,6 +91,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "pusher-auth-generator" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.credentials .Values.credentials.generator .Values.pusher) | nindent 6 }}
       restartPolicy: Never
       serviceAccountName: {{ $saName }}
       containers:

@@ -53,6 +53,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "mysql" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.mysql) | nindent 6 }}
       containers:
         - name: mysql
           image: "{{ .Values.mysql.image.repository }}:{{ .Values.mysql.image.tag }}"

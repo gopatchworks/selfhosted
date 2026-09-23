@@ -39,6 +39,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "elasticsearch" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.elasticsearch) | nindent 6 }}
       # Elasticsearch runs as UID 1000. Setting fsGroup ensures the mounted PVC
       # is chowned to that group by Kubernetes before the container starts —
       # required on cloud block storage (e.g. DigitalOcean) that provisions

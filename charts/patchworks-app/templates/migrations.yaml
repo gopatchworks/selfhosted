@@ -23,6 +23,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-migrations" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric .Values.migrations .Values.fabric.migrations) | nindent 6 }}
       restartPolicy: {{ .Values.migrations.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
@@ -114,6 +115,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "core-migrations" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.migrations) | nindent 6 }}
       restartPolicy: {{ .Values.migrations.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}

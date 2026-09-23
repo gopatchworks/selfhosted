@@ -29,6 +29,7 @@ values API so a shared values file can be passed to both releases.
 ## Contents
 
 - [Global](#global)
+- [Pod DNS](#pod-dns)
 - [Images](#images)
 - [Generated infrastructure credentials](#generated-infrastructure-credentials)
 - [Application](#application)
@@ -81,6 +82,60 @@ the inline password value to bypass generated credentials for that field.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `revisionHistoryLimit` | `3` | Number of old ReplicaSets retained for chart-managed Deployments |
+| `ndots` | unset | Optional DNS `ndots` for chart-managed pods; sections and services can override it |
+
+
+## Pod DNS
+
+Set top-level `ndots` in the shared values file to configure pod DNS in both
+charts. Every chart-managed Deployment, Job and CronJob inherits it. The most
+specific non-null, non-empty setting wins; numeric `0` is supported. With no
+setting at any level, the chart omits `dnsConfig` entirely and leaves Kubernetes
+DNS behaviour unchanged. No numeric default is supplied.
+
+All keys below are optional and unset by default. Each path supports `.ndots`;
+chains run from less to more specific, after the top-level setting.
+
+| Workload | Override chain |
+|----------|----------------|
+| Gateway / Start | `web` → `web.gateway` / `web.start` |
+| Fabric, Dashboard, S3 Manager | `fabric`, `dashboard`, `s3Manager` respectively |
+| Standalone workers | `workers` → `workers.hub` or `workers.companies[]` |
+| Microservice workers | `workers` → `workers.microservices._default` → `workers.microservices.<service>` → `workers.hub` or `workers.companies[]` → `workers.companies[].microservices.<service>` |
+| Mono workers | `workers` → `workers.mono` → `workers.hub` or `workers.companies[]` |
+| Processor Deployments | `workers` → `processorDeployments` → `processors[]` |
+| Scheduler CronJobs | `workers` → `scheduler` → `processors[]` → `processors[].scheduler` |
+| Core / Fabric migrations | `migrations`; Fabric also inherits `fabric` before `migrations`, then `fabric.migrations` |
+| Seed Jobs | `seeds` → `seeds.fabric`, `seeds.tenant` or `seeds.core`; Fabric seed Jobs also inherit `fabric` before `seeds` |
+| MySQL, Redis, RabbitMQ, Elasticsearch, MinIO | `mysql`, `redis`, `rabbitmq`, `elasticsearch`, `s3` respectively; setup Jobs inherit their component |
+| Fabric MySQL / Redis | `fabric` → `fabric.mysql` / `fabric.redis` |
+| KubeFaaS controller / builder / Redis | `kubefaas` → `kubefaas.controller` / `kubefaas.builder` / `kubefaas.redis` |
+| Native Soketi | `pusher` → `soketi` |
+| RabbitMQ topology Job | `rabbitmq` → `rabbitmq.topology` |
+| Credential generators | `credentials` → `credentials.generator`; app key, Passport and Pusher generators then apply `app`, `passport` or `pusher`; tenant password generation then applies `seeds` → `seeds.tenant` |
+| Mono store generator | `workers` → `workers.mono` → `credentials` → `credentials.generator` |
+
+For example:
+
+```yaml
+ndots: 2
+web:
+  ndots: 1
+  gateway:
+    ndots: 0
+workers:
+  ndots: 1
+  microservices:
+    batch:
+      ndots: 3
+```
+
+This sets Gateway to `0`, Start and workers to `1`, the batch microservice to
+`3` when microservice mode is enabled, and other chart-managed pods to `2`.
+
+The optional upstream Soketi subchart and function pods created dynamically by
+the KubeFaaS controller are managed outside these pod templates and do not
+inherit this setting.
 
 ## Images
 

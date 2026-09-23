@@ -63,3 +63,6 @@ jobs:
 
       - name: Microservice queue render tests
         run: ruby tests/microservice_queue_test.rb
+
+      - name: Pod DNS render tests
+        run: ruby tests/ndots_test.rb

@@ -38,6 +38,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-redis" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric .Values.fabric.redis) | nindent 6 }}
       containers:
         - name: redis
           image: "{{ $redis.image.repository }}:{{ $redis.image.tag }}"

@@ -49,6 +49,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.rabbitmq) | nindent 6 }}
       containers:
         - name: rabbitmq
           image: {{ $rmq.image.repository }}:{{ $rmq.image.tag }}

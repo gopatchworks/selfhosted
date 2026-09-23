@@ -35,6 +35,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "mysql-setup" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.mysql) | nindent 6 }}
       restartPolicy: Never
       initContainers:
         - name: wait-for-mysql

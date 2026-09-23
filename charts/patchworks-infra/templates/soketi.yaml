@@ -44,6 +44,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.pusher .Values.soketi) | nindent 6 }}
       terminationGracePeriodSeconds: {{ .Values.soketi.terminationGracePeriodSeconds }}
       {{- with .Values.soketi.podSecurityContext }}
       securityContext:

@@ -37,6 +37,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "s3" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.s3) | nindent 6 }}
       containers:
         - name: minio
           image: "{{ .Values.s3.image.repository }}:{{ .Values.s3.image.tag }}"

@@ -17,6 +17,7 @@ key in workers.microservices (excluding _default).
 {{- if $isStandalone }}
   {{- $services = list (dict
     "autoscaling"   .Values.workers.autoscaling
+    "dnsScopes"     (list .Values .Values.workers)
     "serviceKey"    ""
     "slug"          "workers"
     "ns"            $hubNs
@@ -41,6 +42,7 @@ key in workers.microservices (excluding _default).
   {{- if not $enabled }}{{- continue }}{{- end }}
   {{- $svc := dict
     "autoscaling"   (mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($default.autoscaling | default dict) ($ms.autoscaling | default dict))
+    "dnsScopes"     (list $root.Values $root.Values.workers $default $ms)
     "serviceKey"    $msKey
     "slug"          (printf "workers-%s" $msKey)
     "ns"            ($ms.namespace | default $hubNs)
@@ -150,6 +152,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- include "patchworks.podDnsConfig" (concat $svc.dnsScopes (list (ternary $root.Values.workers.hub $company $isHub) (dig "microservices" $svc.serviceKey (dict) $company))) | nindent 6 }}
       terminationGracePeriodSeconds: {{ dig "terminationGracePeriodSeconds" $root.Values.workers.terminationGracePeriodSeconds $company }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
       {{- with $root.Values.image.pullSecrets }}

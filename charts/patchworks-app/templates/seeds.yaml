@@ -23,6 +23,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-seeds" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric .Values.seeds .Values.seeds.fabric) | nindent 6 }}
       restartPolicy: {{ .Values.seeds.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
@@ -105,6 +106,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "fabric-company-seed" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric .Values.seeds .Values.seeds.tenant) | nindent 6 }}
       restartPolicy: {{ .Values.seeds.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
@@ -212,6 +214,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "tenant-database" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.seeds .Values.seeds.tenant) | nindent 6 }}
       restartPolicy: {{ .Values.seeds.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}
@@ -270,6 +273,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "core-seeds" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.seeds .Values.seeds.core) | nindent 6 }}
       restartPolicy: {{ .Values.seeds.restartPolicy }}
       {{- with .Values.migrations.serviceAccountName }}
       serviceAccountName: {{ . | quote }}

@@ -145,6 +145,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "workers-storegen" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.workers $mono .Values.credentials .Values.credentials.generator) | nindent 6 }}
       restartPolicy: Never
       serviceAccountName: {{ $fullname }}-workers-storegen
       containers:
@@ -423,6 +424,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list $root.Values $root.Values.workers $mono (ternary $root.Values.workers.hub $company $w.isHub)) | nindent 6 }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
       terminationGracePeriodSeconds: {{ $mono.terminationGracePeriodSeconds }}
       automountServiceAccountToken: {{ and $w.isHub (or (eq $scheduler.mode "kubernetes") $mono.operatorKey.enabled) }}

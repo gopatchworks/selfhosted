@@ -41,6 +41,7 @@ spec:
             {{- toYaml . | nindent 12 }}
             {{- end }}
         spec:
+          {{- include "patchworks.podDnsConfig" (list $root.Values $root.Values.workers $root.Values.scheduler $processor $processorScheduler) | nindent 10 }}
           restartPolicy: {{ $sched.restartPolicy }}
           activeDeadlineSeconds: {{ $sched.activeDeadlineSeconds }}
           serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}

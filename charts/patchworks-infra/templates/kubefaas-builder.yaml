@@ -255,6 +255,7 @@ spec:
       annotations:
         checksum/config: {{ $kf | toJson | sha256sum }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas .Values.kubefaas.builder) | nindent 6 }}
       serviceAccountName: {{ $fullname }}-kubefaas-builder
       {{- with $root.Values.image.pullSecrets }}
       imagePullSecrets:

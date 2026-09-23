@@ -36,6 +36,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-redis" "Release" .Release) | nindent 8 }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas .Values.kubefaas.redis) | nindent 6 }}
       containers:
         - name: redis
           image: {{ $kf.redis.image.repository }}:{{ $kf.redis.image.tag }}

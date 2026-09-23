@@ -51,6 +51,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric) | nindent 6 }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
