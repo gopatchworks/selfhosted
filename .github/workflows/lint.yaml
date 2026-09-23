@@ -66,3 +66,6 @@ jobs:
 
       - name: Pod DNS render tests
         run: ruby tests/ndots_test.rb
+
+      - name: RoadRunner shutdown render and process tests
+        run: ruby tests/roadrunner_shutdown_test.rb

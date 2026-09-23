@@ -139,6 +139,14 @@ web:
   ndots: null  # inherits the enclosing section / top-level ndots
   namespace: ""
   frankenphp: {}
+  # RoadRunner only: allow routing updates, then drain before signaling Octane.
+  preStopSleepSeconds: 20
+  # Must exceed preStopSleepSeconds + roadrunner.drainTimeoutSeconds.
+  terminationGracePeriodSeconds: 200
+  roadrunner:
+    # Keep above the image's endure.grace_period (150s in the Core image).
+    drainTimeoutSeconds: 160
+    stateFile: /var/www/html/storage/logs/octane-server-state.json
   image:
     registry: ""
     tag: ""

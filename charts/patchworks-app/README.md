@@ -470,6 +470,10 @@ Gateway and Start are independently selectable Laravel web services.
 | `web.deploymentAnnotations` | `{}` | Deployment metadata annotations; each web service can override keys |
 | `web.replicaCount` | `1` | Number of web replicas |
 | `web.frankenphp.enabled` | unset | Override global FrankenPHP runtime for both Core web services |
+| `web.preStopSleepSeconds` | `20` | RoadRunner: wait for routing updates before starting request drain; `0` skips only this delay |
+| `web.terminationGracePeriodSeconds` | `200` | RoadRunner: pod termination allowance; must exceed the routing delay plus drain timeout |
+| `web.roadrunner.drainTimeoutSeconds` | `160` | Maximum wait for RoadRunner to exit after SIGTERM; keep above the image's `endure.grace_period` |
+| `web.roadrunner.stateFile` | `/var/www/html/storage/logs/octane-server-state.json` | Octane state file containing RoadRunner's master PID; match any `octane.state_file` override |
 | `web.service.type` | `ClusterIP` | Kubernetes service type |
 | `web.service.port` | `80` | Service port |
 | `web.sessionDomain` | `""` | `SESSION_DOMAIN`; controls the cookie domain for authentication |
@@ -480,6 +484,21 @@ Gateway and Start are independently selectable Laravel web services.
 | `web.nodeSelector` | `{}` | Node selector |
 | `web.tolerations` | `[]` | Tolerations |
 | `web.affinity` | `{}` | Affinity rules |
+
+RoadRunner Gateway and Start pods use a `preStop` hook that waits for routing
+updates, signals RoadRunner directly, and waits for it to exit before Kubernetes
+signals Octane. The hook runs PHP without booting Laravel or contacting a database.
+It is embedded in the chart, so it does not require a separate drain script in the
+image. The entire hook consumes the pod termination allowance. A missing state
+file or an already-exited process is a no-op; invalid PIDs and drain timeouts are
+reported as hook failures, after which normal Kubernetes termination continues.
+
+These values can be overridden under `web.gateway` or `web.start`. FrankenPHP
+pods do not receive the RoadRunner hook or these termination settings. Use a Core
+image with `endure.grace_period: 150s` and `http.pool.destroy_timeout: 120s` to allow
+the intended request drain; the chart does not override the image's RoadRunner
+configuration. If a service mesh is injected, its proxy must also remain available
+while requests drain.
 
 ---
 

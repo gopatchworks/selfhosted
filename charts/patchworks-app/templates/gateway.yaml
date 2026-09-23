@@ -31,6 +31,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- include "patchworks.webTerminationGracePeriod" (dict "root" . "svc" $svc) | nindent 6 }}
       {{- include "patchworks.podDnsConfig" (list .Values .Values.web .Values.web.gateway) | nindent 6 }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -43,6 +44,7 @@ spec:
         - name: gateway
           image: {{ include "patchworks.appImage" (dict "svc" $svc "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" .) }}
+          {{- include "patchworks.webPreStop" (dict "root" . "svc" $svc) | nindent 10 }}
           {{- if eq (include "patchworks.usesFrankenphp" (dict "root" . "svc" $svc)) "true" }}
           {{- include "patchworks.frankenphpCommand" . | nindent 10 }}
           {{- else }}
