@@ -822,6 +822,10 @@ workers:
     nameSuffix: workers
     autoscaling: {}
     replicaCount: 1
+    # Delay SIGTERM so endpoint and scaler removal propagates before shutdown.
+    # 0 disables the hook. Counts against terminationGracePeriodSeconds.
+    preStopSleepSeconds: 0
+    # Must exceed preStopSleepSeconds + scheduler.drainTimeoutSeconds.
     terminationGracePeriodSeconds: 3660
     # Retain durable execution when disabling scheduling until old work drains.
     durableExecution: true

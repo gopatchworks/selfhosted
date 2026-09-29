@@ -642,7 +642,8 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
-| `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed scheduler drain by more than 10 seconds |
+| `workers.mono.preStopSleepSeconds` | `0` | Seconds to sleep before SIGTERM, letting endpoint and scaler removal propagate first. `0` renders no hook; the sleep counts against `terminationGracePeriodSeconds` |
+| `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed `preStopSleepSeconds` plus the scheduler drain by more than 10 seconds |
 | `workers.mono.durableExecution` | `true` | Durable execution claims and recovery; retain while registered work drains |
 | `workers.mono.platformApi.fabricUrl` | `""` | Fabric API base URL for operator-run tinker commands; empty derives the in-cluster Fabric service `/api/v2` URL |
 | `workers.mono.platformApi.coreUrl` | `""` | Core API base URL for operator-run tinker commands; empty derives the in-cluster Gateway `/api/v1/patchworks` URL |
