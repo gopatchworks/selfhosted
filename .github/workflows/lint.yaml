@@ -69,3 +69,6 @@ jobs:
 
       - name: RoadRunner shutdown render and process tests
         run: ruby tests/roadrunner_shutdown_test.rb
+
+      - name: Mono worker shutdown render tests
+        run: ruby tests/mono_shutdown_test.rb

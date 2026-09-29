@@ -5,9 +5,16 @@
 {{- if not (has $scheduler.mode (list "disabled" "standalone" "kubernetes")) }}
 {{- fail "workers.mono.scheduler.mode must be disabled, standalone or kubernetes" }}
 {{- end }}
+{{/* The preStop sleep runs before SIGTERM, so it spends the same grace budget. */}}
+{{- if not (regexMatch "^[0-9]+$" (toString $mono.preStopSleepSeconds)) }}
+{{- fail "workers.mono.preStopSleepSeconds must be non-negative integer seconds" }}
+{{- end }}
+{{- if le (int $mono.terminationGracePeriodSeconds) (int $mono.preStopSleepSeconds) }}
+{{- fail "workers.mono.terminationGracePeriodSeconds must exceed preStopSleepSeconds" }}
+{{- end }}
 {{- if and .Values.workers.hub.enabled (ne $scheduler.mode "disabled") }}
-{{- if or (lt (int $scheduler.drainTimeoutSeconds) 1) (le (int $mono.terminationGracePeriodSeconds) (add (int $scheduler.drainTimeoutSeconds) 10)) }}
-{{- fail "mono termination grace must exceed scheduler drain timeout by more than 10 seconds" }}
+{{- if or (lt (int $scheduler.drainTimeoutSeconds) 1) (le (int $mono.terminationGracePeriodSeconds) (add (int $mono.preStopSleepSeconds) (int $scheduler.drainTimeoutSeconds) 10)) }}
+{{- fail "mono termination grace must exceed preStopSleepSeconds plus the scheduler drain timeout by more than 10 seconds" }}
 {{- end }}
 {{- end }}
 {{- $checksumWorkers := deepCopy .Values.workers }}
@@ -585,6 +592,15 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          {{- if gt (int $mono.preStopSleepSeconds) 0 }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - sleep {{ int $mono.preStopSleepSeconds }}
+          {{- end }}
           {{- with $resources }}
           resources:
             {{- toYaml . | nindent 12 }}
