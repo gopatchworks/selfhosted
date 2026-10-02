@@ -47,11 +47,6 @@ baseline = render
 worker_pods(baseline).each do |name, pod|
   assert(hook(pod).nil?, "#{name} rendered a preStop hook by default")
 end
-baseline.select { |d| d['kind'] == 'Deployment' }.each do |document|
-  next if document.dig('metadata', 'labels', 'app.kubernetes.io/component').to_s.start_with?('workers')
-  command = hook(document.dig('spec', 'template', 'spec')).to_a
-  assert(command.first != '/bin/sh', "Mono sleep hook leaked into #{document.dig('metadata', 'name')}")
-end
 
 # The hub and every independently deployed company share one container template.
 enabled = render({ 'preStopSleepSeconds' => 15 }, workers: { 'companies' => [{ 'name' => 'acme' }] })
@@ -61,6 +56,12 @@ assert(pods.keys.sort == %w[patchworks-workers patchworks-workers-acme],
 pods.each do |name, pod|
   assert(hook(pod) == ['/bin/sh', '-c', 'sleep 15'], "#{name} hook was #{hook(pod).inspect}")
   assert(pod['terminationGracePeriodSeconds'] == 3660, "#{name} lost its termination allowance")
+end
+# Other Deployments may have their own hooks (Fabric sleeps too), but never the mono one.
+enabled.select { |d| d['kind'] == 'Deployment' }.each do |document|
+  next if document.dig('metadata', 'labels', 'app.kubernetes.io/component').to_s.start_with?('workers')
+  assert(hook(document.dig('spec', 'template', 'spec')) != ['/bin/sh', '-c', 'sleep 15'],
+         "Mono sleep hook leaked into #{document.dig('metadata', 'name')}")
 end
 
 # The sleep runs before SIGTERM, so it spends the same grace budget as the drain.

@@ -313,6 +313,11 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 |-----|---------|-------------|
 | `fabric.enabled` | `true` | Deploy Fabric web resources; does not control migrations/seeds |
 | `fabric.deploymentAnnotations` | `{}` | Deployment metadata annotations |
+| `fabric.preStopSleepSeconds` | `20` | PHP-FPM: Nginx and PHP-FPM both wait this long before their stop signal so routing updates stop new requests first; `0` renders no hook |
+| `fabric.terminationGracePeriodSeconds` | `90` | PHP-FPM: pod termination allowance; must exceed `preStopSleepSeconds` plus `fpm.drainTimeoutSeconds` |
+| `fabric.fpm.drainTimeoutSeconds` | `60` | PHP-FPM: longest in-flight request drain; match the image's `process_control_timeout` (60s in the Fabric image) |
+| `fabric.podDisruptionBudget.enabled` | `true` | Create a PodDisruptionBudget for Fabric pods |
+| `fabric.podDisruptionBudget.maxUnavailable` | `1` | Fabric pods that node drains and consolidation may evict at once; an integer or percentage |
 | `fabric.core.initialiseDatabases` | `true` | Set `CORE_INITIALISE_DATABASES` so Fabric asks Core to create and migrate databases for new companies |
 | `fabric.core.createSubscription` | `true` | Set `CORE_CREATE_SUBSCRIPTION` so Fabric asks Core to create a subscription for new companies |
 | `fabric.core.gatewayUrl` | `""` | Set `CORE_GATEWAY_URL`; empty resolves the Gateway Service name, namespace and port |
@@ -335,6 +340,17 @@ Enabling automatic provisioning applies to new company creation requests; it
 does not backfill databases for companies already recorded in Fabric. The
 first-install `app:create-tenant` seeder still uses the chart's separate tenant
 database and Core migration Jobs before application startup.
+
+When a PHP-FPM Fabric pod stops, both containers first sleep for
+`fabric.preStopSleepSeconds` so the Service and ingress stop routing to the pod.
+Kubernetes then sends each image's stop signal, SIGQUIT: Nginx stops accepting
+connections and waits for its in-flight requests, and PHP-FPM lets busy workers
+finish for up to its `process_control_timeout`. Fabric images before that
+setting was added kill busy workers at once, so in-flight requests receive 502
+responses whatever the grace period. The PodDisruptionBudget limits how many
+Fabric pods node drains and Karpenter consolidation evict at once; rollouts
+follow the Deployment's update strategy instead. FrankenPHP pods do not receive
+the hook or the termination allowance, but keep the PodDisruptionBudget.
 
 ---
 

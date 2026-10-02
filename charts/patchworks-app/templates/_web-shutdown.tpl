@@ -32,3 +32,33 @@ lifecycle:
         - {{ .svc.roadrunner.stateFile | quote }}
 {{- end -}}
 {{- end }}
+
+{{/* Fabric's Nginx and PHP-FPM wait for routing updates, then drain in-flight
+requests on SIGQUIT; the image's process_control_timeout bounds PHP-FPM's drain. */}}
+{{- define "patchworks.fabricTerminationGracePeriod" -}}
+{{- if ne (include "patchworks.usesFrankenphp" .) "true" -}}
+{{- $svc := .svc -}}
+{{- range $value := list $svc.preStopSleepSeconds $svc.fpm.drainTimeoutSeconds $svc.terminationGracePeriodSeconds -}}
+{{- if not (regexMatch "^[0-9]+$" (toString $value)) -}}
+{{- fail "fabric shutdown timeouts must be non-negative integer seconds" -}}
+{{- end -}}
+{{- end -}}
+{{- if le (int $svc.terminationGracePeriodSeconds) (add (int $svc.preStopSleepSeconds) (int $svc.fpm.drainTimeoutSeconds)) -}}
+{{- fail "fabric.terminationGracePeriodSeconds must exceed preStopSleepSeconds + fpm.drainTimeoutSeconds" -}}
+{{- end -}}
+terminationGracePeriodSeconds: {{ int $svc.terminationGracePeriodSeconds }}
+{{- end -}}
+{{- end }}
+
+{{/* Rendered on both Fabric containers so neither receives its stop signal first. */}}
+{{- define "patchworks.fabricPreStop" -}}
+{{- if and (ne (include "patchworks.usesFrankenphp" .) "true") (gt (int .svc.preStopSleepSeconds) 0) -}}
+lifecycle:
+  preStop:
+    exec:
+      command:
+        - /bin/sh
+        - -c
+        - sleep {{ int .svc.preStopSleepSeconds }}
+{{- end -}}
+{{- end }}

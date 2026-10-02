@@ -288,6 +288,18 @@ fabric:
     frankenphp: {}
     command: "php artisan optimize"
   replicaCount: 1
+  # PHP-FPM only: Nginx and PHP-FPM both wait this long before their stop signal
+  # so routing updates stop new requests first. 0 disables the hook.
+  preStopSleepSeconds: 20
+  # PHP-FPM only: must exceed preStopSleepSeconds + fpm.drainTimeoutSeconds.
+  terminationGracePeriodSeconds: 90
+  fpm:
+    # Match the image's PHP-FPM process_control_timeout (60s in the Fabric image).
+    drainTimeoutSeconds: 60
+  # Limits voluntary evictions, such as node drains and Karpenter consolidation.
+  podDisruptionBudget:
+    enabled: true
+    maxUnavailable: 1
   service:
     type: ClusterIP
     port: 80

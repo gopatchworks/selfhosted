@@ -51,6 +51,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- include "patchworks.fabricTerminationGracePeriod" (dict "root" . "svc" .Values.fabric) | nindent 6 }}
       {{- include "patchworks.podDnsConfig" (list .Values .Values.fabric) | nindent 6 }}
       serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
       {{- with .Values.image.pullSecrets }}
@@ -95,6 +96,7 @@ spec:
         - name: fabric
           image: {{ include "patchworks.appImage" (dict "svc" .Values.fabric "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" .Values.fabric "root" .) }}
+          {{- include "patchworks.fabricPreStop" (dict "root" . "svc" .Values.fabric) | nindent 10 }}
           {{- if $fabricUsesFrankenphp }}
           {{- include "patchworks.frankenphpCommand" . | nindent 10 }}
           {{- end }}
@@ -135,6 +137,7 @@ spec:
         - name: fabric-nginx
           image: nginx:stable-alpine
           imagePullPolicy: IfNotPresent
+          {{- include "patchworks.fabricPreStop" (dict "root" . "svc" .Values.fabric) | nindent 10 }}
           ports:
             - name: http
               containerPort: 80
@@ -174,5 +177,23 @@ spec:
     - name: http
       port: {{ .Values.fabric.service.port }}
       targetPort: http
+{{- if .Values.fabric.podDisruptionBudget.enabled }}
+---
+# PodDisruptionBudget — evict Fabric pods one batch at a time during node drains
+# and consolidation. Rollouts are governed by the Deployment strategy instead.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "patchworks.fullname" . }}-fabric
+  namespace: {{ include "patchworks.fabric.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fabric
+spec:
+  maxUnavailable: {{ toYaml .Values.fabric.podDisruptionBudget.maxUnavailable }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "fabric" "Release" .Release) | nindent 6 }}
+{{- end }}
 
 {{- end }}
