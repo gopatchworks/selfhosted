@@ -559,6 +559,13 @@ spec:
             {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
             - name: REDIS_PREFIX
               value: {{ $root.Values.redis.prefix | quote }}
+            {{- /* Monocore creates a company's payload bucket through the same
+                   service as Core. Only a bucket creation service: unlike Core,
+                   Monocore has no use for the helper's raw S3 endpoint fallback. */}}
+            {{- if or $root.Values.s3.bucketCreationEndpoint $root.Values.s3Manager.external.endpoint $root.Values.s3Manager.enabled }}
+            - name: S3_BUCKET_CREATION_ENDPOINT
+              value: {{ include "patchworks.s3.bucketCreationEndpoint" $root | quote }}
+            {{- end }}
             {{- if include "patchworks.pusher.isConfigured" $root }}
             {{- include "patchworks.env.pusherAppId" $root | nindent 12 }}
             {{- include "patchworks.env.pusherAppKey" $root | nindent 12 }}

@@ -1468,8 +1468,8 @@ s3:
   resources: {}
 
 # ── S3 Manager ─────────────────────────────────────────────────────────────────
-# Bucket creation service deployed by the app chart. Core web pods and non-mono
-# workers use it via S3_BUCKET_CREATION_ENDPOINT.
+# Bucket creation service deployed by the app chart. Core web pods and all
+# workers, including monocore, use it via S3_BUCKET_CREATION_ENDPOINT.
 s3Manager:
   ndots: null  # inherits the enclosing section / top-level ndots
   # Override the Deployment/Service name and ConfigMap prefix.

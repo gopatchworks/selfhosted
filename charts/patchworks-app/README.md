@@ -1302,8 +1302,15 @@ When `s3.enabled` is `true`, a MinIO instance is deployed by the infra chart and
 ## S3 Manager
 
 The app chart deploys S3 Manager by default and points
-`S3_BUCKET_CREATION_ENDPOINT` at it for Core web pods and non-mono workers.
-It uses the same S3 endpoint and credentials as Core.
+`S3_BUCKET_CREATION_ENDPOINT` at it for Core web pods and workers. It uses the
+same S3 endpoint and credentials as Core.
+
+Monocore workers use it to create a company's payload bucket the first time
+they store a payload for that company, as Core does. They receive
+`S3_BUCKET_CREATION_ENDPOINT` only when a bucket creation service is configured
+(`s3.bucketCreationEndpoint`, `s3Manager.external.endpoint` or
+`s3Manager.enabled`), never the resolved S3 endpoint fallback; without one they
+write such payloads to the default bucket.
 
 | Key | Default | Description |
 |-----|---------|-------------|
