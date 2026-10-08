@@ -316,6 +316,7 @@ dispatch to the standalone hub queue instead of each pod's `APP_DOMAIN`.
 | `fabric.preStopSleepSeconds` | `20` | PHP-FPM: Nginx and PHP-FPM both wait this long before their stop signal so routing updates stop new requests first; `0` renders no hook |
 | `fabric.terminationGracePeriodSeconds` | `90` | PHP-FPM: pod termination allowance; must exceed `preStopSleepSeconds` plus `fpm.drainTimeoutSeconds` |
 | `fabric.fpm.drainTimeoutSeconds` | `60` | PHP-FPM: longest in-flight request drain; match the image's `process_control_timeout` (60s in the Fabric image) |
+| `fabric.nginx.fastcgiReadTimeoutSeconds` | `0` | PHP-FPM: seconds Nginx waits for PHP-FPM before returning a 504, while PHP-FPM keeps running the request; `0` keeps Nginx's 60s default |
 | `fabric.podDisruptionBudget.enabled` | `true` | Create a PodDisruptionBudget for Fabric pods |
 | `fabric.podDisruptionBudget.maxUnavailable` | `1` | Fabric pods that node drains and consolidation may evict at once; an integer or percentage |
 | `fabric.core.initialiseDatabases` | `true` | Set `CORE_INITIALISE_DATABASES` so Fabric asks Core to create and migrate databases for new companies |

@@ -1,6 +1,7 @@
 {{- if .Values.fabric.enabled }}
 {{- $fabricUsesFrankenphp := eq (include "patchworks.usesFrankenphp" (dict "root" . "svc" .Values.fabric)) "true" -}}
 {{- $fabricInitSvc := mergeOverwrite (deepCopy .Values.fabric) .Values.fabric.init -}}
+{{- $fabricNginxTimeouts := include "patchworks.fabricNginxTimeouts" . -}}
 {{- if not $fabricUsesFrankenphp }}
 ---
 # ConfigMap — default Nginx config proxying to PHP-FPM on localhost:9000.
@@ -17,6 +18,10 @@ metadata:
 data:
   site.conf: |
     {{- .Files.Get "files/fabric-nginx.conf" | nindent 4 }}
+  {{- with $fabricNginxTimeouts }}
+  timeouts.conf: |
+    {{- . | nindent 4 }}
+  {{- end }}
 {{- end }}
 ---
 # Deployment
@@ -46,6 +51,9 @@ spec:
         checksum/config: {{ include "patchworks.fabricConfigData" . | sha256sum }}
         {{- if not $fabricUsesFrankenphp }}
         checksum/nginx: {{ .Files.Get "files/fabric-nginx.conf" | sha256sum }}
+        {{- with $fabricNginxTimeouts }}
+        checksum/nginx-timeouts: {{ . | sha256sum }}
+        {{- end }}
         {{- end }}
         {{- with .Values.fabric.podAnnotations }}
         {{- toYaml . | nindent 8 }}
@@ -66,6 +74,10 @@ spec:
             items:
               - key: site.conf
                 path: site.conf
+              {{- if $fabricNginxTimeouts }}
+              - key: timeouts.conf
+                path: timeouts.conf
+              {{- end }}
       {{- end }}
       initContainers:
         - name: fabric-init

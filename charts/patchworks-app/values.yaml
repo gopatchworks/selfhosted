@@ -296,6 +296,10 @@ fabric:
   fpm:
     # Match the image's PHP-FPM process_control_timeout (60s in the Fabric image).
     drainTimeoutSeconds: 60
+  nginx:
+    # PHP-FPM only: how long Nginx waits for PHP-FPM to respond before it returns
+    # a 504. PHP-FPM keeps running the request after that. 0 keeps Nginx's 60s.
+    fastcgiReadTimeoutSeconds: 0
   # Limits voluntary evictions, such as node drains and Karpenter consolidation.
   podDisruptionBudget:
     enabled: true

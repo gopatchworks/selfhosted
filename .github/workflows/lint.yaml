@@ -75,3 +75,6 @@ jobs:
 
       - name: Fabric shutdown render tests
         run: ruby tests/fabric_shutdown_test.rb
+
+      - name: Fabric Nginx render tests
+        run: ruby tests/fabric_nginx_test.rb
