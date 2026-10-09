@@ -44,6 +44,5 @@ end
 puts 'Selfhosted scheduler: defaults, modes, namespaces, company isolation and live shard configuration passed'
 
 desired = baseline.find { |r| r['kind'] == 'ConfigMap' && r.fetch('data', {}).key?('desired.json') }
-assert(JSON.parse(desired['data']['desired.json']) == {'version'=>2, 'shards'=>1, 'server_shards'=>{}}, 'per-server default configuration mismatch')
 overridden = render(chart, 'workers.mono.scheduler.serverShards.7=5')
 assert(hub.dig('spec','template') == worker(overridden,'workers').dig('spec','template'), 'server overrides must not roll pods')

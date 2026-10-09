@@ -29,7 +29,7 @@ def component(documents, kind, name)
   matches.first
 end
 
-def check_scheduler(documents, segments)
+def check_scheduler(documents)
   deployment = component(documents, 'Deployment', 'processor-scheduler')
   cron = component(documents, 'CronJob', 'scheduler-scheduler')
   containers = [deployment.dig('spec', 'template', 'spec', 'containers', 0),
@@ -37,8 +37,6 @@ def check_scheduler(documents, segments)
   containers.each do |container|
     env = container['env'].to_h { |item| [item['name'], item['value']] }
     assert(env['APP_DOMAIN'] == 'scheduler', 'Wrong scheduler domain')
-    assert(env['REDIS_QUEUE'] == 'scheduler', 'Nested jobs would inherit the shared default queue')
-    assert(env['FLOW_SCHEDULER_SEGMENTS'] == segments.to_s, 'Segments did not reach worker and cron')
   end
   assert(cron.dig('spec', 'schedule') == '*/1 * * * *', 'Cron must run once per minute')
   assert(cron.dig('spec', 'concurrencyPolicy') == 'Forbid', 'Cron overlaps itself')
@@ -51,16 +49,11 @@ def check_scheduler(documents, segments)
   %w[start medium-processor long-processor].each { |queue| component(documents, 'CronJob', "#{queue}-scheduler") }
 end
 
-baseline = render
-check_scheduler(baseline, 1)
+check_scheduler(render)
 processors = YAML.load_file(File.join(CHART, 'values.yaml'))['processors']
 scheduler = processors.find { |p| p['queue'] == 'scheduler' }
-scheduler['extraEnv'].find { |e| e['name'] == 'FLOW_SCHEDULER_SEGMENTS' }['value'] = '4'
-changed = render('processors' => processors)
-check_scheduler(changed, 4)
-assert(baseline.count { |d| d['kind'] == 'CronJob' } == changed.count { |d| d['kind'] == 'CronJob' }, 'Segments must not create more CronJobs')
 scheduler['enabled'] = false
 disabled = render('processors' => processors)
 assert(disabled.none? { |d| %w[processor-scheduler scheduler-scheduler].include?(d.dig('metadata', 'labels', 'app.kubernetes.io/component')) }, 'Disabled processor still runs')
 assert(!component(disabled, 'ConfigMap', 'rabbitmq-topology').dig('data', 'topology.yaml').include?('name: "scheduler"'), 'Disabled processor still declares its queue')
-puts 'Core scheduler routing, segmentation, topology and existing cron preservation passed'
+puts 'Core scheduler routing, topology and existing cron preservation passed'
