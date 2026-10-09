@@ -843,8 +843,6 @@ workers:
     preStopSleepSeconds: 0
     # Must exceed preStopSleepSeconds + scheduler.drainTimeoutSeconds.
     terminationGracePeriodSeconds: 3660
-    # Retain durable execution when disabling scheduling until old work drains.
-    durableExecution: true
     platformApi:
       # Empty values derive the in-cluster Fabric and Core Gateway service URLs.
       fabricUrl: ""
