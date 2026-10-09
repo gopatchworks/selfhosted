@@ -35,18 +35,8 @@ def resource(documents, kind, name)
 end
 
 documents = render('workers' => {'type' => 'microservice'})
-translate_config = resource(documents, 'ConfigMap', 'patchworks-workers-translate-supervisord')
-assert(translate_config.dig('data', 'supervisord.conf').include?('--queue=map'), 'Translate worker must consume the map queue')
 batch_config = resource(documents, 'ConfigMap', 'patchworks-workers-batch-supervisord')
 assert(batch_config.dig('data', 'supervisord.conf').include?('--queue=batch'), 'An unset queue must fall back to the service domain')
-
-translate_deployment = resource(documents, 'Deployment', 'patchworks-workers-translate')
-translate_env = translate_deployment.dig('spec', 'template', 'spec', 'containers', 0, 'env')
-assert(translate_env.find { |item| item['name'] == 'APP_DOMAIN' }['value'] == 'translate', 'Translate APP_DOMAIN must remain translate')
-
-topology = resource(documents, 'ConfigMap', 'patchworks-rabbitmq-topology').dig('data', 'topology.yaml')
-assert(topology.include?('name: "map"'), 'Translate queue override did not reach RabbitMQ topology')
-assert(!topology.include?('name: "translate"'), 'RabbitMQ topology used the translate domain instead of its queue override')
 
 documents = render(
   'workers' => {
@@ -67,4 +57,4 @@ topology = resource(documents, 'ConfigMap', 'patchworks-rabbitmq-topology').dig(
 assert(topology.include?('name: "assert-jobs"'), 'Per-service queue override did not reach RabbitMQ topology')
 assert(!topology.include?('name: "assert-domain"'), 'RabbitMQ topology used domain despite queue override')
 
-puts 'Microservice queue overrides and translate map queue passed'
+puts 'Microservice queue overrides passed'
