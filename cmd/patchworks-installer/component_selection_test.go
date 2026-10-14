@@ -236,18 +236,20 @@ func TestAppPreviousKeys(t *testing.T) {
 }
 
 func TestComponentSelectionDefaultCompatibility(t *testing.T) {
-	// Baseline identities plus the CPT-6321 scheduler processor and CronJob.
+	// Baseline identities plus the CPT-6321 scheduler processor and CronJob, and
+	// the Fabric PodDisruptionBudget that limits voluntary evictions by default.
 	// This protects ordinary monolithic installs while allowing new annotations
 	// and selective namespace ownership to evolve without a full YAML snapshot.
 	wantByKind := map[string][]string{
-		"ConfigMap":      {"config", "fabric-config", "fabric-nginx", "processor-scheduler-supervisord", "processor-start-supervisord", "processor-gateway-supervisord", "processor-short-processor-supervisord", "processor-medium-processor-supervisord", "processor-long-processor-supervisord", "processor-logging-supervisord", "s3-manager-config", "workers-supervisord", "rabbitmq-topology"},
-		"Service":        {"fabric", "gateway", "s3-manager", "start"},
-		"Deployment":     {"fabric", "gateway", "processor-scheduler", "processor-start", "processor-gateway", "processor-short-processor", "processor-medium-processor", "processor-long-processor", "processor-logging", "s3-manager", "start", "workers"},
-		"CronJob":        {"scheduler-scheduler", "start-scheduler", "gateway-scheduler", "short-processor-scheduler", "medium-processor-scheduler", "long-processor-scheduler"},
-		"ServiceAccount": {"", "app-keygen", "passport-keygen", "pusher-auth-generator"},
-		"Role":           {"app-keygen", "passport-keygen", "pusher-auth-generator"},
-		"RoleBinding":    {"app-keygen", "passport-keygen", "pusher-auth-generator"},
-		"Job":            {"app-keygen", "passport-keygen", "fabric-migrations", "core-migrations", "pusher-auth-generator", "rabbitmq-topology"},
+		"ConfigMap":           {"config", "fabric-config", "fabric-nginx", "processor-scheduler-supervisord", "processor-start-supervisord", "processor-gateway-supervisord", "processor-short-processor-supervisord", "processor-medium-processor-supervisord", "processor-long-processor-supervisord", "processor-logging-supervisord", "s3-manager-config", "workers-supervisord", "rabbitmq-topology"},
+		"Service":             {"fabric", "gateway", "s3-manager", "start"},
+		"PodDisruptionBudget": {"fabric"},
+		"Deployment":          {"fabric", "gateway", "processor-scheduler", "processor-start", "processor-gateway", "processor-short-processor", "processor-medium-processor", "processor-long-processor", "processor-logging", "s3-manager", "start", "workers"},
+		"CronJob":             {"scheduler-scheduler", "start-scheduler", "gateway-scheduler", "short-processor-scheduler", "medium-processor-scheduler", "long-processor-scheduler"},
+		"ServiceAccount":      {"", "app-keygen", "passport-keygen", "pusher-auth-generator"},
+		"Role":                {"app-keygen", "passport-keygen", "pusher-auth-generator"},
+		"RoleBinding":         {"app-keygen", "passport-keygen", "pusher-auth-generator"},
+		"Job":                 {"app-keygen", "passport-keygen", "fabric-migrations", "core-migrations", "pusher-auth-generator", "rabbitmq-topology"},
 	}
 	var want, got []string
 	for kind, suffixes := range wantByKind {
