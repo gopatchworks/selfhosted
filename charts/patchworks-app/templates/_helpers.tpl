@@ -1248,6 +1248,42 @@ RabbitMQ component env vars for pods that do not consume patchworks.appConfigDat
 {{/* ── Mono worker helpers ─────────────────────────────────────────────────────── */}}
 
 {{/*
+GOMEMLIMIT for a Monocore worker: value when set, otherwise 90% of the
+container's resources.limits.memory in whole MiB, otherwise empty (the variable
+is left unset). A resourceFieldRef can only pass the limit on whole, so the
+share is worked out here. The other 10% is left for memory the container is
+charged for outside the Go runtime.
+Usage: {{ include "patchworks.mono.goMemLimit" (dict "value" $goMemLimit "resources" $resources "worker" $slug) }}
+*/}}
+{{- define "patchworks.mono.goMemLimit" -}}
+{{- $memory := dig "limits" "memory" "" (.resources | default dict) -}}
+{{- $value := .value -}}
+{{- /* YAML reads an unquoted off as false. */ -}}
+{{- if kindIs "bool" $value }}{{ $value = ternary "on" "off" $value }}{{ end -}}
+{{- if $value -}}
+{{- if not (kindIs "string" $value) }}{{ $value = int64 $value | toString }}{{ end -}}
+{{- if not (regexMatch "^(off|[0-9]+(B|KiB|MiB|GiB|TiB)?)$" $value) -}}
+{{- fail (printf "%s goMemLimit %q is not a GOMEMLIMIT the Go runtime accepts: use bytes, a B, KiB, MiB, GiB or TiB suffix, or off" .worker $value) -}}
+{{- end -}}
+{{- $value -}}
+{{- else if $memory -}}
+{{- $quantity := $memory -}}
+{{- if not (kindIs "string" $quantity) }}{{ $quantity = int64 $quantity | toString }}{{ end -}}
+{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?(k|M|G|T|Ki|Mi|Gi|Ti)?$" $quantity) -}}
+{{- fail (printf "cannot derive GOMEMLIMIT for %s from resources.limits.memory %q: set goMemLimit" .worker $quantity) -}}
+{{- end -}}
+{{- $units := dict "" 1 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
+{{- $number := regexFind "^[0-9.]+" $quantity -}}
+{{- $bytes := mulf (float64 $number) (get $units (trimPrefix $number $quantity)) | floor | int64 -}}
+{{- $mib := div (mul $bytes 90) 104857600 -}}
+{{- if lt $mib 1 -}}
+{{- fail (printf "%s resources.limits.memory %q is too small to derive GOMEMLIMIT from: set goMemLimit" .worker $quantity) -}}
+{{- end -}}
+{{- printf "%dMiB" $mib -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Resolve the RabbitMQ exchange used by monocore for flow publishes.
 Usage: {{ include "patchworks.mono.flowExchange" (dict "root" . "queueName" $queueName) }}
 */}}

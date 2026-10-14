@@ -659,6 +659,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.image.repository` | `monocore` | Image repository |
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
+| `workers.mono.goMemLimit` | `""` | `GOMEMLIMIT` for the hub and companies. Empty derives 90% of each worker's `resources.limits.memory` in whole MiB, and leaves it unset without a memory limit. Use the Go runtime's units (`1700MiB`, not `1700Mi`) or `off`. A company's `goMemLimit` overrides it. Set it here rather than through `extraEnv` |
 | `workers.mono.preStopSleepSeconds` | `0` | Seconds to sleep before SIGTERM, letting endpoint and scaler removal propagate first. `0` renders no hook; the sleep counts against `terminationGracePeriodSeconds` |
 | `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed `preStopSleepSeconds` plus the scheduler drain by more than 10 seconds |
 | `workers.mono.platformApi.fabricUrl` | `""` | Fabric API base URL for operator-run tinker commands; empty derives the in-cluster Fabric service `/api/v2` URL |

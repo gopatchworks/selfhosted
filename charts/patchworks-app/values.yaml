@@ -885,6 +885,13 @@ workers:
     # built-in topology default.
     queue: flows
     processes: 15
+    # GOMEMLIMIT for the Go runtime, so it collects harder as its heap nears the
+    # container's memory limit instead of being OOMKilled. Empty derives 90% of
+    # the worker's resources.limits.memory, and leaves the variable unset when
+    # there is no memory limit. Set a value to override it, in the Go runtime's
+    # units (e.g. "1700MiB", not Kubernetes' "1700Mi"), or "off" for no limit.
+    # A company can set its own goMemLimit. Set it here, not through extraEnv.
+    goMemLimit: ""
     extraEnv: []
     store:
       # Use an existing Secret containing monocore's store.yaml instead of
@@ -943,6 +950,7 @@ workers:
   #   affinity: {}
   #   autoscaling: {}             # overrides resolved worker autoscaling
   #   processes: 5                # mono: defaults to workers.mono.processes
+  #   goMemLimit: ""              # mono: defaults to workers.mono.goMemLimit (90% of this company's memory limit)
 
 # ── RabbitMQ ───────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy RabbitMQ in-cluster. Set to false and populate

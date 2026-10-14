@@ -73,6 +73,9 @@ jobs:
       - name: Mono worker shutdown render tests
         run: ruby tests/mono_shutdown_test.rb
 
+      - name: Mono worker GOMEMLIMIT render tests
+        run: ruby tests/mono_gomemlimit_test.rb
+
       - name: Fabric shutdown render tests
         run: ruby tests/fabric_shutdown_test.rb
 
