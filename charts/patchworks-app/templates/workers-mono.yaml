@@ -229,6 +229,7 @@ spec:
 {{- $queue := $mainQueue }}
 {{- $processes := $mono.processes }}
 {{- $resources := $root.Values.workers.resources }}
+{{- $goMemLimit := $mono.goMemLimit }}
 {{- $configMapName := printf "%s-%s-config" $fullname $hubSlug }}
 {{- if not $isHub }}
   {{- $slug = printf "%s-%s" $hubSlug $company.name }}
@@ -236,6 +237,7 @@ spec:
   {{- $queue = $company.queue | default $company.name }}
   {{- $processes = dig "processes" $mono.processes $company }}
   {{- $resources = $company.resources | default $root.Values.workers.resources }}
+  {{- $goMemLimit = dig "goMemLimit" $mono.goMemLimit $company }}
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
 {{- end }}
 {{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($mono.autoscaling | default dict) ($company.autoscaling | default dict) }}
@@ -557,6 +559,10 @@ spec:
             {{- include "patchworks.env.mappingElasticsearchPassword" $root | nindent 12 }}
             - name: REDIS_PREFIX
               value: {{ $root.Values.redis.prefix | quote }}
+            {{- with include "patchworks.mono.goMemLimit" (dict "value" $goMemLimit "resources" $resources "worker" $slug) }}
+            - name: GOMEMLIMIT
+              value: {{ . | quote }}
+            {{- end }}
             {{- /* Monocore creates a company's payload bucket through the same
                    service as Core. Only a bucket creation service: unlike Core,
                    Monocore has no use for the helper's raw S3 endpoint fallback. */}}
