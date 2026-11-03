@@ -1458,6 +1458,9 @@ s3:
       rootUserKey: root-user
       rootPasswordKey: root-password
   bucket: patchworks
+  # Core's and Fabric's AWS_BUCKET, the media library's s3 disk (connector logos,
+  # template images); defaults to bucket above.
+  mediaBucket: ""
   # Default bucket for Core payloads when tenant-specific buckets are not available.
   payloadsBucket: ""
   # Bucket for tenant cache payloads; defaults to companyCacheBucket, then bucket above.

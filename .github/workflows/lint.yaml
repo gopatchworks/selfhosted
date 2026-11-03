@@ -67,6 +67,9 @@ jobs:
       - name: Pod DNS render tests
         run: ruby tests/ndots_test.rb
 
+      - name: Media bucket render tests
+        run: ruby tests/media_bucket_test.rb
+
       - name: RoadRunner shutdown render and process tests
         run: ruby tests/roadrunner_shutdown_test.rb
 

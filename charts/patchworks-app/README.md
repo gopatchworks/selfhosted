@@ -1275,6 +1275,7 @@ When `s3.enabled` is `true`, a MinIO instance is deployed by the infra chart and
 |-----|---------|-------------|
 | `s3.enabled` | `true` | Deploy MinIO in-cluster. Set `false` to use external S3 |
 | `s3.bucket` | `patchworks` | Bucket name |
+| `s3.mediaBucket` | `""` | Core's and Fabric's `AWS_BUCKET`, the media library's `s3` disk; defaults to `s3.bucket` / `s3.external.bucket`. Monocore's default store keeps the main bucket |
 | `s3.payloadsBucket` | `""` | Default bucket for Core payloads when tenant-specific buckets are not available; defaults to `s3.bucket` / `s3.external.bucket` |
 | `s3.tenantCacheBucket` | `""` | Bucket for tenant cache payloads; defaults to `s3.companyCacheBucket`, then `s3.bucket` / `s3.external.bucket` |
 | `s3.fileDownloadsBucket` | `""` | Bucket for file downloads; defaults to `s3.bucket` / `s3.external.bucket` |
