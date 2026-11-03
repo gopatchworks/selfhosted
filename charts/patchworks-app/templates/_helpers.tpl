@@ -900,6 +900,15 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- if .Values.s3.enabled -}}{{ .Values.s3.bucket }}{{- else -}}{{ .Values.s3.external.bucket }}{{- end -}}
 {{- end }}
 
+{{/*
+Core's and Fabric's AWS_BUCKET: the s3 disk Laravel's media library keeps uploads on.
+Defaults to the main bucket; set s3.mediaBucket to give media a bucket of its own
+without moving anything else that reads the main bucket (Monocore's default store).
+*/}}
+{{- define "patchworks.s3.mediaBucket" -}}
+{{- .Values.s3.mediaBucket | default (include "patchworks.s3.bucket" .) -}}
+{{- end }}
+
 {{- define "patchworks.s3.payloadsBucket" -}}
 {{- .Values.s3.payloadsBucket | default (include "patchworks.s3.bucket" .) -}}
 {{- end }}
@@ -1505,7 +1514,7 @@ ELASTICSEARCH_USER: {{ include "patchworks.elasticsearch.username" . | quote }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
-AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+AWS_BUCKET: {{ include "patchworks.s3.mediaBucket" . | quote }}
 AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
 PAYLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 PAYLOADS_AWS_BUCKET: {{ include "patchworks.s3.payloadsBucket" . | quote }}
@@ -1635,7 +1644,7 @@ ELASTICSEARCH_USER: {{ include "patchworks.elasticsearch.username" . | quote }}
 AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_ENDPOINT: {{ include "patchworks.s3.endpoint" . | quote }}
 AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
-AWS_BUCKET: {{ include "patchworks.s3.bucket" . | quote }}
+AWS_BUCKET: {{ include "patchworks.s3.mediaBucket" . | quote }}
 AWS_USE_PATH_STYLE_ENDPOINT: {{ include "patchworks.s3.pathStyle" . | quote }}
 PAYLOADS_AWS_DEFAULT_REGION: {{ include "patchworks.s3.region" . | quote }}
 PAYLOADS_AWS_BUCKET: {{ include "patchworks.s3.payloadsBucket" . | quote }}
@@ -2348,7 +2357,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 - name: AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 - name: AWS_BUCKET
-  value: {{ include "patchworks.s3.bucket" . | quote }}
+  value: {{ include "patchworks.s3.mediaBucket" . | quote }}
 - name: AWS_USE_PATH_STYLE_ENDPOINT
   value: {{ include "patchworks.s3.pathStyle" . | quote }}
 - name: PAYLOADS_AWS_DEFAULT_REGION
@@ -2507,7 +2516,7 @@ all DB_*, LANDLORD_DB_*, and TENANT_DB_* vars point at Fabric's own MySQL
 - name: AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
 - name: AWS_BUCKET
-  value: {{ include "patchworks.s3.bucket" . | quote }}
+  value: {{ include "patchworks.s3.mediaBucket" . | quote }}
 - name: AWS_USE_PATH_STYLE_ENDPOINT
   value: {{ include "patchworks.s3.pathStyle" . | quote }}
 - name: PAYLOADS_AWS_DEFAULT_REGION
