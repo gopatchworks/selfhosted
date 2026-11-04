@@ -892,6 +892,14 @@ workers:
     # units (e.g. "1700MiB", not Kubernetes' "1700Mi"), or "off" for no limit.
     # A company can set its own goMemLimit. Set it here, not through extraEnv.
     goMemLimit: ""
+    # /tmp of each worker: an emptyDir on the node's disk where Monocore keeps
+    # payload bundles and connector page spools. A pod whose /tmp outgrows
+    # sizeLimit is evicted on its own, rather than filling the node's disk and
+    # getting every pod on it evicted. The worker gets sizeLimit in bytes as
+    # WORKER_TEMP_DIR_LIMIT_BYTES and hands runs to other worker pods before
+    # /tmp fills. A company can set its own tmp.sizeLimit.
+    tmp:
+      sizeLimit: 10Gi
     extraEnv: []
     store:
       # Use an existing Secret containing monocore's store.yaml instead of
@@ -951,6 +959,8 @@ workers:
   #   autoscaling: {}             # overrides resolved worker autoscaling
   #   processes: 5                # mono: defaults to workers.mono.processes
   #   goMemLimit: ""              # mono: defaults to workers.mono.goMemLimit (90% of this company's memory limit)
+  #   tmp:
+  #     sizeLimit: 10Gi           # mono: defaults to workers.mono.tmp.sizeLimit
 
 # ── RabbitMQ ───────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy RabbitMQ in-cluster. Set to false and populate

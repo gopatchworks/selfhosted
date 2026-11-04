@@ -1276,20 +1276,59 @@ Usage: {{ include "patchworks.mono.goMemLimit" (dict "value" $goMemLimit "resour
 {{- end -}}
 {{- $value -}}
 {{- else if $memory -}}
-{{- $quantity := $memory -}}
-{{- if not (kindIs "string" $quantity) }}{{ $quantity = int64 $quantity | toString }}{{ end -}}
-{{- if not (regexMatch "^[0-9]+(\\.[0-9]+)?(k|M|G|T|Ki|Mi|Gi|Ti)?$" $quantity) -}}
-{{- fail (printf "cannot derive GOMEMLIMIT for %s from resources.limits.memory %q: set goMemLimit" .worker $quantity) -}}
+{{- $bytes := include "patchworks.quantityBytes" $memory -}}
+{{- if not $bytes -}}
+{{- fail (printf "cannot derive GOMEMLIMIT for %s from resources.limits.memory %q: set goMemLimit" .worker (toString $memory)) -}}
 {{- end -}}
-{{- $units := dict "" 1 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
-{{- $number := regexFind "^[0-9.]+" $quantity -}}
-{{- $bytes := mulf (float64 $number) (get $units (trimPrefix $number $quantity)) | floor | int64 -}}
-{{- $mib := div (mul $bytes 90) 104857600 -}}
+{{- $mib := div (mul (int64 $bytes) 90) 104857600 -}}
 {{- if lt $mib 1 -}}
-{{- fail (printf "%s resources.limits.memory %q is too small to derive GOMEMLIMIT from: set goMemLimit" .worker $quantity) -}}
+{{- fail (printf "%s resources.limits.memory %q is too small to derive GOMEMLIMIT from: set goMemLimit" .worker (toString $memory)) -}}
 {{- end -}}
 {{- printf "%dMiB" $mib -}}
 {{- end -}}
+{{- end -}}
+
+{{/*
+A Kubernetes quantity (a string such as 1.5Gi, or a number of bytes) in whole
+bytes, or empty when it uses a form this does not read: k, M, G, T, Ki, Mi, Gi
+and Ti suffixes only. int64 stops a bare byte count rendering as a float
+(1.073741824e+10).
+*/}}
+{{- define "patchworks.quantityBytes" -}}
+{{- $quantity := . -}}
+{{- if not (kindIs "string" $quantity) }}{{ $quantity = int64 $quantity | toString }}{{ end -}}
+{{- if regexMatch "^[0-9]+(\\.[0-9]+)?(k|M|G|T|Ki|Mi|Gi|Ti)?$" $quantity -}}
+{{- $units := dict "" 1 "k" 1000 "M" 1000000 "G" 1000000000 "T" 1000000000000 "Ki" 1024 "Mi" 1048576 "Gi" 1073741824 "Ti" 1099511627776 -}}
+{{- $number := regexFind "^[0-9.]+" $quantity -}}
+{{- mulf (float64 $number) (get $units (trimPrefix $number $quantity)) | floor | int64 -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Size limit of a Monocore worker's /tmp emptyDir, as the volume takes it.
+Usage: {{ include "patchworks.mono.tmpSizeLimit" (dict "sizeLimit" $tmpSizeLimit "worker" $slug) }}
+*/}}
+{{- define "patchworks.mono.tmpSizeLimit" -}}
+{{- $limit := .sizeLimit -}}
+{{- if not $limit -}}
+{{- fail (printf "%s tmp.sizeLimit is required: it bounds Monocore's local temporary files" .worker) -}}
+{{- end -}}
+{{- if kindIs "string" $limit }}{{ $limit }}{{ else }}{{ int64 $limit }}{{ end -}}
+{{- end -}}
+
+{{/*
+WORKER_TEMP_DIR_LIMIT_BYTES for a Monocore worker: its /tmp size limit in bytes,
+so the worker hands runs to other pods before /tmp fills and the pod is
+evicted (gopatchworks/monocore "Disk handback rule").
+Usage: {{ include "patchworks.mono.tmpLimitBytes" (dict "sizeLimit" $tmpSizeLimit "worker" $slug) }}
+*/}}
+{{- define "patchworks.mono.tmpLimitBytes" -}}
+{{- $limit := include "patchworks.mono.tmpSizeLimit" . -}}
+{{- $bytes := include "patchworks.quantityBytes" $limit -}}
+{{- if not $bytes -}}
+{{- fail (printf "cannot derive WORKER_TEMP_DIR_LIMIT_BYTES for %s from tmp.sizeLimit %q: use a k, M, G, T, Ki, Mi, Gi or Ti suffix, or set WORKER_TEMP_DIR_LIMIT_BYTES in extraEnv" .worker $limit) -}}
+{{- end -}}
+{{- $bytes -}}
 {{- end -}}
 
 {{/*
