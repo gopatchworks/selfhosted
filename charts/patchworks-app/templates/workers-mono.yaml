@@ -230,6 +230,7 @@ spec:
 {{- $processes := $mono.processes }}
 {{- $resources := $root.Values.workers.resources }}
 {{- $goMemLimit := $mono.goMemLimit }}
+{{- $tmpSizeLimit := dig "tmp" "sizeLimit" "" $mono }}
 {{- $configMapName := printf "%s-%s-config" $fullname $hubSlug }}
 {{- if not $isHub }}
   {{- $slug = printf "%s-%s" $hubSlug $company.name }}
@@ -238,6 +239,7 @@ spec:
   {{- $processes = dig "processes" $mono.processes $company }}
   {{- $resources = $company.resources | default $root.Values.workers.resources }}
   {{- $goMemLimit = dig "goMemLimit" $mono.goMemLimit $company }}
+  {{- $tmpSizeLimit = dig "tmp" "sizeLimit" $tmpSizeLimit $company }}
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}
 {{- end }}
 {{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($mono.autoscaling | default dict) ($company.autoscaling | default dict) }}
@@ -455,6 +457,13 @@ spec:
                   items:
                     - key: {{ $storeSecretKey | quote }}
                       path: store.yaml
+        # Monocore's temporary directory: payload bundles and connector page
+        # spools. On the node's disk, never medium: Memory, whose files count
+        # as the pod's memory. A pod past its sizeLimit is evicted rather than
+        # filling the node's disk.
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ include "patchworks.mono.tmpSizeLimit" (dict "sizeLimit" $tmpSizeLimit "worker" $slug) | quote }}
       initContainers:
         - name: wait-for-deps
           image: busybox:1.37
@@ -495,6 +504,8 @@ spec:
             - name: monocore-etc
               mountPath: /etc/monocore
               readOnly: true
+            - name: tmp
+              mountPath: /tmp
           env:
             {{- if and $w.isHub $mono.operatorKey.enabled }}
             - name: FABRIC_API_URL
@@ -562,6 +573,16 @@ spec:
             {{- with include "patchworks.mono.goMemLimit" (dict "value" $goMemLimit "resources" $resources "worker" $slug) }}
             - name: GOMEMLIMIT
               value: {{ . | quote }}
+            {{- end }}
+            {{- $extraEnvNames := list }}
+            {{- range concat ($root.Values.workers.extraEnv | default list) ($mono.extraEnv | default list) (ternary list ($company.extraEnv | default list) $isHub) }}
+            {{- $extraEnvNames = append $extraEnvNames .name }}
+            {{- end }}
+            {{- if not (has "WORKER_TEMP_DIR_LIMIT_BYTES" $extraEnvNames) }}
+            # The /tmp volume's size: the worker hands runs to other pods
+            # before /tmp fills.
+            - name: WORKER_TEMP_DIR_LIMIT_BYTES
+              value: {{ include "patchworks.mono.tmpLimitBytes" (dict "sizeLimit" $tmpSizeLimit "worker" $slug) | quote }}
             {{- end }}
             {{- /* Monocore creates a company's payload bucket through the same
                    service as Core. Only a bucket creation service: unlike Core,

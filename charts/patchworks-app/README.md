@@ -660,6 +660,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.queue` | `flows` | Hub queue consumed by Monocore and used for the generated `flows` topology |
 | `workers.mono.processes` | `15` | Worker goroutine count |
 | `workers.mono.goMemLimit` | `""` | `GOMEMLIMIT` for the hub and companies. Empty derives 90% of each worker's `resources.limits.memory` in whole MiB, and leaves it unset without a memory limit. Use the Go runtime's units (`1700MiB`, not `1700Mi`) or `off`. A company's `goMemLimit` overrides it. Set it here rather than through `extraEnv` |
+| `workers.mono.tmp.sizeLimit` | `10Gi` | Size limit of the `emptyDir` each worker mounts at `/tmp`, where Monocore keeps payload bundles and page spools. A pod past it is evicted instead of filling the node's disk. The worker gets it in bytes as `WORKER_TEMP_DIR_LIMIT_BYTES` and hands runs to other worker pods before `/tmp` fills (set that variable in `extraEnv` to override it). A company's `tmp.sizeLimit` overrides it. Required |
 | `workers.mono.preStopSleepSeconds` | `0` | Seconds to sleep before SIGTERM, letting endpoint and scaler removal propagate first. `0` renders no hook; the sleep counts against `terminationGracePeriodSeconds` |
 | `workers.mono.terminationGracePeriodSeconds` | `3660` | Pod shutdown grace; must exceed `preStopSleepSeconds` plus the scheduler drain by more than 10 seconds |
 | `workers.mono.platformApi.fabricUrl` | `""` | Fabric API base URL for operator-run tinker commands; empty derives the in-cluster Fabric service `/api/v2` URL |
