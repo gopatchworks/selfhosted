@@ -77,14 +77,17 @@ app:
   # Core runtime tuning. Each key maps to one Core env var. Values are strings
   # so that "false" and "0" are emitted rather than treated as unset; leave a
   # key empty to omit the variable entirely and fall back to the application
-  # default compiled into config/.
+  # default compiled into config/. Monocore workers also receive
+  # payloadMetaMaxBytes; the other keys reach Core alone.
   #
   # mediaDisk                 → MEDIA_DISK (app default: local, i.e. ephemeral
   #                             pod storage — set to s3 for any real deployment)
   # sessionDriver             → SESSION_DRIVER
   # broadcastDriver           → BROADCAST_DRIVER
   # flowConcurrencyLimit      → FLOW_CONCURRENCY_LIMIT (app default: false)
-  # payloadMetaMaxBytes       → PAYLOAD_META_MAX_BYTES (app default: 10240)
+  # payloadMetaMaxBytes       → PAYLOAD_META_MAX_BYTES for Core and Monocore
+  #                             workers, so both enforce the same payload meta
+  #                             limit (default: 10240 in both)
   # secretVarCacheLockTimeout → SECRET_VAR_CACHE_LOCK_TIMEOUT (app default: 30)
   # connectionPoolHoldTimeout → CONNECTION_POOL_HOLD_TIMEOUT
   mediaDisk: ""

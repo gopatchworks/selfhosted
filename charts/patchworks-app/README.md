@@ -297,6 +297,7 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.license.existingSecret.name` | `""` | Existing Secret containing license values |
 | `app.license.existingSecret.keyKey` | `LICENSE_KEY` | Key containing `LICENSE_KEY` in the existing Secret |
 | `app.license.existingSecret.serverUrlKey` | `""` | Optional key containing the license server URL in the existing Secret |
+| `app.payloadMetaMaxBytes` | `""` | `PAYLOAD_META_MAX_BYTES`, the largest payload meta in bytes, for Core and for Monocore workers, so both enforce the same limit. Empty omits it and both keep their default of `10240`. A Monocore worker whose `extraEnv` sets the variable keeps that value |
 | `app.extraEnv` | `[]` | Additional env vars injected into all app pods |
 | `app.extraEnvFrom` | `[]` | Additional `secretRef`/`configMapRef` sources for all app pods |
 
