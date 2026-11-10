@@ -584,6 +584,14 @@ spec:
             - name: WORKER_TEMP_DIR_LIMIT_BYTES
               value: {{ include "patchworks.mono.tmpLimitBytes" (dict "sizeLimit" $tmpSizeLimit "worker" $slug) | quote }}
             {{- end }}
+            {{- with $root.Values.app.payloadMetaMaxBytes }}
+            {{- if not (has "PAYLOAD_META_MAX_BYTES" $extraEnvNames) }}
+            # Core's payload meta limit, so Monocore rejects payload meta at
+            # the same size Core does.
+            - name: PAYLOAD_META_MAX_BYTES
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
             {{- /* Monocore creates a company's payload bucket through the same
                    service as Core. Only a bucket creation service: unlike Core,
                    Monocore has no use for the helper's raw S3 endpoint fallback. */}}
