@@ -1487,7 +1487,9 @@ func inspectCluster(kubeconfigPath, contextName string) inspectResult {
 		return inspectResult{Info: info}
 	}
 
-	if _, err := client.Discovery().RESTClient().Get().AbsPath("/version").DoRaw(ctx); err != nil {
+	// A forbidden answer still means the cluster is there; RBAC may only
+	// limit what the rest of the inspection can read.
+	if _, err := client.Discovery().RESTClient().Get().AbsPath("/version").DoRaw(ctx); err != nil && !apierrors.IsForbidden(err) {
 		info.Warnings = append(info.Warnings, fmt.Sprintf("could not connect to the cluster: %v", err))
 		return inspectResult{Info: info}
 	}

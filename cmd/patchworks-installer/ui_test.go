@@ -67,6 +67,24 @@ func TestInspectClusterReportsReachableCluster(t *testing.T) {
 	}
 }
 
+func TestInspectClusterTreatsForbiddenVersionAsConnected(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/version" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"kind":"Status","apiVersion":"v1","status":"Failure","reason":"Forbidden","code":403}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	result := inspectCluster(writeTestKubeconfig(t, server.URL), "test")
+	if !result.Info.Connected {
+		t.Fatalf("forbidden /version should still count as connected: %#v", result.Info)
+	}
+}
+
 func TestInspectClusterReportsUnreachableCluster(t *testing.T) {
 	server := httptest.NewServer(http.NotFoundHandler())
 	url := server.URL
