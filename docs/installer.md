@@ -175,6 +175,9 @@ The TUI asks for:
 - Ingress provider and class
 - Dashboard routing mode
 - Cookie/session domain
+- With mono workers, whether the Monocore hub serves Core's webhooks, callbacks
+  and start API, and, with ingress on, whether the ingress routes their paths
+  to it (see [Monocore inbound triggers](../charts/patchworks-app/README.md#monocore-inbound-triggers))
 - Image pull secret mode: existing secret, create from Quay credentials, or none
 - Initial company and admin details, including an optional admin password
 - Output values file path
@@ -183,6 +186,14 @@ The TUI asks for:
 The license server URL defaults to `https://license.wearepatchworks.com` and is
 not prompted for interactively. Set `application.license.serverUrl` in
 `config.yaml` when it needs to be overridden.
+
+`--save-config` keeps the inbound trigger answers as `workers.inbound.enabled`
+and `workers.inbound.routeIngress`. Answer No to the routes when adding inbound
+triggers to a running installation, and Yes on a later run once the Monocore
+hub has restarted; a new installation can answer Yes at once. When the selected
+chart release cannot serve them (its chart predates the setting, or its
+Monocore image is `v0.2.12` or older), the installer leaves them off, says why in
+the install summary, and keeps the saved answers for a run with a newer release.
 
 When complete, it writes the selected values to disk and prints the Helm
 commands to install the infra and app charts with that shared values file. It

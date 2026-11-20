@@ -675,6 +675,12 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.scheduler.timezone` | `UTC` | Must match Core's application timezone |
 | `workers.mono.scheduler.estate` | fullname | Stable scheduling estate identity |
 | `workers.mono.scheduler.rbac.create` | `true` | Bind scheduler permissions to the shared service account in the hub namespace |
+| `workers.mono.scheduler.admitAllTriggers` | `false` | `SCHEDULER_ADMIT_ALL_TRIGGERS` on the hub: admit every queued `scheduled_flows` row (API, webhook, Shape and other triggers) of a `monocore-scheduler` company, not only cron rows. Turn on only once Core leaves those rows to Monocore, or a row both engines admit runs twice. See [Monocore inbound triggers](#monocore-inbound-triggers) |
+| `workers.mono.inbound.enabled` | `false` | Serve Core's webhook, callback and start API endpoints from the hub's public listener (port 8082) and its `<fullname>-<nameSuffix>-inbound` Service. Needs a mono hub and a Monocore image later than `v0.2.12` |
+| `workers.mono.inbound.ingress.enabled` | `false` | Route the paths Monocore serves on the start, webhook and callback hosts to it. Off, routing is left to you. Turn it on in the second of the [two enabling upgrades](#monocore-inbound-triggers) |
+| `workers.mono.inbound.coreUrl` | `""` | Where Monocore forwards the requests of companies Core runs (`INBOUND_CORE_URL`). Empty derives Core's in-cluster start Service; required when `web.start.enabled=false`. Never an ingress host |
+| `workers.mono.inbound.rateLimitPrefix` | `""` | Cache prefix of Core's start pods, whose rate-limit windows Monocore shares (`INBOUND_RATE_LIMIT_PREFIX`). Empty derives Core's: `CACHE_PREFIX`, else `Str::slug(APP_NAME, '_')` and `_cache_:`, from `app.extraEnv` and the start service's `extraEnv`; `laravel_cache_:` when neither is set. Required when `web.start.enabled=false` |
+| `workers.mono.inbound.queueSchedule` | `""` | `INBOUND_QUEUE_SCHEDULE`: queue webhook and `/start` runs in `scheduled_flows`. Empty follows Core's `FLOW_QUEUE_SCHEDULE` from the same `extraEnv` (default `true`); `"true"` or `"false"` overrides it. Required when `web.start.enabled=false` |
 | `workers.mono.store.existingSecret.name` | `""` | Existing Secret containing monocore's `store.yaml`; skips the generated store Secret hook |
 | `workers.mono.store.existingSecret.key` | `store.yaml` | Secret key to mount as `/etc/monocore/store.yaml` |
 | `workers.mono.rabbitmq.flowExchange` | `""` | Flow publish exchange. Empty defaults to `workers.mono.queue` when `companyFlows.enabled=false`, or `customer-flows` when enabled |
@@ -831,9 +837,9 @@ after Core migrations.
 | `ingress.annotations` | `{}` | Annotations applied to every generated Ingress or HTTPProxy resource |
 | `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |
 | `ingress.hosts.gateway` | `""` | Hostname for the Core gateway service (`/`) |
-| `ingress.hosts.start` | `""` | Hostname for the Core start service (`/`) |
-| `ingress.hosts.webhook` | `""` | Hostname for webhook traffic; routes to the Core start service (`/`) |
-| `ingress.hosts.callback` | `""` | Hostname for callback traffic; routes to the Core start service (`/`) |
+| `ingress.hosts.start` | `""` | Hostname for the Core start service (`/`); `/api/v1/flows/` goes to Monocore when it serves [inbound triggers](#monocore-inbound-triggers) |
+| `ingress.hosts.webhook` | `""` | Hostname for webhook traffic; routes to the Core start service (`/`), or `/api/v1/` to Monocore when it serves inbound triggers |
+| `ingress.hosts.callback` | `""` | Hostname for callback traffic; routes to the Core start service (`/`), or `/api/v1/` to Monocore when it serves inbound triggers |
 | `ingress.hosts.fabric` | `""` | Hostname for the Fabric service (`/`) |
 | `ingress.hosts.dashboard` | `""` | Hostname for the dashboard and path-based routes (see below) |
 | `ingress.rewriteAnnotations` | see below | Annotations added only to the path-rewriting Ingress |
@@ -1667,6 +1673,67 @@ render no scheduler RBAC. Durable execution stays enabled so registered work can
 finish after scheduling is disabled. Shard changes update desired configuration
 without changing the worker checksum. Keep the same estate and runtime ConfigMap
 identity through upgrades.
+
+### Monocore inbound triggers
+
+`workers.mono.inbound.enabled=true` has the hub Monocore worker serve Core's
+webhook, callback and start API endpoints (gopatchworks/monocore
+`docs/inbound-triggers.md`) on a public listener, port 8082, exposed by the
+`<fullname>-<nameSuffix>-inbound` Service alone: the hub's own Service also
+reaches `/flows/start` and `/flows/run`, which have no authentication. Company
+workers do not serve them. Monocore images up to `v0.2.12` predate the
+listener; with one the Service has no listener behind it.
+
+The hub is configured as Core's start pods are: their `WEBHOOK_DOMAIN`,
+`CALLBACK_DOMAIN`, `WEBHOOK_RATE_LIMIT`, `CALLBACK_RATE_LIMIT` and
+`MANUAL_RUNS_API_RATE_LIMIT` (from `app.extraEnv` and the start service's
+`extraEnv`, else the ingress hosts), the Passport public key (only the public
+key, from the Passport Secret, which then also has to exist in the workers
+namespace), and the cache prefix and queue scheduling derived as described in
+the table above. The chart cannot read `extraEnvFrom` or a Secret, so set
+`rateLimitPrefix` and `queueSchedule` when Core's start pods get `CACHE_PREFIX`,
+`APP_NAME` or `FLOW_QUEUE_SCHEDULE` that way, and set the rate limits in
+`workers.mono.extraEnv` too. A wrong prefix fails silently: each engine then
+admits a company's full limit. Check Core's with `php artisan tinker
+--execute="echo config('cache.prefix');"` in a start pod. When Core's start
+pods belong to another release (`web.start.enabled=false`), set `coreUrl`,
+`rateLimitPrefix` and `queueSchedule` to theirs; the chart then renders no
+start, webhook or callback routes.
+
+Enable it in two upgrades. The first sets `workers.mono.inbound.enabled=true`:
+it starts the listener on the new hub pods and changes no route, as
+`workers.mono.inbound.ingress.enabled` defaults to `false`. Check that the
+inbound Service has endpoints and that the start pods' prefix matches. The
+second sets `workers.mono.inbound.ingress.enabled=true`. Done in one upgrade,
+the routes move before any hub pod has the public port, so the inbound paths
+answer 503 until the first new pod is ready, or until rollback on an image
+without the listener. A new installation, which has no traffic yet, can set
+both at once.
+
+With `ingress.enabled` and `workers.mono.inbound.ingress.enabled`, the start,
+webhook and callback hosts route these paths to Monocore, and everything else
+to Core's start Service as before:
+
+| Host | Monocore | Core |
+|---|---|---|
+| start | `/api/v1/flows/` | everything else |
+| webhook, callback | `/api/v1/` | `/api/v1/otc/`, `/api/v1/mcp` and everything else |
+
+Core still serves every inbound route, so a request left on Core is answered
+correctly; Monocore forwards callbacks and `/manual` requests of companies
+without the `monocore` flag to Core's start Service and queues their webhooks
+and `/start` requests for Core. The dashboard's path route (`/core-start`)
+stays on Core, which hands Monocore's companies to Monocore itself. An Ingress
+cannot reach a Service in another namespace, so the chart refuses to route
+when the start service and the workers are in different namespaces: leave
+`workers.mono.inbound.ingress.enabled` off and route to the inbound Service
+yourself. The hub cannot scale or pause to zero while it serves them.
+
+Before exposing the listener to the internet, check that the Monocore release
+bounds request bodies and header timeouts (monocore-rod.7). Turn on
+`workers.mono.scheduler.admitAllTriggers` only after Core's
+`MonocoreSchedulerOwnership::restrictPendingToCore` excludes every trigger for
+`monocore-scheduler` companies (monocore-rod.6).
 
 ## Worker autoscaling
 

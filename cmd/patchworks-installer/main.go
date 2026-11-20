@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -87,6 +88,8 @@ type localConfig struct {
 	DashboardEnabled  *bool  `yaml:"dashboardEnabled"`
 	RoutingMode       string `yaml:"routingMode"`
 	WorkerMode        string `yaml:"workerMode"`
+	MonoInbound       *bool
+	MonoInboundRoutes *bool
 	IngressEnabled    *bool  `yaml:"ingressEnabled"`
 	IngressProvider   string `yaml:"ingressProvider"`
 	IngressClass      string `yaml:"ingressClass"`
@@ -272,7 +275,15 @@ type localConfigDashboard struct {
 }
 
 type localConfigWorkers struct {
-	Type string `yaml:"type,omitempty"`
+	Type    string             `yaml:"type,omitempty"`
+	Inbound localConfigInbound `yaml:"inbound,omitempty"`
+}
+
+// localConfigInbound is the mono hub serving Core's webhook, callback and start
+// API endpoints (the chart's workers.mono.inbound).
+type localConfigInbound struct {
+	Enabled      *bool `yaml:"enabled,omitempty"`
+	RouteIngress *bool `yaml:"routeIngress,omitempty"`
 }
 
 type localConfigIngress struct {
@@ -375,6 +386,8 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	overrideString(&config.RoutingMode, file.Application.Dashboard.RoutingMode)
 	overrideString(&config.CookieDomain, file.Application.CookieDomain)
 	overrideString(&config.WorkerMode, file.Workers.Type)
+	overrideBool(&config.MonoInbound, file.Workers.Inbound.Enabled)
+	overrideBool(&config.MonoInboundRoutes, file.Workers.Inbound.RouteIngress)
 	overrideBool(&config.IngressEnabled, file.Ingress.Enabled)
 	overrideString(&config.IngressProvider, file.Ingress.Provider)
 	overrideString(&config.IngressClass, file.Ingress.ClassName)
@@ -429,6 +442,10 @@ func (config localConfig) MarshalYAML() (any, error) {
 		},
 		Workers: localConfigWorkers{
 			Type: config.WorkerMode,
+			Inbound: localConfigInbound{
+				Enabled:      config.MonoInbound,
+				RouteIngress: config.MonoInboundRoutes,
+			},
 		},
 		Ingress: localConfigIngress{
 			Enabled:   config.IngressEnabled,
@@ -762,6 +779,9 @@ func runInstaller(opts cliOptions) error {
 	}
 	config.Values["chartSource"] = charts.Lock.Source
 	config.Values["chartVersion"] = charts.Lock.Version
+	if config.Values["monoInbound"] == "true" {
+		config.Values["monoInboundUnsupported"] = monoInboundUnsupportedReason(charts.Charts["patchworks-app"])
+	}
 
 	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
 	if err != nil {
@@ -2529,6 +2549,8 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	}
 
 	ingressEnabled := boolDefault(defaults.IngressEnabled, true)
+	monoInbound := boolDefault(defaults.MonoInbound, false)
+	monoInboundRoutes := boolDefault(defaults.MonoInboundRoutes, false)
 	cookieDomain := stringDefault(defaults.CookieDomain, defaultCookieDomainForRouting(domain, routingMode))
 	licenseKey := defaults.LicenseKey
 	licenseServerURL := stringDefault(defaults.LicenseServerURL, defaultLicenseServerURL)
@@ -2561,6 +2583,22 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 				Value(&cookieDomain).
 				CharLimit(253),
 		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Serve inbound triggers from Monocore").
+				Description("Run webhooks, callbacks and the start API on the Monocore hub instead of Core's start service. Core still serves the companies it runs. Needs a Patchworks release later than v"+lastMonocoreWithoutInbound+".").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&monoInbound),
+		).WithHideFunc(func() bool { return workerMode != "mono" }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Route inbound paths to Monocore").
+				Description("Send the webhook, callback and start API paths to Monocore through the ingress. A new installation can answer Yes. When adding inbound triggers to a running installation, answer No, then Yes on a later run once the Monocore hub has restarted: until then nothing would answer them.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&monoInboundRoutes),
+		).WithHideFunc(func() bool { return workerMode != "mono" || !monoInbound || !ingressEnabled }),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("License key").
@@ -2631,6 +2669,8 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"dashboardEnabled":  fmt.Sprintf("%t", dashboardEnabled),
 		"routingMode":       routingMode,
 		"workerMode":        workerMode,
+		"monoInbound":       fmt.Sprintf("%t", workerMode == "mono" && monoInbound),
+		"monoInboundRoutes": fmt.Sprintf("%t", workerMode == "mono" && monoInbound && ingressEnabled && monoInboundRoutes),
 		"cookieDomain":      cookieDomain,
 		"pullSecretMode":    pullSecretModeFromSelection(pullSecret, quay),
 		"pullSecret":        pullSecret,
@@ -2938,13 +2978,17 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 		DashboardEnabled: boolPtr(parseBoolDefault(values["dashboardEnabled"], true)),
 		RoutingMode:      values["routingMode"],
 		WorkerMode:       defaultWorkerMode(values["workerMode"]),
-		IngressEnabled:   boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
-		IngressProvider:  values["ingressProvider"],
-		IngressClass:     values["ingressClass"],
-		CookieDomain:     values["cookieDomain"],
-		PullSecretMode:   values["pullSecretMode"],
-		PullSecret:       values["pullSecret"],
-		InfraComponents:  infrastructureComponentsFromValues(values),
+		// The user's answers, kept when the selected release cannot serve
+		// inbound triggers, so a later run with a newer release applies them.
+		MonoInbound:       monoSetting(values, "monoInbound"),
+		MonoInboundRoutes: monoSetting(values, "monoInboundRoutes"),
+		IngressEnabled:    boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
+		IngressProvider:   values["ingressProvider"],
+		IngressClass:      values["ingressClass"],
+		CookieDomain:      values["cookieDomain"],
+		PullSecretMode:    values["pullSecretMode"],
+		PullSecret:        values["pullSecret"],
+		InfraComponents:   infrastructureComponentsFromValues(values),
 		External: localConfigExternal{
 			CredentialsMode: values["externalCredentialsMode"],
 			MySQL: localConfigExternalSQL{
@@ -3190,6 +3234,9 @@ func installSummary(config installConfig) string {
 		keyValue("Cookie/session domain", values["cookieDomain"]),
 		keyValue("Image pull secret", defaultListValue(values["pullSecret"], "none")),
 		keyValue("Initial company/admin", values["seedInstall"]),
+	}
+	if defaultWorkerMode(values["workerMode"]) == "mono" {
+		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
 	}
 	if config.Quay != nil {
 		lines = append(lines, keyValue("Quay secret action", fmt.Sprintf("create/update %s", config.Quay.SecretName)))
@@ -3620,7 +3667,15 @@ func writeValues(path string, values map[string]string) error {
 	fmt.Fprintf(&b, "web:\n  sessionDomain: %s\n\n", quote(cookieDomain))
 
 	fmt.Fprintf(&b, "workers:\n")
-	fmt.Fprintf(&b, "  type: %s\n\n", quote(defaultWorkerMode(values["workerMode"])))
+	fmt.Fprintf(&b, "  type: %s\n", quote(defaultWorkerMode(values["workerMode"])))
+	if monoInboundEnabled(values) {
+		fmt.Fprintf(&b, "  mono:\n")
+		fmt.Fprintf(&b, "    inbound:\n")
+		fmt.Fprintf(&b, "      enabled: true\n")
+		fmt.Fprintf(&b, "      ingress:\n")
+		fmt.Fprintf(&b, "        enabled: %t\n", values["monoInboundRoutes"] == "true")
+	}
+	fmt.Fprintf(&b, "\n")
 
 	seedEnabled := values["seedInstall"]
 	fmt.Fprintf(&b, "seeds:\n")
@@ -3843,6 +3898,62 @@ func defaultCookieDomainForRouting(domain, routingMode string) string {
 		return strings.TrimPrefix(domain, ".")
 	}
 	return defaultCookieDomain(domain)
+}
+
+// lastMonocoreWithoutInbound is the last Patchworks release whose Monocore
+// image has no public listener for inbound triggers: gopatchworks/monocore#470
+// merged after its build.
+const lastMonocoreWithoutInbound = "0.2.12"
+
+// monoInboundUnsupportedReason says why the selected app chart cannot serve
+// inbound triggers from Monocore, or "" when it can: a chart without the
+// setting would ignore it, and an older Monocore image has no listener, so
+// its routes would reach nothing.
+func monoInboundUnsupportedReason(chart helmchart.Charter) string {
+	accessor, err := helmchart.NewAccessor(chart)
+	if err != nil {
+		return "the app chart could not be read"
+	}
+	workers, _ := accessor.Values()["workers"].(map[string]any)
+	mono, _ := workers["mono"].(map[string]any)
+	if _, ok := mono["inbound"].(map[string]any); !ok {
+		return "this chart release cannot serve them"
+	}
+	image, _ := mono["image"].(map[string]any)
+	tag, _ := image["tag"].(string)
+	// A tag that is not a version (a branch build) cannot be compared.
+	if version, err := semver.NewVersion(strings.TrimPrefix(tag, "v")); err == nil &&
+		!version.GreaterThan(semver.MustParse(lastMonocoreWithoutInbound)) {
+		return fmt.Sprintf("Monocore %s predates them", tag)
+	}
+	return ""
+}
+
+// monoInboundEnabled is whether the values file turns inbound triggers on:
+// mono workers, the user's answer, and a release that can serve them.
+func monoInboundEnabled(values map[string]string) bool {
+	return defaultWorkerMode(values["workerMode"]) == "mono" && values["monoInbound"] == "true" && values["monoInboundUnsupported"] == ""
+}
+
+func monoInboundSummary(values map[string]string) string {
+	switch {
+	case values["monoInbound"] != "true":
+		return "off"
+	case values["monoInboundUnsupported"] != "":
+		return "off: " + values["monoInboundUnsupported"] + "; choose a newer release with --chart-version"
+	case values["monoInboundRoutes"] == "true":
+		return "on, ingress routes to Monocore"
+	default:
+		return "on, ingress routes still to Core"
+	}
+}
+
+// monoSetting is a saved answer to a mono-only question, nil for other worker modes.
+func monoSetting(values map[string]string, key string) *bool {
+	if defaultWorkerMode(values["workerMode"]) != "mono" {
+		return nil
+	}
+	return boolPtr(values[key] == "true")
 }
 
 func defaultWorkerMode(value string) string {

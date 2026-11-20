@@ -120,6 +120,8 @@ mono: "type: mono" {
     dep:      "Deployment\n{name}-workers"                      { shape: rectangle }
     desired: "Scheduler desired ConfigMap\nworkers.mono.scheduler.mode=kubernetes" { shape: document }
     runtime: "Scheduler runtime ConfigMap + Leases\nMonocore-owned; shared ServiceAccount RBAC" { shape: document }
+    inbound: "Service\n{name}-workers-inbound\n:80 -> public listener :8082\nworkers.mono.inbound.enabled" { shape: rectangle; style.stroke-dash: 4 }
+    inbound -> dep: "start, webhook and callback\ningress paths"
     dep -> desired: "API read"
     dep -> runtime: "API create / CAS"
     topology -> dep: mounts
@@ -147,7 +149,7 @@ microservice.service.hub.scaler: "Optional HPA / KEDA ScaledObject" { shape: rec
 microservice.service.hub.scaler -> microservice.service.hub.dep: scales
 microservice.service.company.scaler: "Optional HPA / KEDA ScaledObject\nShared queue; per-service overrides" { shape: rectangle }
 microservice.service.company.scaler -> microservice.service.company.dep: scales
-mono.hub.scaler: "Optional HPA / KEDA ScaledObject\nScheduler hub minimum: 1" { shape: rectangle }
+mono.hub.scaler: "Optional HPA / KEDA ScaledObject\nScheduler or inbound hub minimum: 1" { shape: rectangle }
 mono.hub.scaler -> mono.hub.dep: scales
 mono.company.scaler: "Optional HPA / KEDA ScaledObject" { shape: rectangle }
 mono.company.scaler -> mono.company.dep: scales
