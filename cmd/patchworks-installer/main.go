@@ -689,6 +689,9 @@ func runInstaller(opts cliOptions) error {
 		}
 		if installContourChoice {
 			if err := installContour(access); err != nil {
+				if errors.Is(err, huh.ErrUserAborted) {
+					return err
+				}
 				fmt.Println(warningLine(err.Error()))
 				continueWithoutContour := true
 				if confirmErr := runFormWithQuitConfirm(huh.NewForm(
@@ -736,7 +739,7 @@ func runInstaller(opts cliOptions) error {
 		DoneFunc: func() string {
 			return fmt.Sprintf("Prepared charts %s (%s)", charts.Lock.Version, charts.Lock.Source)
 		},
-	}, func() error {
+	}, func(_ context.Context) error {
 		var prepareErr error
 		charts, prepareErr = prepareCharts(request, pinned)
 		return prepareErr
@@ -807,15 +810,17 @@ func runInstaller(opts cliOptions) error {
 			Title:  "Creating Quay pull secret",
 			Done:   fmt.Sprintf("Created pull secret %s in %s", config.Quay.SecretName, config.Values["namespace"]),
 			Detail: fmt.Sprintf("Creating %s in namespace %s", config.Quay.SecretName, config.Values["namespace"]),
-		}, func() error {
-			return createQuayPullSecret(access, config.Values["namespace"], *config.Quay)
+		}, func(ctx context.Context) error {
+			return createQuayPullSecret(ctx, access, config.Values["namespace"], *config.Quay)
 		}); err != nil {
 			return err
 		}
 	}
 
 	if err := installPatchworks(access, config.Values["namespace"], config.Output, installInfrastructure, charts); err != nil {
-		fmt.Print(manualInstallView(commands))
+		if !errors.Is(err, huh.ErrUserAborted) {
+			fmt.Print(manualInstallView(commands))
+		}
 		return err
 	}
 
@@ -967,7 +972,7 @@ func installContour(access kubeAccess) error {
 		Title:  "Fetching Contour chart",
 		Done:   "Fetched Contour chart",
 		Detail: "Downloading chart metadata and loading contour/contour",
-	}, func() error {
+	}, func(_ context.Context) error {
 		var loadErr error
 		chart, values, loadErr = loadHelmChart(settings, "contour", "https://projectcontour.github.io/helm-charts/", "")
 		return loadErr
@@ -977,12 +982,19 @@ func installContour(access kubeAccess) error {
 	mergeCommonLabels(values, installerLabels())
 
 	return runProgress(progressStep{
-		Title:  "Installing Contour",
-		Done:   "Installed Contour · ingress class contour",
-		Detail: "Applying release contour in namespace projectcontour",
-	}, func() error {
-		return helmUpgradeOrInstall(cfg, "contour", "projectcontour", chart, values, true, 10*time.Minute, installerLabels())
+		Title:    "Installing Contour",
+		Done:     "Installed Contour · ingress class contour",
+		Detail:   "Applying release contour in namespace projectcontour",
+		StopNote: helmStopNote("contour"),
+	}, func(ctx context.Context) error {
+		return helmUpgradeOrInstall(ctx, cfg, "contour", "projectcontour", chart, values, true, 10*time.Minute, installerLabels())
 	})
+}
+
+// helmStopNote explains what stopping a Helm install or upgrade leaves:
+// Helm records the release as failed, which a later run can upgrade.
+func helmStopNote(release string) string {
+	return fmt.Sprintf("Helm marks release %s as failed and keeps what it created. Run the installer again to retry.", release)
 }
 
 func installPatchworks(access kubeAccess, namespace, valuesFile string, installInfrastructure bool, charts *preparedCharts) error {
@@ -997,27 +1009,33 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string, installI
 	}
 	if installInfrastructure {
 		if err := runProgress(progressStep{
-			Title:   "Installing infrastructure",
-			Done:    "Installed infrastructure",
-			Detail:  "Applying release patchworks-infra and waiting for readiness",
-			Monitor: installPhaseMonitor(access, namespace, "infra"),
-		}, func() error {
-			return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
+			Title:    "Installing infrastructure",
+			Done:     "Installed infrastructure",
+			Detail:   "Applying release patchworks-infra and waiting for readiness",
+			Monitor:  installPhaseMonitor(access, namespace, "infra"),
+			StopNote: helmStopNote("patchworks-infra"),
+		}, func(ctx context.Context) error {
+			return helmUpgradeOrInstall(ctx, cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
 		}); err != nil {
-			printInstallFailureDiagnostics(access, namespace)
+			if !errors.Is(err, huh.ErrUserAborted) {
+				printInstallFailureDiagnostics(access, namespace)
+			}
 			return err
 		}
 	}
 
 	if err := runProgress(progressStep{
-		Title:   "Installing application",
-		Done:    "Installed application",
-		Detail:  "Applying release patchworks-app and waiting for hooks and readiness",
-		Monitor: installPhaseMonitor(access, namespace, "app"),
-	}, func() error {
-		return helmUpgradeOrInstall(cfg, "patchworks-app", namespace, charts.Charts["patchworks-app"], values, false, 15*time.Minute, installerLabels())
+		Title:    "Installing application",
+		Done:     "Installed application",
+		Detail:   "Applying release patchworks-app and waiting for hooks and readiness",
+		Monitor:  installPhaseMonitor(access, namespace, "app"),
+		StopNote: helmStopNote("patchworks-app"),
+	}, func(ctx context.Context) error {
+		return helmUpgradeOrInstall(ctx, cfg, "patchworks-app", namespace, charts.Charts["patchworks-app"], values, false, 15*time.Minute, installerLabels())
 	}); err != nil {
-		printInstallFailureDiagnostics(access, namespace)
+		if !errors.Is(err, huh.ErrUserAborted) {
+			printInstallFailureDiagnostics(access, namespace)
+		}
 		return err
 	}
 	return nil
@@ -1143,9 +1161,9 @@ func runUninstall(opts cliOptions) error {
 			Title:    "Removing Quay pull secret",
 			Detail:   fmt.Sprintf("Deleting %s only if installer-labelled", pullSecretName),
 			DoneFunc: func() string { return outcome },
-		}, func() error {
+		}, func(ctx context.Context) error {
 			var deleteErr error
-			outcome, deleteErr = deleteInstallerPullSecret(access, namespace, pullSecretName)
+			outcome, deleteErr = deleteInstallerPullSecret(ctx, access, namespace, pullSecretName)
 			return deleteErr
 		}); err != nil {
 			return err
@@ -1206,19 +1224,21 @@ func uninstallPatchworks(access kubeAccess, namespace string) error {
 	}
 
 	if err := runProgress(progressStep{
-		Title:  "Uninstalling application",
-		Done:   "Removed release patchworks-app",
-		Detail: "Removing release patchworks-app",
-	}, func() error {
+		Title:    "Uninstalling application",
+		Done:     "Removed release patchworks-app",
+		Detail:   "Removing release patchworks-app",
+		StopNote: helmUninstallStopNote("patchworks-app"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "patchworks-app", 10*time.Minute)
 	}); err != nil {
 		return err
 	}
 	return runProgress(progressStep{
-		Title:  "Uninstalling infrastructure",
-		Done:   "Removed release patchworks-infra",
-		Detail: "Removing release patchworks-infra",
-	}, func() error {
+		Title:    "Uninstalling infrastructure",
+		Done:     "Removed release patchworks-infra",
+		Detail:   "Removing release patchworks-infra",
+		StopNote: helmUninstallStopNote("patchworks-infra"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "patchworks-infra", 10*time.Minute)
 	})
 }
@@ -1229,12 +1249,20 @@ func uninstallContour(access kubeAccess) error {
 		return err
 	}
 	return runProgress(progressStep{
-		Title:  "Uninstalling Contour",
-		Done:   "Removed release contour",
-		Detail: "Removing release contour from namespace projectcontour",
-	}, func() error {
+		Title:    "Uninstalling Contour",
+		Done:     "Removed release contour",
+		Detail:   "Removing release contour from namespace projectcontour",
+		StopNote: helmUninstallStopNote("contour"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "contour", 10*time.Minute)
 	})
+}
+
+// helmUninstallStopNote explains what stopping an uninstall leaves. Helm's
+// uninstall takes no context, so the installer stops waiting rather than
+// cancelling it.
+func helmUninstallStopNote(release string) string {
+	return fmt.Sprintf("Release %s may be left partly removed. Run uninstall again to finish.", release)
 }
 
 func helmRuntime(access kubeAccess, namespace string) (*cli.EnvSettings, *action.Configuration, error) {
@@ -1334,7 +1362,7 @@ func mergeHelmValues(settings *cli.EnvSettings, valuesFile string) (map[string]a
 	return valueOptions.MergeValues(getter.All(settings))
 }
 
-func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace string, chart helmchart.Charter, values map[string]any, createNamespace bool, timeout time.Duration, labels map[string]string) error {
+func helmUpgradeOrInstall(ctx context.Context, cfg *action.Configuration, releaseName, namespace string, chart helmchart.Charter, values map[string]any, createNamespace bool, timeout time.Duration, labels map[string]string) error {
 	exists := helmReleaseExists(cfg, releaseName)
 	if !exists {
 		install := action.NewInstall(cfg)
@@ -1346,7 +1374,7 @@ func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace stri
 		install.Timeout = timeout
 		install.DependencyUpdate = true
 		install.Labels = labels
-		_, err := install.Run(chart, values)
+		_, err := install.RunWithContext(ctx, chart, values)
 		return err
 	}
 
@@ -1357,7 +1385,7 @@ func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace stri
 	upgrade.Timeout = timeout
 	upgrade.DependencyUpdate = true
 	upgrade.Labels = labels
-	_, err := upgrade.Run(releaseName, chart, values)
+	_, err := upgrade.RunWithContext(ctx, releaseName, chart, values)
 	return err
 }
 
@@ -1580,7 +1608,7 @@ func secretExistsInNamespace(kubeconfigPath, contextName, namespace, name string
 	return err == nil
 }
 
-func createQuayPullSecret(access kubeAccess, namespace string, creds quayCredentials) error {
+func createQuayPullSecret(ctx context.Context, access kubeAccess, namespace string, creds quayCredentials) error {
 	if creds.SecretName == "" {
 		return fmt.Errorf("pull secret name cannot be empty")
 	}
@@ -1591,7 +1619,7 @@ func createQuayPullSecret(access kubeAccess, namespace string, creds quayCredent
 		return fmt.Errorf("quay password/token cannot be empty")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	client, err := kubernetesClient(access)
@@ -1682,8 +1710,8 @@ func tenantAdminPassword(access kubeAccess, namespace string) (string, error) {
 
 // deleteInstallerPullSecret deletes the pull secret only when this installer
 // created it, and returns what it did for the step's trail line.
-func deleteInstallerPullSecret(access kubeAccess, namespace, name string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+func deleteInstallerPullSecret(ctx context.Context, access kubeAccess, namespace, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	client, err := kubernetesClient(access)

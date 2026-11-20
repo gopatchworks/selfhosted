@@ -43,6 +43,12 @@ Warnings from Helm and the Kubernetes API, such as PodSecurity warnings, are
 collected while a step runs and printed under it, grouped and at most once per
 run, so they cannot garble the live view.
 
+Press Esc or Ctrl+C during a step to stop the installer. It asks first and says
+what stopping leaves behind; press Y or Enter (or Ctrl+C again) to stop. A
+stopped Helm install or upgrade is recorded as failed, not left pending, so the
+next run can upgrade it; resources already created stay in the cluster. While
+the step winds down, Ctrl+C quits at once.
+
 ## Install and run
 
 Install the released binary on macOS with Homebrew:

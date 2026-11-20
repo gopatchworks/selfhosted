@@ -257,6 +257,9 @@ type progressStep struct {
 	Detail string
 	// Monitor, when set, is polled while the step runs to list components.
 	Monitor func() []installComponentRow
+	// StopNote says what stopping the step leaves behind. It is shown when the
+	// user presses Esc or Ctrl+C, and again once the step has stopped.
+	StopNote string
 }
 
 func (s progressStep) doneText() string {
@@ -271,6 +274,13 @@ func (s progressStep) doneText() string {
 	return s.Title
 }
 
+// stopGrace is how long a stopped step may take to wind down after its
+// context is cancelled. Helm needs a moment to record the release as failed;
+// steps that ignore the context are abandoned when it runs out.
+const stopGrace = 10 * time.Second
+
+const defaultStopNote = "The installer exits once the step stops."
+
 type progressResult struct {
 	err error
 }
@@ -281,13 +291,22 @@ type progressRowsMsg struct {
 	rows []installComponentRow
 }
 
+type progressStopGraceMsg struct{}
+
 type progressModel struct {
-	step     progressStep
-	run      func() error
-	spinner  spinner.Model
-	started  time.Time
-	elapsed  time.Duration
-	rows     []installComponentRow
+	step    progressStep
+	run     func(context.Context) error
+	ctx     context.Context
+	cancel  context.CancelFunc
+	spinner spinner.Model
+	started time.Time
+	elapsed time.Duration
+	rows    []installComponentRow
+	// confirmStop is set while the stop question is shown.
+	confirmStop bool
+	// stopping is set once the user confirmed the stop and the step's context
+	// has been cancelled.
+	stopping bool
 	finished bool
 	err      error
 	width    int
@@ -301,10 +320,17 @@ func newSpinner() spinner.Model {
 	return spin
 }
 
-func runProgress(step progressStep, fn func() error) error {
+// runProgress runs fn while drawing the step live. Esc or Ctrl+C asks
+// whether to stop; confirming cancels fn's context and returns
+// huh.ErrUserAborted.
+func runProgress(step progressStep, fn func(ctx context.Context) error) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	initial := progressModel{
 		step:    step,
 		run:     fn,
+		ctx:     ctx,
+		cancel:  cancel,
 		spinner: newSpinner(),
 		started: time.Now(),
 	}
@@ -320,13 +346,23 @@ func runProgress(step progressStep, fn func() error) error {
 	}
 	fmt.Println(model.summary())
 	printCapturedOutput()
-	return model.err
+	return model.result()
+}
+
+// result is what runProgress returns: nil when the step succeeded and was
+// not stopped, huh.ErrUserAborted when the user stopped it, and otherwise
+// the step's error.
+func (m progressModel) result() error {
+	if m.stopping {
+		return huh.ErrUserAborted
+	}
+	return m.err
 }
 
 func (m progressModel) Init() tea.Cmd {
-	run := m.run
+	run, ctx := m.run, m.ctx
 	cmds := []tea.Cmd{
-		func() tea.Msg { return progressResult{err: run()} },
+		func() tea.Msg { return progressResult{err: run(ctx)} },
 		m.spinner.Tick,
 	}
 	if m.step.Monitor != nil {
@@ -340,13 +376,28 @@ func (m progressModel) poll() tea.Cmd {
 	return func() tea.Msg { return progressRowsMsg{rows: monitor()} }
 }
 
+func (m progressModel) finish(err error) (tea.Model, tea.Cmd) {
+	m.err = err
+	m.finished = true
+	m.confirmStop = false
+	m.elapsed = time.Since(m.started)
+	return m, tea.Quit
+}
+
 func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case progressResult:
-		m.err = msg.err
-		m.finished = true
-		m.elapsed = time.Since(m.started)
-		return m, tea.Quit
+		if m.finished {
+			return m, nil
+		}
+		return m.finish(msg.err)
+	case progressStopGraceMsg:
+		if m.finished {
+			return m, nil
+		}
+		return m.finish(context.Canceled)
+	case tea.KeyMsg:
+		return m.handleKey(msg)
 	case progressPollMsg:
 		if m.finished {
 			return m, nil
@@ -376,6 +427,64 @@ func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// splitAltKey undoes Bubble Tea joining keys. When a lone Esc and the next
+// key arrive in one read, which happens while the view redraws often, they
+// are reported as one Alt-modified key. None of the installer's screens use
+// Alt, so the key is handled as the Esc and key that were typed.
+func splitAltKey(msg tea.KeyMsg) []tea.KeyMsg {
+	if !msg.Alt {
+		return []tea.KeyMsg{msg}
+	}
+	plain := msg
+	plain.Alt = false
+	return []tea.KeyMsg{{Type: tea.KeyEsc}, plain}
+}
+
+// handleKey runs the stop flow: Esc or Ctrl+C asks, Y/Enter or a second
+// Ctrl+C confirms and cancels the step, and once stopping, Ctrl+C quits
+// without waiting for the step to wind down.
+func (m progressModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if msg.Alt {
+		var cmds []tea.Cmd
+		var model tea.Model = m
+		for _, key := range splitAltKey(msg) {
+			var cmd tea.Cmd
+			model, cmd = model.(progressModel).handleKey(key)
+			cmds = append(cmds, cmd)
+		}
+		return model, tea.Batch(cmds...)
+	}
+	if m.finished {
+		return m, nil
+	}
+	key := msg.String()
+	switch {
+	case m.stopping:
+		if key == "ctrl+c" {
+			return m.finish(context.Canceled)
+		}
+	case m.confirmStop:
+		switch key {
+		case "y", "Y", "enter", "ctrl+c":
+			m.confirmStop = false
+			m.stopping = true
+			if m.cancel != nil {
+				m.cancel()
+			}
+			return m, tea.Tick(stopGrace, func(time.Time) tea.Msg { return progressStopGraceMsg{} })
+		case "n", "N", "esc":
+			m.confirmStop = false
+		}
+	case key == "ctrl+c" || key == "esc":
+		m.confirmStop = true
+	}
+	return m, nil
+}
+
+func (m progressModel) stopNote() string {
+	return stringDefault(m.step.StopNote, defaultStopNote)
+}
+
 // View draws the running step. Once the step has finished it draws nothing,
 // so the live frame is cleared, and runProgress prints the summary in its
 // place. Printed rather than drawn, the summary is not cut at the terminal
@@ -386,7 +495,21 @@ func (m progressModel) View() string {
 		return ""
 	}
 
-	lines := []string{m.spinner.View() + m.step.Title + elapsedSuffix(time.Since(m.started))}
+	elapsed := elapsedSuffix(time.Since(m.started))
+	switch {
+	case m.stopping:
+		return fmt.Sprintf("%sStopping: %s%s\n%s\n",
+			m.spinner.View(), m.step.Title, elapsed,
+			noteLine("Waiting for the step to wind down · Ctrl+C: quit now"))
+	case m.confirmStop:
+		return fmt.Sprintf("%s%s%s\n  %s\n%s\n%s\n",
+			m.spinner.View(), m.step.Title, elapsed,
+			warningStyle.Render("Stop "+lowerFirst(m.step.Title)+"?"),
+			noteLine(m.stopNote()),
+			noteLine("Y/Enter: stop  N/Esc: keep going"))
+	}
+
+	lines := []string{m.spinner.View() + m.step.Title + elapsed}
 	if m.step.Detail != "" {
 		lines = append(lines, noteLine(m.step.Detail))
 	}
@@ -397,16 +520,30 @@ func (m progressModel) View() string {
 }
 
 // summary is the trail a finished step leaves: one line on success, and on
-// failure the components that had not finished.
+// failure or a stop the components that had not finished.
 func (m progressModel) summary() string {
 	if m.err == nil {
 		return doneLine(m.step.doneText(), m.elapsed)
 	}
-	lines := []string{failedLine(m.step.Title+" failed", m.elapsed)}
+	outcome := " failed"
+	if m.stopping {
+		outcome = " stopped"
+	}
+	lines := []string{failedLine(m.step.Title+outcome, m.elapsed)}
 	if len(m.rows) > 0 {
 		lines = append(lines, installRowLines(m.rows, 0, true)...)
 	}
+	if m.stopping {
+		lines = append(lines, noteLine(m.stopNote()))
+	}
 	return strings.Join(lines, "\n")
+}
+
+func lowerFirst(text string) string {
+	if text == "" {
+		return text
+	}
+	return strings.ToLower(text[:1]) + text[1:]
 }
 
 // rowBudget is how many component rows fit under the title and detail lines.
@@ -597,25 +734,36 @@ func (m inspectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
 	case tea.KeyMsg:
-		if m.quitConfirm {
-			switch msg.String() {
-			case "y", "Y", "enter", "ctrl+c":
-				m.aborted = true
+		for _, key := range splitAltKey(msg) {
+			if m.handleKey(key) {
 				return m, tea.Quit
-			case "n", "N", "esc":
-				m.quitConfirm = false
-				return m, nil
 			}
-			return m, nil
-		}
-
-		if msg.String() == "ctrl+c" || msg.String() == "esc" {
-			m.quitConfirm = true
-			return m, nil
 		}
 	}
 
 	return m, nil
+}
+
+// handleKey runs the quit question and reports whether to quit.
+func (m *inspectModel) handleKey(msg tea.KeyMsg) bool {
+	if m.finished {
+		return false
+	}
+	key := msg.String()
+	if m.quitConfirm {
+		switch key {
+		case "y", "Y", "enter", "ctrl+c":
+			m.aborted = true
+			return true
+		case "n", "N", "esc":
+			m.quitConfirm = false
+		}
+		return false
+	}
+	if key == "ctrl+c" || key == "esc" {
+		m.quitConfirm = true
+	}
+	return false
 }
 
 // View clears itself once the inspection ends; runInspection then prints the

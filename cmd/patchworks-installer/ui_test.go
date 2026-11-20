@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,9 +13,155 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 )
+
+func keyMsg(key string) tea.KeyMsg {
+	switch key {
+	case "ctrl+c":
+		return tea.KeyMsg{Type: tea.KeyCtrlC}
+	case "esc":
+		return tea.KeyMsg{Type: tea.KeyEsc}
+	case "enter":
+		return tea.KeyMsg{Type: tea.KeyEnter}
+	}
+	return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)}
+}
+
+func newStepModel(step progressStep) (progressModel, context.Context) {
+	ctx, cancel := context.WithCancel(context.Background())
+	return progressModel{step: step, ctx: ctx, cancel: cancel, spinner: newSpinner(), started: time.Now()}, ctx
+}
+
+func send(model progressModel, msgs ...tea.Msg) (progressModel, tea.Cmd) {
+	var cmd tea.Cmd
+	for _, msg := range msgs {
+		var next tea.Model
+		next, cmd = model.Update(msg)
+		model = next.(progressModel)
+	}
+	return model, cmd
+}
+
+var installStep = progressStep{
+	Title:    "Installing infrastructure",
+	Detail:   "Applying release patchworks-infra",
+	StopNote: "Helm marks release patchworks-infra as failed and keeps what it created. Run the installer again to retry.",
+}
+
+func TestProgressStopAsksBeforeCancelling(t *testing.T) {
+	model, ctx := newStepModel(installStep)
+
+	for _, key := range []string{"ctrl+c", "esc"} {
+		asking, _ := send(model, keyMsg(key))
+		view := asking.View()
+		if !asking.confirmStop || !strings.Contains(view, "Stop installing infrastructure?") || !strings.Contains(view, "marks release patchworks-infra as failed") {
+			t.Fatalf("%s should ask before stopping:\n%s", key, view)
+		}
+		if ctx.Err() != nil {
+			t.Fatalf("%s cancelled the step before it was confirmed", key)
+		}
+		for _, answer := range []string{"n", "esc"} {
+			resumed, _ := send(asking, keyMsg(answer))
+			if resumed.confirmStop || resumed.stopping || !strings.Contains(resumed.View(), "Applying release patchworks-infra") {
+				t.Fatalf("%s should keep the step going:\n%s", answer, resumed.View())
+			}
+		}
+	}
+	if ctx.Err() != nil {
+		t.Fatal("declining the stop cancelled the step")
+	}
+}
+
+func TestProgressStopCancelsStepAndReportsStopped(t *testing.T) {
+	for _, confirm := range []string{"y", "enter", "ctrl+c"} {
+		model, ctx := newStepModel(installStep)
+		stopping, cmd := send(model, keyMsg("ctrl+c"), keyMsg(confirm))
+		if !stopping.stopping || ctx.Err() == nil || cmd == nil {
+			t.Fatalf("%s should cancel the step and start the grace timer: stopping=%t ctx=%v", confirm, stopping.stopping, ctx.Err())
+		}
+		if view := stopping.View(); !strings.Contains(view, "Stopping: Installing infrastructure") || !strings.Contains(view, "Ctrl+C: quit now") {
+			t.Fatalf("stopping view:\n%s", view)
+		}
+
+		stopped, _ := send(stopping, progressResult{err: context.Canceled})
+		if !stopped.finished || !errors.Is(stopped.result(), huh.ErrUserAborted) {
+			t.Fatalf("stopped step should finish as aborted: finished=%t result=%v", stopped.finished, stopped.result())
+		}
+		summary := stopped.summary()
+		if !strings.Contains(summary, "✗ Installing infrastructure stopped") || !strings.Contains(summary, "Run the installer again to retry") {
+			t.Fatalf("stopped summary:\n%s", summary)
+		}
+	}
+}
+
+func TestProgressCtrlCWhileStoppingQuitsNow(t *testing.T) {
+	model, _ := newStepModel(installStep)
+	quit, _ := send(model, keyMsg("ctrl+c"), keyMsg("y"), keyMsg("ctrl+c"))
+	if !quit.finished || !errors.Is(quit.result(), huh.ErrUserAborted) {
+		t.Fatalf("Ctrl+C while stopping should quit: finished=%t result=%v", quit.finished, quit.result())
+	}
+}
+
+func TestProgressStopGivesUpAfterGrace(t *testing.T) {
+	model, _ := newStepModel(installStep)
+	quit, _ := send(model, keyMsg("ctrl+c"), keyMsg("y"), progressStopGraceMsg{})
+	if !quit.finished || !errors.Is(quit.result(), huh.ErrUserAborted) {
+		t.Fatalf("grace timeout should quit: finished=%t result=%v", quit.finished, quit.result())
+	}
+}
+
+func TestProgressStepFinishingWhileStoppingStillStops(t *testing.T) {
+	model, _ := newStepModel(installStep)
+	done, _ := send(model, keyMsg("ctrl+c"), keyMsg("y"), progressResult{})
+	if !strings.HasPrefix(done.summary(), "✓") {
+		t.Fatalf("a step that finished should say so: %q", done.summary())
+	}
+	if !errors.Is(done.result(), huh.ErrUserAborted) {
+		t.Fatalf("the installer should still stop after the step: %v", done.result())
+	}
+}
+
+// Bubble Tea can report a lone Esc and the next key as one Alt key when they
+// arrive in the same read; seen under a pty while the spinner redraws.
+func TestProgressSplitsJoinedEscAndKey(t *testing.T) {
+	model, ctx := newStepModel(installStep)
+	stopped, _ := send(model, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y"), Alt: true})
+	if !stopped.stopping || ctx.Err() == nil {
+		t.Fatalf("alt+y should act as Esc then Y: confirm=%t stopping=%t", stopped.confirmStop, stopped.stopping)
+	}
+
+	model, ctx = newStepModel(installStep)
+	toggled, _ := send(model, tea.KeyMsg{Type: tea.KeyEsc, Alt: true})
+	if toggled.confirmStop || toggled.stopping || ctx.Err() != nil {
+		t.Fatalf("alt+esc should act as two Esc presses: confirm=%t stopping=%t", toggled.confirmStop, toggled.stopping)
+	}
+}
+
+func TestInspectSplitsJoinedEscAndKey(t *testing.T) {
+	next, cmd := inspectModel{spinner: newSpinner()}.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y"), Alt: true})
+	if model := next.(inspectModel); !model.aborted || cmd == nil {
+		t.Fatalf("alt+y should act as Esc then Y: aborted=%t", model.aborted)
+	}
+
+	next, _ = inspectModel{spinner: newSpinner()}.Update(keyMsg("esc"))
+	asking := next.(inspectModel)
+	next, _ = asking.Update(keyMsg("n"))
+	if model := next.(inspectModel); model.quitConfirm || model.aborted {
+		t.Fatalf("N should dismiss the quit question: %#v", model)
+	}
+}
+
+func TestProgressDefaultStopNote(t *testing.T) {
+	model, _ := newStepModel(progressStep{Title: "Preparing Patchworks charts"})
+	asking, _ := send(model, keyMsg("esc"))
+	if view := asking.View(); !strings.Contains(view, "Stop preparing Patchworks charts?") || !strings.Contains(view, defaultStopNote) {
+		t.Fatalf("default stop prompt:\n%s", view)
+	}
+}
 
 func writeTestKubeconfig(t *testing.T, server string) string {
 	t.Helper()
