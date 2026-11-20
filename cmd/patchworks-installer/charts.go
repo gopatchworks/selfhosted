@@ -314,6 +314,60 @@ func prepareChartsFromRepository(request chartRequest, pinned *chartLock, client
 	return result, nil
 }
 
+// bundledChartsNotice warns when GitHub charts were selected although this
+// installer bundles newer charts, or different charts for the same release.
+// A build from a release's image-tag commit bundles exactly that release's
+// charts, so it only warns when a lock or config pins an older release; a
+// build from a later commit also warns at the same release once the charts
+// have changed.
+func bundledChartsNotice(selected, bundled chartLock) string {
+	if selected.Source != "github" || bundled.Source != "bundled" {
+		return ""
+	}
+	selectedVersion, err := semver.StrictNewVersion(selected.Version)
+	if err != nil {
+		return ""
+	}
+	bundledVersion, err := semver.StrictNewVersion(bundled.Version)
+	if err != nil {
+		return ""
+	}
+	switch {
+	case bundledVersion.GreaterThan(selectedVersion):
+		return fmt.Sprintf("This installer bundles newer charts (%s) than release %s", bundled.Version, selected.Version)
+	case bundledVersion.Equal(selectedVersion) && chartDigestsDiffer(selected, bundled):
+		return fmt.Sprintf("This installer's bundled charts differ from release %s", selected.Version)
+	}
+	return ""
+}
+
+// chartDigestsDiffer reports a difference only when both locks record a digest.
+func chartDigestsDiffer(a, b chartLock) bool {
+	for _, name := range patchworksChartNames {
+		if a.Digests[name] == "" || b.Digests[name] == "" {
+			return false
+		}
+		if a.Digests[name] != b.Digests[name] {
+			return true
+		}
+	}
+	return false
+}
+
+// selectedChartsOrigin says where a GitHub release selection came from and
+// how to switch to the bundled charts instead.
+func selectedChartsOrigin(request chartRequest, pinned *chartLock, selectedVersion, lockPath, configPath string) string {
+	const hint = "; run with --chart-source bundled to use the bundled charts"
+	switch {
+	case pinned != nil:
+		return fmt.Sprintf("Release %s is pinned in %s%s", selectedVersion, lockPath, hint)
+	case request.Version != "" && request.Version != "latest":
+		return fmt.Sprintf("Release %s is set in %s%s", selectedVersion, configPath, hint)
+	default:
+		return fmt.Sprintf("%s is GitHub's latest release%s", selectedVersion, hint)
+	}
+}
+
 func bundledChartFiles() (map[string]map[string][]byte, error) {
 	files := map[string]map[string][]byte{}
 	for _, name := range patchworksChartNames {
