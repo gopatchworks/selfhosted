@@ -7,8 +7,12 @@ app:
   debug: "true"
 
 # Reduce Elasticsearch heap for laptop/desktop memory budgets.
+# kind nodes use the Docker host's vm.max_map_count, which can be below the
+# 262144 Elasticsearch needs, so let the privileged init container set it.
 elasticsearch:
   javaOpts: "-Xms256m -Xmx256m"
+  sysctlInitContainer:
+    enabled: true
 
 # Two supervisord processes per worker for local development.
 workers:
