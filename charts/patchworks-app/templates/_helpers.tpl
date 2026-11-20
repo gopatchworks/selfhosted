@@ -1349,6 +1349,152 @@ customer-flows
 {{- end -}}
 {{- end -}}
 
+{{/* ── Monocore inbound triggers ──────────────────────────────────────────────── */}}
+
+{{/*
+"true" when the hub Monocore worker serves Core's webhook, callback and start
+API endpoints (workers.mono.inbound). patchworks.validate refuses
+inbound.enabled without a mono hub.
+*/}}
+{{- define "patchworks.mono.inbound" -}}
+{{- if and .Values.workers.enabled (eq .Values.workers.type "mono") .Values.workers.hub.enabled .Values.workers.mono.inbound.enabled -}}true{{- end -}}
+{{- end -}}
+
+{{/* Name of the Service exposing only the hub's public listener. */}}
+{{- define "patchworks.mono.inboundService" -}}
+{{- printf "%s-%s-inbound" (include "patchworks.fullname" .) (.Values.workers.mono.nameSuffix | default "workers") -}}
+{{- end -}}
+
+{{/*
+The env entry Core's start pods end up with for a name, as JSON ({} when
+none): start.yaml appends app.extraEnv and then the start service's extraEnv,
+and the kubelet keeps the last entry of a name.
+Usage: {{ include "patchworks.start.extraEnvEntry" (dict "root" . "name" "APP_NAME") | fromJson }}
+*/}}
+{{- define "patchworks.start.extraEnvEntry" -}}
+{{- $root := .root -}}
+{{- $svc := mergeOverwrite (deepCopy $root.Values.web) $root.Values.web.start -}}
+{{- $entry := dict -}}
+{{- range concat ($root.Values.app.extraEnv | default list) ($svc.extraEnv | default list) -}}
+{{- if eq (toString .name) $.name -}}{{- $entry = . -}}{{- end -}}
+{{- end -}}
+{{- $entry | toJson -}}
+{{- end -}}
+
+{{/*
+INBOUND_RATE_LIMIT_PREFIX: the cache prefix of Core's start pods, whose
+RateLimiter windows (webhooks, callbacks, the start API) Monocore counts in.
+Core's config/cache.php: CACHE_PREFIX, else Str::slug(APP_NAME, '_') followed
+by _cache_:, with APP_NAME "laravel" when unset. Core's image sets neither and
+the chart gives the start pods neither, so only their extraEnv can.
+*/}}
+{{- define "patchworks.mono.inboundRateLimitPrefix" -}}
+{{- $root := . -}}
+{{- $prefix := $root.Values.workers.mono.inbound.rateLimitPrefix | default "" -}}
+{{- if not $prefix -}}
+{{- $cachePrefix := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "CACHE_PREFIX") | fromJson -}}
+{{- $appName := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "APP_NAME") | fromJson -}}
+{{- if or (hasKey $cachePrefix "valueFrom") (and (not $cachePrefix) (hasKey $appName "valueFrom")) -}}
+{{- fail "workers.mono.inbound.rateLimitPrefix is required: Core's start pods read CACHE_PREFIX or APP_NAME through valueFrom, which the chart cannot read" -}}
+{{- end -}}
+{{- if $cachePrefix -}}
+{{- $prefix = toString ($cachePrefix.value | default "") -}}
+{{- else -}}
+{{- $name := toString ($appName.value | default "laravel") -}}
+{{- if regexMatch "[^\\x00-\\x7F]" $name -}}
+{{- fail (printf "workers.mono.inbound.rateLimitPrefix is required: Core's start APP_NAME %q is not ASCII, which Str::slug transliterates" $name) -}}
+{{- end -}}
+{{- /* Str::slug($name, '_') for ASCII text. */ -}}
+{{- $slug := regexReplaceAll "-+" $name "_" -}}
+{{- $slug = replace "@" "_at_" $slug -}}
+{{- $slug = regexReplaceAll "[^_a-z0-9\\s]+" (lower $slug) "" -}}
+{{- $slug = regexReplaceAll "[_\\s]+" $slug "_" -}}
+{{- $prefix = printf "%s_cache_:" (trimAll "_" $slug) -}}
+{{- end -}}
+{{- end -}}
+{{- if not $prefix -}}
+{{- fail "workers.mono.inbound.rateLimitPrefix must not be empty: Core's start pods set an empty CACHE_PREFIX, which Monocore refuses" -}}
+{{- end -}}
+{{- $prefix -}}
+{{- end -}}
+
+{{/*
+INBOUND_QUEUE_SCHEDULE: workers.mono.inbound.queueSchedule, else Core's
+FLOW_QUEUE_SCHEDULE as PHP reads it (Laravel's env() conversions, then
+truthiness), true when unset as in Core.
+*/}}
+{{- define "patchworks.mono.inboundQueueSchedule" -}}
+{{- $root := . -}}
+{{- $raw := $root.Values.workers.mono.inbound.queueSchedule -}}
+{{- $configured := ternary (toString $raw) (toString ($raw | default "")) (kindIs "bool" $raw) -}}
+{{- if $configured -}}
+{{- if not (has $configured (list "true" "false")) -}}
+{{- fail (printf "workers.mono.inbound.queueSchedule must be \"\", \"true\" or \"false\", got %q" $configured) -}}
+{{- end -}}
+{{- $configured -}}
+{{- else -}}
+{{- $entry := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "FLOW_QUEUE_SCHEDULE") | fromJson -}}
+{{- if hasKey $entry "valueFrom" -}}
+{{- fail "workers.mono.inbound.queueSchedule is required: Core's start pods read FLOW_QUEUE_SCHEDULE through valueFrom, which the chart cannot read" -}}
+{{- end -}}
+{{- if not $entry -}}
+true
+{{- else -}}
+{{- $value := lower (toString ($entry.value | default "")) -}}
+{{- ternary "false" "true" (has $value (list "" "0" "false" "(false)" "empty" "(empty)" "null" "(null)")) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+INBOUND_CORE_URL: workers.mono.inbound.coreUrl, else Core's in-cluster start
+Service. Never an ingress host, which would route forwards back to Monocore.
+*/}}
+{{- define "patchworks.mono.inboundCoreUrl" -}}
+{{- $root := . -}}
+{{- if $root.Values.workers.mono.inbound.coreUrl -}}
+{{- $root.Values.workers.mono.inbound.coreUrl -}}
+{{- else if $root.Values.web.start.enabled -}}
+{{- $svc := mergeOverwrite (deepCopy $root.Values.web) $root.Values.web.start -}}
+{{- printf "http://%s-start.%s.svc.cluster.local:%v" (include "patchworks.fullname" $root) (include "patchworks.start.namespace" $root) $svc.service.port -}}
+{{- else -}}
+{{- fail "workers.mono.inbound.coreUrl is required when web.start is disabled: Monocore forwards the requests of companies Core runs to Core's start service" -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Env of a hub worker serving inbound triggers, as a YAML list (empty when every
+name is skipped). Core's start pods read the same names for the domains and
+rate limits, so their extraEnv entries are mirrored, valueFrom included; a
+name in $skip (the worker's own extraEnv) is left to it.
+Usage: {{ include "patchworks.mono.inboundEnv" (dict "root" $root "skip" $extraEnvNames) }}
+*/}}
+{{- define "patchworks.mono.inboundEnv" -}}
+{{- $root := .root -}}
+{{- $passport := $root.Values.passport.existingSecret -}}
+{{- $publicKeyKey := ternary ($passport.publicKeyKey | default "PASSPORT_PUBLIC_KEY") "PASSPORT_PUBLIC_KEY" (not (empty $passport.name)) -}}
+{{- $env := list
+  (dict "name" "PUBLIC_HTTP_PORT" "value" "8082")
+  (dict "name" "INBOUND_CORE_URL" "value" (include "patchworks.mono.inboundCoreUrl" $root))
+  (dict "name" "INBOUND_RATE_LIMIT_PREFIX" "value" (include "patchworks.mono.inboundRateLimitPrefix" $root))
+  (dict "name" "INBOUND_QUEUE_SCHEDULE" "value" (include "patchworks.mono.inboundQueueSchedule" $root))
+  (dict "name" "PASSPORT_PUBLIC_KEY" "valueFrom" (dict "secretKeyRef" (dict "name" (include "patchworks.passportSecretName" $root) "key" $publicKeyKey))) -}}
+{{- $defaults := dict "WEBHOOK_DOMAIN" ($root.Values.ingress.hosts.webhook | default "") "CALLBACK_DOMAIN" ($root.Values.ingress.hosts.callback | default "") -}}
+{{- range $name := list "WEBHOOK_DOMAIN" "CALLBACK_DOMAIN" "WEBHOOK_RATE_LIMIT" "CALLBACK_RATE_LIMIT" "MANUAL_RUNS_API_RATE_LIMIT" -}}
+{{- $entry := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" $name) | fromJson -}}
+{{- if $entry -}}
+{{- $env = append $env $entry -}}
+{{- else if get $defaults $name -}}
+{{- $env = append $env (dict "name" $name "value" (get $defaults $name)) -}}
+{{- end -}}
+{{- end -}}
+{{- $kept := list -}}
+{{- range $env -}}
+{{- if not (has .name $.skip) -}}{{- $kept = append $kept . -}}{{- end -}}
+{{- end -}}
+{{- with $kept -}}{{- toYaml . -}}{{- end -}}
+{{- end -}}
+
 {{/*
 Render the RabbitMQ topology.yaml content (unindented).
 Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $queueName) | indent 4 }}
@@ -1452,6 +1598,9 @@ Called by validation.yaml so disabled components do not hide active validation.
 {{- $valid := list "standalone" "mono" "microservice" -}}
 {{- if and .Values.workers.enabled (not (has .Values.workers.type $valid)) -}}
 {{- fail (printf "workers.type must be one of: standalone, mono, microservice. Got: %q" .Values.workers.type) -}}
+{{- end -}}
+{{- if and .Values.workers.mono.inbound.enabled (not (include "patchworks.mono.inbound" .)) -}}
+{{- fail "workers.mono.inbound.enabled needs workers.enabled, workers.type mono and workers.hub.enabled: only the hub Monocore worker serves inbound triggers" -}}
 {{- end -}}
 {{- if and $consumers.appKey (not .Values.mysql.enabled) (not .Values.fabric.mysql.enabled) (empty .Values.fabric.mysql.external.host) -}}
 {{- fail "Fabric has no MySQL source. Enable mysql, enable fabric.mysql, or set fabric.mysql.external.host." -}}
@@ -2705,6 +2854,8 @@ annotations:
 {{- end -}}
 {{- $_ := merge $accounts $core $workers -}}
 {{- $_ := merge $passport $core -}}
+{{- /* A hub serving the start API verifies Passport tokens with the public key. */ -}}
+{{- if include "patchworks.mono.inbound" . -}}{{- $_ := set $passport (include "patchworks.workers.namespace" .) true -}}{{- end -}}
 {{- if .Values.fabric.enabled -}}
   {{- $_ := set $accounts (include "patchworks.fabric.namespace" .) true -}}
   {{- $_ := set $passport (include "patchworks.fabric.namespace" .) true -}}

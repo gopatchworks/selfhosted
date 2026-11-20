@@ -83,6 +83,7 @@ application -> infra.landlord: "Core LANDLORD_DB_* / DB_*\nMonocore DB_LANDLORD_
 application -> infra.tenants: "Core TENANT_DB_* / TENANT_DB_*_{id}\nMonocore DB_TENANT_* / DB_TENANT_{id}_*"
 
 application.workers.mono -> application.coordination: "shared ServiceAccount / namespace RBAC"
+application.workers.mono -> application.web: "INBOUND_CORE_URL: forwards inbound requests\nof companies Core runs (workers.mono.inbound)"
 
 optional.scaling: "Optional worker autoscaling\nHPA or KEDA ScaledObject per target\nKEDA / Metrics Server installed separately" { shape: rectangle }
 optional.prometheus: "External Prometheus-compatible endpoint\nOptional RabbitMQ scrape / ServiceMonitor" { shape: cylinder }

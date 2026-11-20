@@ -38,6 +38,9 @@ To enable ingress, set:
   Replicas: {{ .Values.workers.replicaCount }}, connection: {{ .Values.workers.queue.connection }}
 {{- else if eq .Values.workers.type "mono" }}
   Processes: {{ .Values.workers.mono.processes }}
+{{- if include "patchworks.mono.inbound" . }}
+  Inbound triggers: webhooks, callbacks and the start API on {{ include "patchworks.mono.inboundService" . }}
+{{- end }}
 {{- end }}
 
 ── Infrastructure ────────────────────────────────────────────────────────────

@@ -1,11 +1,36 @@
 {{- if .Values.ingress.enabled }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ing := .Values.ingress }}
+{{- /*
+Routes of the start, webhook and callback hosts. Every one goes to Core's start
+Service unless the hub Monocore worker serves inbound triggers: then the paths
+Monocore serves go to its public listener. The start API answers on any host;
+webhooks and callbacks under /api/v1/ on their own hosts, where Core also
+answers the one-time callback (/api/v1/otc/...) and its MCP proxy
+(/api/v1/mcp) on any host, so those stay on Core. Core still serves every
+inbound route, so a path left on Core is answered correctly either way.
+*/}}
+{{- $coreStart := printf "%s-start" $fullname }}
+{{- $startRoutes := list (dict "path" "/" "prefix" "/" "svcName" $coreStart) }}
+{{- $triggerRoutes := $startRoutes }}
+{{- if and (include "patchworks.mono.inbound" .) .Values.workers.mono.inbound.ingress.enabled .Values.web.start.enabled (or $ing.hosts.start $ing.hosts.webhook $ing.hosts.callback) }}
+{{- $startNs := include "patchworks.start.namespace" . }}
+{{- $monoNs := include "patchworks.workers.namespace" . }}
+{{- if ne $startNs $monoNs }}
+{{- fail (printf "workers.mono.inbound.ingress.enabled routes the start, webhook and callback hosts (namespace %s) to the Monocore hub (namespace %s), and an Ingress cannot reach a Service in another namespace: put them in one namespace, or set workers.mono.inbound.ingress.enabled=false and route to the %s Service yourself" $startNs $monoNs (include "patchworks.mono.inboundService" .)) }}
+{{- end }}
+{{- $monocore := include "patchworks.mono.inboundService" . }}
+{{- $startRoutes = prepend $startRoutes (dict "path" "/api/v1/flows" "prefix" "/api/v1/flows/" "svcName" $monocore) }}
+{{- $triggerRoutes = concat (list
+  (dict "path" "/api/v1/otc" "prefix" "/api/v1/otc/" "svcName" $coreStart)
+  (dict "path" "/api/v1/mcp" "prefix" "/api/v1/mcp"  "svcName" $coreStart)
+  (dict "path" "/api/v1"     "prefix" "/api/v1/"     "svcName" $monocore)) $triggerRoutes }}
+{{- end }}
 {{- $services := list
   (dict "enabled" .Values.web.gateway.enabled "host" $ing.hosts.gateway "svcName" (printf "%s-gateway"  $fullname) "ns" (include "patchworks.gateway.namespace"  .) "tlsSecret" (dig "gateway"  "secretName" "" $ing.tls))
-  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.start   "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "start"    "secretName" "" $ing.tls))
-  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.webhook "svcName" (printf "%s-start"    $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "webhook"  "secretName" "" $ing.tls) "name" (printf "%s-webhook" $fullname))
-  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.callback "svcName" (printf "%s-start"   $fullname) "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "callback" "secretName" "" $ing.tls) "name" (printf "%s-callback" $fullname))
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.start   "svcName" $coreStart "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "start"    "secretName" "" $ing.tls) "routes" $startRoutes)
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.webhook "svcName" $coreStart "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "webhook"  "secretName" "" $ing.tls) "name" (printf "%s-webhook" $fullname) "routes" $triggerRoutes)
+  (dict "enabled" .Values.web.start.enabled "host" $ing.hosts.callback "svcName" $coreStart "ns" (include "patchworks.start.namespace"    .) "tlsSecret" (dig "callback" "secretName" "" $ing.tls) "name" (printf "%s-callback" $fullname) "routes" $triggerRoutes)
   (dict "enabled" .Values.fabric.enabled "host" $ing.hosts.fabric  "svcName" (printf "%s-fabric"   $fullname) "ns" (include "patchworks.fabric.namespace"   .) "tlsSecret" (dig "fabric"   "secretName" "" $ing.tls))
 }}
 {{- $timeoutPolicy := dict }}
@@ -16,6 +41,7 @@
 {{- range $services }}
 {{- if and .enabled .host }}
 {{- $resourceName := .name | default .svcName }}
+{{- $routes := .routes | default (list (dict "path" "/" "prefix" "/" "svcName" .svcName)) }}
 {{- if eq $ing.provider "contour" }}
 ---
 apiVersion: projectcontour.io/v1
@@ -37,8 +63,9 @@ spec:
       secretName: {{ .tlsSecret | quote }}
     {{- end }}
   routes:
+    {{- range $routes }}
     - conditions:
-        - prefix: /
+        - prefix: {{ .prefix }}
       {{- with $timeoutPolicy }}
       timeoutPolicy:
         {{- toYaml . | nindent 8 }}
@@ -46,6 +73,7 @@ spec:
       services:
         - name: {{ .svcName }}
           port: 80
+    {{- end }}
 {{- else }}
 ---
 apiVersion: networking.k8s.io/v1
@@ -70,13 +98,15 @@ spec:
     - host: {{ .host | quote }}
       http:
         paths:
-          - path: /
+          {{- range $routes }}
+          - path: {{ .path }}
             pathType: Prefix
             backend:
               service:
                 name: {{ .svcName }}
                 port:
                   name: http
+          {{- end }}
 {{- end }}
 {{- end }}
 {{- end }}

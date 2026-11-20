@@ -85,6 +85,9 @@ jobs:
       - name: Mono worker payload meta limit render tests
         run: ruby tests/mono_payload_meta_test.rb
 
+      - name: Mono hub inbound trigger render tests
+        run: ruby tests/mono_inbound_test.rb
+
       - name: Fabric shutdown render tests
         run: ruby tests/fabric_shutdown_test.rb
 

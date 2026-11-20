@@ -22,6 +22,9 @@
 {{- $_ := unset $checksumWorkers.mono.scheduler "serverShards" }}
 {{/* Renaming builds a new Deployment, so the slug need not roll the old one. */}}
 {{- $_ := unset $checksumWorkers.mono "nameSuffix" }}
+{{/* Both change the hub's env, which rolls it, and no worker's config file. */}}
+{{- $_ := unset $checksumWorkers.mono.scheduler "admitAllTriggers" }}
+{{- $_ := unset $checksumWorkers.mono "inbound" }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{/*
 The hub's component slug. Its Deployment, Service, ConfigMaps and companies are
@@ -245,6 +248,10 @@ spec:
 {{- $autoscaling := mergeOverwrite (deepCopy $root.Values.workers.autoscaling) ($mono.autoscaling | default dict) ($company.autoscaling | default dict) }}
 {{- if and $autoscaling.enabled $isHub (ne $scheduler.mode "disabled") (or (eq (int $autoscaling.minReplicas) 0) (and (ne $autoscaling.keda.pausedReplicas nil) (eq (int $autoscaling.keda.pausedReplicas) 0))) }}
 {{- fail "Monocore hub with scheduler enabled cannot scale or pause to zero; disable its scheduler first" }}
+{{- end }}
+{{- $inbound := and $isHub (include "patchworks.mono.inbound" $root) }}
+{{- if and $autoscaling.enabled $inbound (or (eq (int $autoscaling.minReplicas) 0) (and (ne $autoscaling.keda.pausedReplicas nil) (eq (int $autoscaling.keda.pausedReplicas) 0))) }}
+{{- fail "Monocore hub serving inbound triggers cannot scale or pause to zero: webhooks, callbacks and start API requests would find no pod" }}
 {{- end }}
 {{ include "patchworks.workerAutoscaler" (dict "root" $root "options" $autoscaling "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "queue" $queue "processes" $processes "resources" $resources) }}
 {{- $topoCMName := printf "%s-%s-topology" $fullname $hubSlug }}
@@ -496,6 +503,10 @@ spec:
               containerPort: 8080
             - name: metrics
               containerPort: 8081
+            {{- if $inbound }}
+            - name: public
+              containerPort: 8082
+            {{- end }}
           volumeMounts:
             - name: monocore-config
               mountPath: /config.yaml
@@ -524,6 +535,12 @@ spec:
               value: {{ printf "%ds" (int $scheduler.drainTimeoutSeconds) | quote }}
             - name: SCHEDULER_TIMEZONE
               value: {{ $scheduler.timezone | quote }}
+            {{- if $scheduler.admitAllTriggers }}
+            # Admit every queued trigger, not only cron rows; Core must already
+            # leave them to Monocore.
+            - name: SCHEDULER_ADMIT_ALL_TRIGGERS
+              value: "true"
+            {{- end }}
             {{- end }}
             {{- if and $w.isHub (eq $scheduler.mode "kubernetes") }}
             - name: SCHEDULER_NAMESPACE
@@ -590,6 +607,13 @@ spec:
             # the same size Core does.
             - name: PAYLOAD_META_MAX_BYTES
               value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- if $inbound }}
+            # The public listener serving Core's webhook, callback and start API
+            # endpoints, configured as Core's start pods are.
+            {{- with include "patchworks.mono.inboundEnv" (dict "root" $root "skip" $extraEnvNames) }}
+            {{- . | nindent 12 }}
             {{- end }}
             {{- end }}
             {{- /* Monocore creates a company's payload bucket through the same
@@ -679,6 +703,29 @@ spec:
     - name: metrics
       port: 8081
       targetPort: metrics
+{{- if $inbound }}
+---
+# The public listener alone, for ingress routes: the worker Service above also
+# exposes /flows/start and /flows/run, which have no authentication.
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "-30"
+  name: {{ include "patchworks.mono.inboundService" $root }}
+  namespace: {{ $wNs }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: {{ $slug }}-inbound
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: public
+{{- end }}
 {{ include "patchworks.serviceMonitor" (dict "root" $root "name" (printf "%s-%s" $fullname $slug) "namespace" $wNs "component" $slug "port" "metrics" "options" $mono.serviceMonitor) }}
 {{- end }}
 {{- end }}

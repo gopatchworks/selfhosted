@@ -865,8 +865,48 @@ workers:
       drainTimeoutSeconds: 30
       timezone: UTC
       estate: ""
+      # Admit every pending scheduled_flows row of a monocore-scheduler company
+      # (API, webhook, Shape and other triggers), not only cron rows
+      # (SCHEDULER_ADMIT_ALL_TRIGGERS). Turn on only once Core excludes every
+      # trigger from its own queue admission for those companies (Core's
+      # MonocoreSchedulerOwnership::restrictPendingToCore): Core takes no row
+      # lock, so a row both engines admit runs twice.
+      admitAllTriggers: false
       rbac:
         create: true
+    # Serve Core's webhook, callback and start API endpoints from the hub's
+    # public listener (port 8082) instead of Core's start deployment. Needs a
+    # Monocore image with the public listener (gopatchworks/monocore#470,
+    # later than v0.2.12). Monocore forwards callbacks and /manual requests of
+    # companies without the monocore flag to Core's start Service, and queues
+    # their webhooks and /start requests for Core's queue.
+    inbound:
+      enabled: false
+      # Point the chart's start, webhook and callback ingress routes for the
+      # paths Monocore serves at it: /api/v1/flows/ on every host, and
+      # /api/v1/ on the webhook and callback hosts except Core's /api/v1/otc
+      # and /api/v1/mcp. Everything else stays on Core's start Service. false
+      # leaves routing to you; Monocore's <fullname>-<nameSuffix>-inbound
+      # Service serves only the public listener.
+      ingress:
+        enabled: true
+      # Where Monocore forwards requests of companies Core runs. Empty derives
+      # Core's in-cluster start Service; never an ingress host, which would
+      # route the request back to Monocore.
+      coreUrl: ""
+      # Cache prefix of Core's start deployment, whose rate-limit windows
+      # Monocore shares. Empty derives Core's own: CACHE_PREFIX, else
+      # Str::slug(APP_NAME, '_') followed by _cache_:, read from app.extraEnv
+      # and the start service's extraEnv ("laravel_cache_:" when neither is
+      # set). Set it when Core's start pods get either from extraEnvFrom or a
+      # Secret.
+      rateLimitPrefix: ""
+      # Whether Monocore queues webhook and /start runs in scheduled_flows
+      # (INBOUND_QUEUE_SCHEDULE). Empty follows Core's FLOW_QUEUE_SCHEDULE
+      # from the same extraEnv (Core's default: true); "true" or "false"
+      # overrides it. It must match Core's, or webhooks of companies Core runs
+      # are queued where Core never admits them.
+      queueSchedule: ""
     # Scrape the existing internal metrics Service port (8081).
     serviceMonitor:
       enabled: false
