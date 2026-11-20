@@ -2057,6 +2057,22 @@ LICENSE_KEY: {{ .Values.app.license.key | quote }}
 {{- end }}
 {{- end }}
 
+{{/*
+License env vars for Monocore workers. A licensed Monocore image reads only
+LICENSE_KEY and LICENSE_SERVER_URL, Core's names, so it gets neither
+LICENSE_ACTIVE (licensed mode is fixed when the image is built) nor Fabric's
+LICENSE_URL. It builds its licence fingerprint from LARAVEL_APP_KEY. Without a
+key it is omitted, and a licensed worker refuses new runs.
+*/}}
+{{- define "patchworks.mono.licenseEnv" -}}
+{{- $license := .Values.app.license -}}
+{{- $es := $license.existingSecret -}}
+{{- if or $es.name $license.key -}}
+{{ include "patchworks.secretEnv" (dict "name" "LICENSE_KEY" "value" $license.key "secret" (dict "name" $es.name "key" ($es.keyKey | default "LICENSE_KEY"))) }}
+{{ end -}}
+{{ include "patchworks.secretEnv" (dict "name" "LICENSE_SERVER_URL" "value" $license.serverUrl "secret" (dict "name" $es.name "key" $es.serverUrlKey)) }}
+{{- end }}
+
 {{/* ── Managed Secret helpers ─────────────────────────────────────────────────── */}}
 
 {{/*

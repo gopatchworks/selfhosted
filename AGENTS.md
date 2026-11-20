@@ -289,6 +289,8 @@ Company deployments set the same `APP_NAME`/`APP_DOMAIN` as their hub (for `micr
 
 Monocore workers get their config from a generated `config.yaml` ConfigMap (via `patchworks.mono.configYaml`) and a generated `topology.yaml` (via `patchworks.mono.topologyYaml`). The config sets `rabbitmq.queue` and `rabbitmq.flow.exchange`, and the Monocore process also receives the resolved flow exchange via `--rabbitmq-flow-exchange`. If `workers.mono.rabbitmq.flowExchange` is empty, it resolves to `workers.mono.queue` when `companyFlows.enabled` is false, or `customer-flows` when enabled. Company deployments bind to that exchange only when `workers.mono.rabbitmq.companyFlows.enabled` is true.
 
+The Monocore image is licensed. Every Monocore worker, hub and company, gets `LICENSE_KEY` and `LICENSE_SERVER_URL` from `app.license` through `patchworks.mono.licenseEnv`, not `patchworks.licenseEnv`, which adds Core's `LICENSE_ACTIVE` and Fabric's `LICENSE_URL`. Their readiness probe is `/readyz`, which waits for the licence server's first answer; liveness stays on `/healthz`.
+
 ---
 
 ## KubeFaaS
