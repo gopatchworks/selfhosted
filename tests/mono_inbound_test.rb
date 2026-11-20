@@ -41,6 +41,8 @@ def mono(extra = {}, inbound: true)
   }
   deep_merge(base, extra)
 end
+# The ingress routes to Monocore, a second opt-in.
+ROUTED = {'workers' => {'mono' => {'inbound' => {'ingress' => {'enabled' => true}}}}}.freeze
 def workers(documents)
   documents.select { |d| d['kind'] == 'Deployment' && d.dig('spec', 'template', 'spec', 'containers', 0, 'name') == 'workers' }
                .to_h { |d| [d.dig('metadata', 'name'), d.dig('spec', 'template', 'spec', 'containers', 0)] }
@@ -100,22 +102,23 @@ check([{'name' => 'http', 'port' => 80, 'targetPort' => 'public'}], services[0].
 check({'app.kubernetes.io/name' => 'workers', 'app.kubernetes.io/instance' => 'test'}, services[0].dig('spec', 'selector'),
   'the inbound Service selects the hub alone')
 
+check({'patchworks-start' => core_only, 'patchworks-webhook' => core_only, 'patchworks-callback' => core_only}, routes(documents),
+  'the routes stay on Core until inbound.ingress.enabled turns them on')
 monocore = 'patchworks-workers-inbound'
 check({
   'patchworks-start' => [['/api/v1/flows/', monocore, 80], *core_only],
   'patchworks-webhook' => [['/api/v1/otc/', 'patchworks-start', 80], ['/api/v1/mcp', 'patchworks-start', 80], ['/api/v1/', monocore, 80], *core_only],
   'patchworks-callback' => [['/api/v1/otc/', 'patchworks-start', 80], ['/api/v1/mcp', 'patchworks-start', 80], ['/api/v1/', monocore, 80], *core_only]
-}, routes(documents), 'Contour sends the paths Monocore serves to it, and the rest to Core')
+}, routes(render(mono(ROUTED))), 'Contour sends the paths Monocore serves to it, and the rest to Core')
 core_only_nginx = [['/', 'patchworks-start', 'http']]
 check({
   'patchworks-start' => [['/api/v1/flows', monocore, 'http'], *core_only_nginx],
   'patchworks-webhook' => [['/api/v1/otc', 'patchworks-start', 'http'], ['/api/v1/mcp', 'patchworks-start', 'http'], ['/api/v1', monocore, 'http'], *core_only_nginx],
   'patchworks-callback' => [['/api/v1/otc', 'patchworks-start', 'http'], ['/api/v1/mcp', 'patchworks-start', 'http'], ['/api/v1', monocore, 'http'], *core_only_nginx]
-}, routes(render(mono('ingress' => {'provider' => 'nginx'}))), 'an Ingress routes the same paths')
+}, routes(render(mono(deep_merge(ROUTED, 'ingress' => {'provider' => 'nginx'})))), 'an Ingress routes the same paths')
 check({'patchworks-start' => core_only, 'patchworks-webhook' => core_only, 'patchworks-callback' => core_only},
-  routes(render(mono('workers' => {'mono' => {'inbound' => {'ingress' => {'enabled' => false}}}}))),
-  'inbound.ingress.enabled=false leaves the routes to the operator')
-dashboard = render(mono('ingress' => {'hosts' => {'dashboard' => 'app.example.com'}}))
+  routes(render(mono(ROUTED, inbound: false))), 'the routes need inbound itself on')
+dashboard = render(mono(deep_merge(ROUTED, 'ingress' => {'hosts' => {'dashboard' => 'app.example.com'}})))
   .select { |d| d['kind'] == 'HTTPProxy' && d.dig('metadata', 'name') == 'patchworks-dashboard' }
 check([['/core-start', 'patchworks-start']], dashboard.flat_map { |d| d.dig('spec', 'routes') }
   .map { |r| [r['conditions'][0]['prefix'], r['services'][0]['name']] }.select { |prefix, _| prefix.include?('start') },
@@ -207,8 +210,8 @@ check(['http://core.internal', 'start_cache_:', 'true'],
   inbound_env(workers(separate)['patchworks-workers']).values_at('INBOUND_CORE_URL', 'INBOUND_RATE_LIMIT_PREFIX', 'INBOUND_QUEUE_SCHEDULE'),
   'with Core\'s start pods elsewhere the hub takes the values given')
 check({}, routes(separate), 'and the chart renders no start, webhook or callback routes')
-render(mono('web' => {'start' => {'namespace' => 'core'}}), failure: 'an Ingress cannot reach a Service in another namespace')
-split = render(mono('web' => {'start' => {'namespace' => 'core'}}, 'workers' => {'mono' => {'inbound' => {'ingress' => {'enabled' => false}}}}))
+render(mono(deep_merge(ROUTED, 'web' => {'start' => {'namespace' => 'core'}})), failure: 'an Ingress cannot reach a Service in another namespace')
+split = render(mono('web' => {'start' => {'namespace' => 'core'}}))
 check({'patchworks-start' => core_only, 'patchworks-webhook' => core_only, 'patchworks-callback' => core_only}, routes(split),
   'routing left to the operator works across namespaces')
 check('http://patchworks-start.core.svc.cluster.local:80', inbound_env(workers(split)['patchworks-workers'])['INBOUND_CORE_URL'],

@@ -885,13 +885,14 @@ workers:
       # Point the chart's start, webhook and callback ingress routes for the
       # paths Monocore serves at it: /api/v1/flows/ on every host, and
       # /api/v1/ on the webhook and callback hosts except Core's /api/v1/otc
-      # and /api/v1/mcp. Everything else stays on Core's start Service. false
-      # leaves routing to you; Monocore's <fullname>-<nameSuffix>-inbound
-      # Service serves only the public listener. Enable inbound with this
-      # false first, then set it once the hub pods serve the listener: in one
-      # upgrade the routes move before any hub pod has the public port.
+      # and /api/v1/mcp. Everything else stays on Core's start Service. Off,
+      # routing is left to you; Monocore's <fullname>-<nameSuffix>-inbound
+      # Service serves only the public listener. Turn it on in an upgrade
+      # after the one that enables inbound, once the hub pods serve the
+      # listener: in one upgrade the routes move before any hub pod has the
+      # public port.
       ingress:
-        enabled: true
+        enabled: false
       # Where Monocore forwards requests of companies Core runs. Empty derives
       # Core's in-cluster start Service; never an ingress host, which would
       # route the request back to Monocore. Required when web.start is

@@ -677,7 +677,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.scheduler.rbac.create` | `true` | Bind scheduler permissions to the shared service account in the hub namespace |
 | `workers.mono.scheduler.admitAllTriggers` | `false` | `SCHEDULER_ADMIT_ALL_TRIGGERS` on the hub: admit every queued `scheduled_flows` row (API, webhook, Shape and other triggers) of a `monocore-scheduler` company, not only cron rows. Turn on only once Core leaves those rows to Monocore, or a row both engines admit runs twice. See [Monocore inbound triggers](#monocore-inbound-triggers) |
 | `workers.mono.inbound.enabled` | `false` | Serve Core's webhook, callback and start API endpoints from the hub's public listener (port 8082) and its `<fullname>-<nameSuffix>-inbound` Service. Needs a mono hub and a Monocore image later than `v0.2.12` |
-| `workers.mono.inbound.ingress.enabled` | `true` | Route the paths Monocore serves on the start, webhook and callback hosts to it. `false` leaves routing to you; use it for the first of the [two enabling upgrades](#monocore-inbound-triggers) |
+| `workers.mono.inbound.ingress.enabled` | `false` | Route the paths Monocore serves on the start, webhook and callback hosts to it. Off, routing is left to you. Turn it on in the second of the [two enabling upgrades](#monocore-inbound-triggers) |
 | `workers.mono.inbound.coreUrl` | `""` | Where Monocore forwards the requests of companies Core runs (`INBOUND_CORE_URL`). Empty derives Core's in-cluster start Service; required when `web.start.enabled=false`. Never an ingress host |
 | `workers.mono.inbound.rateLimitPrefix` | `""` | Cache prefix of Core's start pods, whose rate-limit windows Monocore shares (`INBOUND_RATE_LIMIT_PREFIX`). Empty derives Core's: `CACHE_PREFIX`, else `Str::slug(APP_NAME, '_')` and `_cache_:`, from `app.extraEnv` and the start service's `extraEnv`; `laravel_cache_:` when neither is set. Required when `web.start.enabled=false` |
 | `workers.mono.inbound.queueSchedule` | `""` | `INBOUND_QUEUE_SCHEDULE`: queue webhook and `/start` runs in `scheduled_flows`. Empty follows Core's `FLOW_QUEUE_SCHEDULE` from the same `extraEnv` (default `true`); `"true"` or `"false"` overrides it. Required when `web.start.enabled=false` |
@@ -1700,17 +1700,19 @@ pods belong to another release (`web.start.enabled=false`), set `coreUrl`,
 `rateLimitPrefix` and `queueSchedule` to theirs; the chart then renders no
 start, webhook or callback routes.
 
-Enable it in two upgrades. The first, with
-`workers.mono.inbound.ingress.enabled=false`, starts the listener on the new
-hub pods and changes no route. Check that the inbound Service has endpoints and
-that the start pods' prefix matches. The second sets
-`workers.mono.inbound.ingress.enabled=true`. Done in one upgrade, the routes
-move before any hub pod has the public port, so the inbound paths answer 503
-until the first new pod is ready, or until rollback on an image without the
-listener.
+Enable it in two upgrades. The first sets `workers.mono.inbound.enabled=true`:
+it starts the listener on the new hub pods and changes no route, as
+`workers.mono.inbound.ingress.enabled` defaults to `false`. Check that the
+inbound Service has endpoints and that the start pods' prefix matches. The
+second sets `workers.mono.inbound.ingress.enabled=true`. Done in one upgrade,
+the routes move before any hub pod has the public port, so the inbound paths
+answer 503 until the first new pod is ready, or until rollback on an image
+without the listener. A new installation, which has no traffic yet, can set
+both at once.
 
-With `ingress.enabled`, the start, webhook and callback hosts route these paths
-to Monocore, and everything else to Core's start Service as before:
+With `ingress.enabled` and `workers.mono.inbound.ingress.enabled`, the start,
+webhook and callback hosts route these paths to Monocore, and everything else
+to Core's start Service as before:
 
 | Host | Monocore | Core |
 |---|---|---|
@@ -1723,8 +1725,8 @@ without the `monocore` flag to Core's start Service and queues their webhooks
 and `/start` requests for Core. The dashboard's path route (`/core-start`)
 stays on Core, which hands Monocore's companies to Monocore itself. An Ingress
 cannot reach a Service in another namespace, so the chart refuses to route
-when the start service and the workers are in different namespaces: set
-`workers.mono.inbound.ingress.enabled=false` and route to the inbound Service
+when the start service and the workers are in different namespaces: leave
+`workers.mono.inbound.ingress.enabled` off and route to the inbound Service
 yourself. The hub cannot scale or pause to zero while it serves them.
 
 Before exposing the listener to the internet, check that the Monocore release
