@@ -70,11 +70,23 @@ jobs:
       - name: Media bucket render tests
         run: ruby tests/media_bucket_test.rb
 
+      - name: Core scheduler render tests
+        run: ruby tests/core_scheduler_test.rb
+
       - name: RoadRunner shutdown render and process tests
         run: ruby tests/roadrunner_shutdown_test.rb
 
       - name: Mono worker shutdown render tests
         run: ruby tests/mono_shutdown_test.rb
+
+      - name: Mono scheduler render tests
+        run: ruby tests/mono_scheduler_test.rb
+
+      - name: Mono hub rename render tests
+        run: ruby tests/mono_rename_test.rb
+
+      - name: Mono worker bucket creation render tests
+        run: ruby tests/mono_bucket_creation_test.rb
 
       - name: Mono worker GOMEMLIMIT render tests
         run: ruby tests/mono_gomemlimit_test.rb
@@ -87,6 +99,9 @@ jobs:
 
       - name: Mono hub inbound trigger render tests
         run: ruby tests/mono_inbound_test.rb
+
+      - name: Mono worker licence render tests
+        run: ruby tests/mono_license_test.rb
 
       - name: Fabric shutdown render tests
         run: ruby tests/fabric_shutdown_test.rb

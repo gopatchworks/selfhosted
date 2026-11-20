@@ -174,10 +174,10 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.env` | `production` | `APP_ENV` |
 | `app.debug` | `"false"` | `APP_DEBUG` |
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
-| `app.license.active` | `"true"` | `LICENSE_ACTIVE` for encoded application images |
-| `app.license.key` | `""` | Inline `LICENSE_KEY`. Prefer `app.license.existingSecret.name` for production |
-| `app.license.serverUrl` | `https://license.wearepatchworks.com` | License server URL rendered as `LICENSE_SERVER_URL` for Core and `LICENSE_URL` for Fabric |
-| `app.license.existingSecret.name` | `""` | Existing Secret containing license values |
+| `app.license.active` | `"true"` | `LICENSE_ACTIVE` for encoded Core and Fabric images. Monocore workers do not read it |
+| `app.license.key` | `""` | Inline `LICENSE_KEY` for Core, Fabric and Monocore workers. Prefer `app.license.existingSecret.name` for production |
+| `app.license.serverUrl` | `https://license.wearepatchworks.com` | License server URL rendered as `LICENSE_SERVER_URL` for Core and Monocore workers, and as `LICENSE_URL` for Fabric |
+| `app.license.existingSecret.name` | `""` | Existing Secret containing license values. It must exist in every namespace that runs Core, Fabric or Monocore workers |
 | `app.license.existingSecret.keyKey` | `LICENSE_KEY` | Key containing `LICENSE_KEY` in the existing Secret |
 | `app.license.existingSecret.serverUrlKey` | `""` | Optional key containing the license server URL in the existing Secret |
 | `app.extraEnv` | `[]` | Additional env vars injected into all app pods |

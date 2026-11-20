@@ -60,27 +60,27 @@ baseline = render
 check_shutdown(pod(baseline), 20, 90)
 check_budget(baseline, 1)
 
-custom = render('fabric' => {
+custom = render({'fabric' => {
   'preStopSleepSeconds' => 0, 'terminationGracePeriodSeconds' => 75,
   'fpm' => { 'drainTimeoutSeconds' => 70 }, 'podDisruptionBudget' => { 'maxUnavailable' => '25%' }
-})
+}})
 check_shutdown(pod(custom), 0, 75)
 check_budget(custom, '25%')
 
-no_budget = render('fabric' => { 'podDisruptionBudget' => { 'enabled' => false } })
+no_budget = render({'fabric' => { 'podDisruptionBudget' => { 'enabled' => false } }})
 assert(fabric(no_budget, 'PodDisruptionBudget').nil?, 'Disabled Fabric PodDisruptionBudget rendered')
 
 # FrankenPHP has no Nginx sidecar or PHP-FPM drain, so it keeps Kubernetes defaults
 # and skips their validation, but still limits voluntary evictions.
-franken = render('runtime' => { 'frankenphp' => { 'enabled' => true } },
-                 'fabric' => { 'terminationGracePeriodSeconds' => 10 })
+franken = render({'runtime' => { 'frankenphp' => { 'enabled' => true } },
+                 'fabric' => { 'terminationGracePeriodSeconds' => 10 }})
 spec = pod(franken)
 assert(!spec.key?('terminationGracePeriodSeconds') && hooks(spec).values.none?, 'PHP-FPM shutdown settings leaked into FrankenPHP')
 check_budget(franken, 1)
-check_shutdown(pod(render('runtime' => { 'frankenphp' => { 'enabled' => true } },
-                          'fabric' => { 'frankenphp' => { 'enabled' => false } })), 20, 90)
+check_shutdown(pod(render({'runtime' => { 'frankenphp' => { 'enabled' => true } },
+                          'fabric' => { 'frankenphp' => { 'enabled' => false } }})), 20, 90)
 
-disabled = render('fabric' => { 'enabled' => false })
+disabled = render({'fabric' => { 'enabled' => false }})
 assert(fabric(disabled, 'Deployment').nil? && fabric(disabled, 'PodDisruptionBudget').nil?, 'Disabled Fabric resources rendered')
 
 [-1, 1.5, 'invalid'].each do |seconds|
@@ -89,6 +89,6 @@ assert(fabric(disabled, 'Deployment').nil? && fabric(disabled, 'PodDisruptionBud
 end
 render({ 'fabric' => { 'terminationGracePeriodSeconds' => 80 } }, error: 'must exceed preStopSleepSeconds + fpm.drainTimeoutSeconds')
 render({ 'fabric' => { 'preStopSleepSeconds' => 40 } }, error: 'must exceed preStopSleepSeconds + fpm.drainTimeoutSeconds')
-check_shutdown(pod(render('fabric' => { 'terminationGracePeriodSeconds' => 81 })), 20, 81)
+check_shutdown(pod(render({'fabric' => { 'terminationGracePeriodSeconds' => 81 }})), 20, 81)
 
 puts 'Fabric shutdown rendering, runtime overrides, disruption budget and validation tests passed'

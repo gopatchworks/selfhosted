@@ -291,10 +291,10 @@ Shared configuration injected into every application pod (web, workers, migratio
 | `app.env` | `production` | `APP_ENV` |
 | `app.debug` | `"false"` | `APP_DEBUG` |
 | `app.url` | `http://localhost` | `APP_URL` — set to your public-facing URL |
-| `app.license.active` | `"true"` | `LICENSE_ACTIVE` for encoded application images |
-| `app.license.key` | `""` | Inline `LICENSE_KEY`. Prefer `app.license.existingSecret.name` for production |
-| `app.license.serverUrl` | `https://license.wearepatchworks.com` | License server URL rendered as `LICENSE_SERVER_URL` for Core and `LICENSE_URL` for Fabric |
-| `app.license.existingSecret.name` | `""` | Existing Secret containing license values |
+| `app.license.active` | `"true"` | `LICENSE_ACTIVE` for encoded Core and Fabric images. Monocore workers do not read it |
+| `app.license.key` | `""` | Inline `LICENSE_KEY` for Core, Fabric and Monocore workers. Prefer `app.license.existingSecret.name` for production |
+| `app.license.serverUrl` | `https://license.wearepatchworks.com` | License server URL rendered as `LICENSE_SERVER_URL` for Core and Monocore workers, and as `LICENSE_URL` for Fabric |
+| `app.license.existingSecret.name` | `""` | Existing Secret containing license values. It must exist in every namespace that runs Core, Fabric or Monocore workers |
 | `app.license.existingSecret.keyKey` | `LICENSE_KEY` | Key containing `LICENSE_KEY` in the existing Secret |
 | `app.license.existingSecret.serverUrlKey` | `""` | Optional key containing the license server URL in the existing Secret |
 | `app.payloadMetaMaxBytes` | `""` | `PAYLOAD_META_MAX_BYTES`, the largest payload meta in bytes, for Core and for Monocore workers, so both enforce the same limit. Empty omits it and both keep their default of `10240`. A Monocore worker whose `extraEnv` sets the variable keeps that value |
@@ -696,6 +696,15 @@ Secret keeps the `-workers` name whatever `workers.mono.nameSuffix` is), unless
 resolved S3 endpoint, bucket names, region, path-style setting, and access
 credentials for both the `default` and `customer_cache` stores. Existing store
 Secrets must exist in every namespace where monocore worker pods run.
+
+The Monocore image is licensed, as Core and Fabric are. Every Monocore worker,
+the hub and each company, gets `LICENSE_KEY` and `LICENSE_SERVER_URL` from
+`app.license` (see [Application](#application)) and checks the licence against
+the licence server in the background. While the licence is not valid it starts
+no new runs; runs already started finish. Its readiness probe is `/readyz`,
+which fails until the licence server has first answered, so a new pod takes
+no requests before then, from Core or as an inbound trigger. The liveness probe stays on `/healthz`. An
+`app.license.existingSecret` must exist in every worker namespace.
 
 ### Renaming the hub
 

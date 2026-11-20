@@ -568,6 +568,7 @@ spec:
             {{- with include "patchworks.env.laravelAppKey" $root }}
             {{- . | nindent 12 }}
             {{- end }}
+            {{- include "patchworks.mono.licenseEnv" $root | nindent 12 }}
             {{- include "patchworks.env.rabbitmqPassword" $root | nindent 12 }}
             {{- include "patchworks.env.rabbitmq" $root | nindent 12 }}
             {{- if or $root.Values.redis.external.password $root.Values.redis.external.existingSecret.name }}
@@ -648,9 +649,13 @@ spec:
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
+          # /readyz holds a licensed worker back until the licence server has
+          # first answered, so Core's requests, and inbound triggers on the
+          # public listener, reach only pods that know the licence. Liveness
+          # stays on /healthz, which never depends on it.
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /readyz
               port: http
             initialDelaySeconds: 5
             periodSeconds: 10

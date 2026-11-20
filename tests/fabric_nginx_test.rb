@@ -51,16 +51,16 @@ assert(nginx_files(baseline).keys == ['site.conf'], 'Nginx timeouts rendered wit
 assert(!annotations(baseline).key?('checksum/nginx-timeouts'), 'Unset Nginx timeouts changed the pod annotations')
 assert(!nginx_files(baseline)['site.conf'].include?('fastcgi_read_timeout'), 'site.conf must stay the shipped file')
 
-configured = render('fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 300 } })
+configured = render({'fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 300 } }})
 assert(nginx_files(configured)['timeouts.conf'].strip == 'fastcgi_read_timeout 300s;', "Wrong timeouts.conf: #{nginx_files(configured)['timeouts.conf'].inspect}")
 assert(nginx_files(configured)['site.conf'] == nginx_files(baseline)['site.conf'], 'Configuring a timeout changed site.conf')
 assert(annotations(configured)['checksum/nginx'] == annotations(baseline)['checksum/nginx'], 'site.conf checksum changed')
 assert(annotations(configured).key?('checksum/nginx-timeouts'), 'Changing the timeout would not roll the Fabric pods')
-assert(annotations(configured)['checksum/nginx-timeouts'] != annotations(render('fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 120 } }))['checksum/nginx-timeouts'],
+assert(annotations(configured)['checksum/nginx-timeouts'] != annotations(render({'fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 120 } }}))['checksum/nginx-timeouts'],
        'Different timeouts share a pod checksum')
 
-franken = render('runtime' => { 'frankenphp' => { 'enabled' => true } },
-                 'fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 300 } })
+franken = render({'runtime' => { 'frankenphp' => { 'enabled' => true } },
+                 'fabric' => { 'nginx' => { 'fastcgiReadTimeoutSeconds' => 300 } }})
 assert(fabric(franken, 'ConfigMap').nil?, 'FrankenPHP has no Nginx sidecar to configure')
 
 [-1, 1.5, 'invalid', '300s'].each do |seconds|

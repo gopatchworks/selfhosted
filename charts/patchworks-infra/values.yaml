@@ -57,12 +57,16 @@ app:
   env: production
   debug: "false"
   url: "http://localhost"
-  # License values required by encoded Core and Fabric images.
+  # License values required by encoded Core and Fabric images and by Monocore
+  # workers.
   # Use existingSecret for production so the license key is not stored in values.
+  # The existing Secret must also exist in every Monocore worker namespace.
   license:
+    # LICENSE_ACTIVE for Core and Fabric. Monocore workers do not read it.
     active: "true"
     key: ""
-    # License server URL. Rendered as LICENSE_SERVER_URL for Core and LICENSE_URL for Fabric.
+    # License server URL. Rendered as LICENSE_SERVER_URL for Core and Monocore
+    # workers, and as LICENSE_URL for Fabric.
     serverUrl: "https://license.wearepatchworks.com"
     existingSecret:
       name: ""
