@@ -70,6 +70,9 @@ jobs:
       - name: Media bucket render tests
         run: ruby tests/media_bucket_test.rb
 
+      - name: S3 image render tests
+        run: ruby tests/s3_images_test.rb
+
       - name: Core scheduler render tests
         run: ruby tests/core_scheduler_test.rb
 

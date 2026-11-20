@@ -36,7 +36,8 @@ spec:
               echo "MinIO ready."
       containers:
         - name: mc
-          image: minio/mc:latest
+          image: "{{ .Values.s3.setup.image.repository }}:{{ .Values.s3.setup.image.tag }}"
+          imagePullPolicy: {{ .Values.s3.setup.image.pullPolicy }}
           command:
             - sh
             - -c
