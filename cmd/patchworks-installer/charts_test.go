@@ -342,3 +342,89 @@ func TestChartLockCLI(t *testing.T) {
 		}
 	}
 }
+
+func TestBundledChartsNotice(t *testing.T) {
+	bundled, err := prepareChartsFromRepository(chartRequest{Source: "bundled"}, nil, chartRepositoryClient{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	lock := func(source, version string, digests map[string]string) chartLock {
+		return chartLock{SchemaVersion: 1, Source: source, Version: version, Digests: digests}
+	}
+	changed := map[string]string{}
+	for name, value := range bundled.Lock.Digests {
+		changed[name] = value
+	}
+	changed["patchworks-infra"] = digest.FromString("other infra").String()
+	current, _ := exactChartVersion(bundled.Lock.Version)
+	older := "0.0.1"
+	newer := "999.0.0"
+
+	cases := []struct {
+		name     string
+		selected chartLock
+		bundled  chartLock
+		want     string
+	}{
+		{"release build matches its GitHub release", lock("github", current, bundled.Lock.Digests), bundled.Lock, ""},
+		{"lock pins an older release", lock("github", older, changed), bundled.Lock, "This installer bundles newer charts (" + current + ") than release " + older},
+		{"development build changed the same release", lock("github", current, changed), bundled.Lock, "This installer's bundled charts differ from release " + current},
+		{"GitHub release is newer", lock("github", newer, changed), bundled.Lock, ""},
+		{"bundled charts selected", lock("bundled", older, changed), bundled.Lock, ""},
+		{"selected digests unknown", lock("github", current, map[string]string{}), bundled.Lock, ""},
+		{"bundled lock not bundled", lock("github", older, changed), lock("github", current, bundled.Lock.Digests), ""},
+		{"invalid selected version", lock("github", "latest", changed), bundled.Lock, ""},
+	}
+	for _, tc := range cases {
+		if got := bundledChartsNotice(tc.selected, tc.bundled); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}
+
+func TestSelectedChartsOrigin(t *testing.T) {
+	pinned := &chartLock{Source: "github", Version: "0.2.14"}
+	cases := []struct {
+		request chartRequest
+		pinned  *chartLock
+		want    string
+	}{
+		{chartRequest{"github", "0.2.14"}, pinned, "Release 0.2.14 is pinned in values.yaml.charts.lock.yaml"},
+		{chartRequest{"github", "0.2.14"}, nil, "Release 0.2.14 is set in config.yaml"},
+		{chartRequest{"github", "latest"}, nil, "0.2.14 is GitHub's latest release"},
+	}
+	for _, tc := range cases {
+		got := selectedChartsOrigin(tc.request, tc.pinned, "0.2.14", "values.yaml.charts.lock.yaml", "config.yaml")
+		if !strings.HasPrefix(got, tc.want) || !strings.HasSuffix(got, "run with --chart-source bundled to use the bundled charts") {
+			t.Errorf("%+v: got %q", tc.request, got)
+		}
+	}
+}
+
+func TestChartNoticeStaysOutOfWrittenFiles(t *testing.T) {
+	notice := "This installer bundles newer charts (0.2.15) than release 0.2.14; run with --chart-source bundled to use them"
+	values := map[string]string{"chartSource": "github", "chartVersion": "0.2.14", "namespace": "patchworks", "chartNotice": notice}
+	if summary := installSummary(installConfig{Values: values}); !strings.Contains(summary, notice) {
+		t.Fatalf("install summary omits the chart notice:\n%s", summary)
+	}
+	if summary := installSummary(installConfig{Values: map[string]string{"chartSource": "github", "chartVersion": "0.2.14"}}); strings.Contains(summary, "--chart-source") {
+		t.Fatalf("install summary shows a notice without one:\n%s", summary)
+	}
+	path := filepath.Join(t.TempDir(), "values.yaml")
+	if err := writeValues(path, values); err != nil {
+		t.Fatal(err)
+	}
+	written, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	saved, err := yaml.Marshal(localConfigFromInstallConfig(installConfig{Values: values}, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{"values file": written, "saved config": saved} {
+		if bytes.Contains(data, []byte("bundled charts")) || bytes.Contains(data, []byte("chartNotice")) {
+			t.Fatalf("%s contains the chart notice:\n%s", name, data)
+		}
+	}
+}

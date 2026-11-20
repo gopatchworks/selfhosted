@@ -150,6 +150,24 @@ An explicit `--chart-source bundled` selects the current binary's bundle anew.
 Existing installations without a lock do not infer a version from the cluster;
 use an explicit release on the first run if you want to retain a particular one.
 
+When no chart option is given and the run selects a GitHub release, the
+installer compares it with the charts bundled in its binary. It warns, under
+the **Prepared charts** line and in the install summary, when the bundled
+charts are a newer release, or the same release with different content (a
+development build). A newer binary therefore cannot quietly install an older
+pinned release:
+
+```text
+✓ Prepared charts 0.2.14 (github) · 1s
+  ! This installer's bundled charts differ from release 0.2.14
+  Release 0.2.14 is pinned in patchworks.values.yaml.charts.lock.yaml; run with --chart-source bundled to use the bundled charts
+```
+
+The warning never changes the selection or stops the run. A binary built from a
+release's `Update image tags for vX.Y.Z` commit bundles exactly that release's
+charts, so it stays silent unless a lock or `config.yaml` pins an older
+release. Chart options suppress the check.
+
 ### Unpack charts
 
 `unpack-charts` defaults to the current binary's bundle. Use an explicit release

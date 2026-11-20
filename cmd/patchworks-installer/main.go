@@ -733,6 +733,7 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 	var charts *preparedCharts
+	chartsNotice := ""
 	if err := runProgress(progressStep{
 		Title:  "Preparing Patchworks charts",
 		Detail: "Resolving the chart release and validating both charts",
@@ -742,9 +743,25 @@ func runInstaller(opts cliOptions) error {
 	}, func(_ context.Context) error {
 		var prepareErr error
 		charts, prepareErr = prepareCharts(request, pinned)
-		return prepareErr
+		if prepareErr != nil {
+			return prepareErr
+		}
+		// A chart flag is an explicit choice. Otherwise a lock, a config pin or
+		// GitHub's latest release can quietly select older charts than the ones
+		// in this binary. The check never blocks the selected charts.
+		if opts.ChartSource == "" && opts.ChartVersion == "" && charts.Lock.Source == "github" {
+			if bundled, bundledErr := prepareCharts(chartRequest{Source: "bundled"}, nil); bundledErr == nil {
+				chartsNotice = bundledChartsNotice(charts.Lock, bundled.Lock)
+			}
+		}
+		return nil
 	}); err != nil {
 		return err
+	}
+	if chartsNotice != "" {
+		fmt.Println(warningLine(chartsNotice))
+		fmt.Println(noteLine(selectedChartsOrigin(request, pinned, charts.Lock.Version, lockPath, opts.ConfigPath)))
+		config.Values["chartNotice"] = chartsNotice + "; run with --chart-source bundled to use them"
 	}
 	config.Values["chartSource"] = charts.Lock.Source
 	config.Values["chartVersion"] = charts.Lock.Version
@@ -3166,6 +3183,11 @@ func installSummary(config installConfig) string {
 	lines := []string{
 		keyValue("Values file", config.Output),
 		keyValue("Chart release", fmt.Sprintf("%s (%s)", values["chartVersion"], values["chartSource"])),
+	}
+	if values["chartNotice"] != "" {
+		lines = append(lines, warningStyle.Render("! "+values["chartNotice"]))
+	}
+	lines = append(lines,
 		keyValue("Namespace", values["namespace"]),
 		keyValue("Infrastructure", infrastructureSummary(values)),
 		keyValue("Base domain", values["domain"]),
@@ -3178,7 +3200,7 @@ func installSummary(config installConfig) string {
 		keyValue("Cookie/session domain", values["cookieDomain"]),
 		keyValue("Image pull secret", defaultListValue(values["pullSecret"], "none")),
 		keyValue("Initial company/admin", values["seedInstall"]),
-	}
+	)
 	if defaultWorkerMode(values["workerMode"]) == "mono" {
 		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
 	}
