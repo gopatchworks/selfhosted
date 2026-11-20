@@ -1244,10 +1244,19 @@ s3:
       name: ""
       accessKeyKey: access-key
       secretKeyKey: secret-key
+  # MinIO stopped publishing its images on Docker Hub and Quay. Silo is a
+  # maintained MinIO fork with the same S3 API, MINIO_* settings, health routes
+  # and on-disk format, so existing data volumes keep working.
   image:
-    repository: minio/minio
-    tag: latest
+    repository: pgsty/silo
+    tag: RELEASE.2026-11-12T00-00-00Z
     pullPolicy: IfNotPresent
+  # Client image for the bucket setup Job. It needs sh and mc.
+  setup:
+    image:
+      repository: pgsty/mc
+      tag: RELEASE.2026-11-12T00-00-00Z
+      pullPolicy: IfNotPresent
   auth:
     rootUser: minioadmin
     rootPassword: ""
