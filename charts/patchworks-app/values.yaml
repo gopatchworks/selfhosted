@@ -887,19 +887,22 @@ workers:
       # /api/v1/ on the webhook and callback hosts except Core's /api/v1/otc
       # and /api/v1/mcp. Everything else stays on Core's start Service. false
       # leaves routing to you; Monocore's <fullname>-<nameSuffix>-inbound
-      # Service serves only the public listener.
+      # Service serves only the public listener. Enable inbound with this
+      # false first, then set it once the hub pods serve the listener: in one
+      # upgrade the routes move before any hub pod has the public port.
       ingress:
         enabled: true
       # Where Monocore forwards requests of companies Core runs. Empty derives
       # Core's in-cluster start Service; never an ingress host, which would
-      # route the request back to Monocore.
+      # route the request back to Monocore. Required when web.start is
+      # disabled, as are rateLimitPrefix and queueSchedule.
       coreUrl: ""
       # Cache prefix of Core's start deployment, whose rate-limit windows
       # Monocore shares. Empty derives Core's own: CACHE_PREFIX, else
       # Str::slug(APP_NAME, '_') followed by _cache_:, read from app.extraEnv
       # and the start service's extraEnv ("laravel_cache_:" when neither is
       # set). Set it when Core's start pods get either from extraEnvFrom or a
-      # Secret.
+      # Secret, or run in another release.
       rateLimitPrefix: ""
       # Whether Monocore queues webhook and /start runs in scheduled_flows
       # (INBOUND_QUEUE_SCHEDULE). Empty follows Core's FLOW_QUEUE_SCHEDULE

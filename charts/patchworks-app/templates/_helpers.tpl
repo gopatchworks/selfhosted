@@ -1391,6 +1391,9 @@ the chart gives the start pods neither, so only their extraEnv can.
 {{- define "patchworks.mono.inboundRateLimitPrefix" -}}
 {{- $root := . -}}
 {{- $prefix := $root.Values.workers.mono.inbound.rateLimitPrefix | default "" -}}
+{{- if and (not $prefix) (not $root.Values.web.start.enabled) -}}
+{{- fail "workers.mono.inbound.rateLimitPrefix is required when web.start is disabled: this release renders no start pods to read Core's cache prefix from" -}}
+{{- end -}}
 {{- if not $prefix -}}
 {{- $cachePrefix := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "CACHE_PREFIX") | fromJson -}}
 {{- $appName := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "APP_NAME") | fromJson -}}
@@ -1432,6 +1435,8 @@ truthiness), true when unset as in Core.
 {{- fail (printf "workers.mono.inbound.queueSchedule must be \"\", \"true\" or \"false\", got %q" $configured) -}}
 {{- end -}}
 {{- $configured -}}
+{{- else if not $root.Values.web.start.enabled -}}
+{{- fail "workers.mono.inbound.queueSchedule is required when web.start is disabled: this release renders no start pods to read Core's FLOW_QUEUE_SCHEDULE from" -}}
 {{- else -}}
 {{- $entry := include "patchworks.start.extraEnvEntry" (dict "root" $root "name" "FLOW_QUEUE_SCHEDULE") | fromJson -}}
 {{- if hasKey $entry "valueFrom" -}}

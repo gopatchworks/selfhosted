@@ -196,6 +196,17 @@ only_hub = 'only the hub Monocore worker serves inbound triggers'
 render({'workers' => {'type' => 'standalone', 'mono' => {'inbound' => {'enabled' => true}}}}, failure: only_hub)
 render(mono('workers' => {'hub' => {'enabled' => false}}), failure: only_hub)
 render(mono('web' => {'start' => {'enabled' => false}}), failure: 'workers.mono.inbound.coreUrl is required when web.start is disabled')
+# Core's start pods in another release: nothing here describes them.
+elsewhere = {'web' => {'start' => {'enabled' => false}}, 'app' => {'extraEnv' => [env('APP_NAME', 'Core')]}}
+render(mono(deep_merge(elsewhere, 'workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal'}}})),
+  failure: 'workers.mono.inbound.rateLimitPrefix is required when web.start is disabled')
+render(mono(deep_merge(elsewhere, 'workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal', 'rateLimitPrefix' => 'start_cache_:'}}})),
+  failure: 'workers.mono.inbound.queueSchedule is required when web.start is disabled')
+separate = render(mono(deep_merge(elsewhere, 'workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal', 'rateLimitPrefix' => 'start_cache_:', 'queueSchedule' => 'true'}}})))
+check(['http://core.internal', 'start_cache_:', 'true'],
+  inbound_env(workers(separate)['patchworks-workers']).values_at('INBOUND_CORE_URL', 'INBOUND_RATE_LIMIT_PREFIX', 'INBOUND_QUEUE_SCHEDULE'),
+  'with Core\'s start pods elsewhere the hub takes the values given')
+check({}, routes(separate), 'and the chart renders no start, webhook or callback routes')
 render(mono('web' => {'start' => {'namespace' => 'core'}}), failure: 'an Ingress cannot reach a Service in another namespace')
 split = render(mono('web' => {'start' => {'namespace' => 'core'}}, 'workers' => {'mono' => {'inbound' => {'ingress' => {'enabled' => false}}}}))
 check({'patchworks-start' => core_only, 'patchworks-webhook' => core_only, 'patchworks-callback' => core_only}, routes(split),
