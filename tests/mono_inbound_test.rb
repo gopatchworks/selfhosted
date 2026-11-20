@@ -144,9 +144,9 @@ check('core_cache_:', hub_env(mono(start_env(env('APP_NAME', 'Flow'), env('CACHE
   'CACHE_PREFIX wins over APP_NAME')
 check('start_cache_:', hub_env(mono(start_env(env('APP_NAME', 'start')).merge('app' => {'extraEnv' => [env('APP_NAME', 'Core')]})))['INBOUND_RATE_LIMIT_PREFIX'],
   'the start service\'s extraEnv comes after app.extraEnv, and the last entry wins')
-check('core_cache_:', hub_env(mono('app' => {'extraEnv' => [env('APP_NAME', 'Core')]}))['INBOUND_RATE_LIMIT_PREFIX'],
+check('core_cache_:', hub_env(mono({'app' => {'extraEnv' => [env('APP_NAME', 'Core')]}}))['INBOUND_RATE_LIMIT_PREFIX'],
   'app.extraEnv reaches Core\'s start pods')
-check('web_cache_:', hub_env(mono('web' => {'extraEnv' => [env('APP_NAME', 'Web')]}))['INBOUND_RATE_LIMIT_PREFIX'],
+check('web_cache_:', hub_env(mono({'web' => {'extraEnv' => [env('APP_NAME', 'Web')]}}))['INBOUND_RATE_LIMIT_PREFIX'],
   'web.extraEnv applies when the start service sets none')
 check('chosen_cache_:', hub_env(mono(start_env(env('APP_NAME', 'start')).merge('workers' => {'mono' => {'inbound' => {'rateLimitPrefix' => 'chosen_cache_:'}}})))['INBOUND_RATE_LIMIT_PREFIX'],
   'an explicit rateLimitPrefix wins')
@@ -160,11 +160,11 @@ render(mono(start_env(env('CACHE_PREFIX', ''))), failure: 'must not be empty')
   check(monocore_value, hub_env(mono(start_env(env('FLOW_QUEUE_SCHEDULE', core))))['INBOUND_QUEUE_SCHEDULE'],
     "Core's FLOW_QUEUE_SCHEDULE #{core.inspect} reads as PHP reads it")
 end
-check('false', hub_env(mono('workers' => {'mono' => {'inbound' => {'queueSchedule' => false}}}))['INBOUND_QUEUE_SCHEDULE'],
+check('false', hub_env(mono({'workers' => {'mono' => {'inbound' => {'queueSchedule' => false}}}}))['INBOUND_QUEUE_SCHEDULE'],
   'a boolean false override applies')
 check('true', hub_env(mono(start_env(env('FLOW_QUEUE_SCHEDULE', 'false')).merge('workers' => {'mono' => {'inbound' => {'queueSchedule' => 'true'}}})))['INBOUND_QUEUE_SCHEDULE'],
   'an explicit queueSchedule wins')
-render(mono('workers' => {'mono' => {'inbound' => {'queueSchedule' => 'yes'}}}), failure: 'queueSchedule must be')
+render(mono({'workers' => {'mono' => {'inbound' => {'queueSchedule' => 'yes'}}}}), failure: 'queueSchedule must be')
 
 # ── Core's settings mirrored, the worker's own extraEnv left alone ─────────────
 limit_ref = {'secretKeyRef' => {'name' => 'limits', 'key' => 'callback'}}
@@ -173,17 +173,17 @@ mirrored = hub_env(mono(start_env(env('WEBHOOK_RATE_LIMIT', '600'), {'name' => '
 check(['600', limit_ref, '20', 'hooks.example.com', 'callback.example.com'],
   mirrored.values_at('WEBHOOK_RATE_LIMIT', 'CALLBACK_RATE_LIMIT', 'MANUAL_RUNS_API_RATE_LIMIT', 'WEBHOOK_DOMAIN', 'CALLBACK_DOMAIN'),
   'Core start\'s rate limits and domains reach the hub, valueFrom included')
-own = workers(render(mono('workers' => {'mono' => {'extraEnv' => [env('INBOUND_RATE_LIMIT_PREFIX', 'own_cache_:')]}})))['patchworks-workers']
+own = workers(render(mono({'workers' => {'mono' => {'extraEnv' => [env('INBOUND_RATE_LIMIT_PREFIX', 'own_cache_:')]}}})))['patchworks-workers']
 check(['own_cache_:'], own['env'].select { |e| e['name'] == 'INBOUND_RATE_LIMIT_PREFIX' }.map { |e| e['value'] },
   'a name in workers.mono.extraEnv is rendered once, with its value')
-check('http://core.internal', hub_env(mono('workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal'}}}))['INBOUND_CORE_URL'],
+check('http://core.internal', hub_env(mono({'workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal'}}}}))['INBOUND_CORE_URL'],
   'an explicit coreUrl wins')
-check('http://patchworks-start.install.svc.cluster.local:8080', hub_env(mono('web' => {'start' => {'service' => {'port' => 8080}}}))['INBOUND_CORE_URL'],
+check('http://patchworks-start.install.svc.cluster.local:8080', hub_env(mono({'web' => {'start' => {'service' => {'port' => 8080}}}}))['INBOUND_CORE_URL'],
   'the derived coreUrl follows the start Service\'s port')
-existing = render(mono('passport' => {'existingSecret' => {'name' => 'keys', 'publicKeyKey' => 'public'}}), passport: nil)
+existing = render(mono({'passport' => {'existingSecret' => {'name' => 'keys', 'publicKeyKey' => 'public'}}}), passport: nil)
 check({'secretKeyRef' => {'name' => 'keys', 'key' => 'public'}},
   inbound_env(workers(existing)['patchworks-workers'])['PASSPORT_PUBLIC_KEY'], 'an existing Passport Secret is read through its publicKeyKey')
-generated = render(mono('credentials' => {'autoGenerate' => true}), passport: nil)
+generated = render(mono({'credentials' => {'autoGenerate' => true}}), passport: nil)
 check({'secretKeyRef' => {'name' => 'patchworks-passport-keys', 'key' => 'PASSPORT_PUBLIC_KEY'}},
   inbound_env(workers(generated)['patchworks-workers'])['PASSPORT_PUBLIC_KEY'], 'the generated Passport Secret holds PASSPORT_PUBLIC_KEY')
 
@@ -197,8 +197,8 @@ check({}, hub_env(mono({'workers' => {'mono' => {'scheduler' => {'admitAllTrigge
 # ── Guards ─────────────────────────────────────────────────────────────────────
 only_hub = 'only the hub Monocore worker serves inbound triggers'
 render({'workers' => {'type' => 'standalone', 'mono' => {'inbound' => {'enabled' => true}}}}, failure: only_hub)
-render(mono('workers' => {'hub' => {'enabled' => false}}), failure: only_hub)
-render(mono('web' => {'start' => {'enabled' => false}}), failure: 'workers.mono.inbound.coreUrl is required when web.start is disabled')
+render(mono({'workers' => {'hub' => {'enabled' => false}}}), failure: only_hub)
+render(mono({'web' => {'start' => {'enabled' => false}}}), failure: 'workers.mono.inbound.coreUrl is required when web.start is disabled')
 # Core's start pods in another release: nothing here describes them.
 elsewhere = {'web' => {'start' => {'enabled' => false}}, 'app' => {'extraEnv' => [env('APP_NAME', 'Core')]}}
 render(mono(deep_merge(elsewhere, 'workers' => {'mono' => {'inbound' => {'coreUrl' => 'http://core.internal'}}})),
@@ -211,12 +211,12 @@ check(['http://core.internal', 'start_cache_:', 'true'],
   'with Core\'s start pods elsewhere the hub takes the values given')
 check({}, routes(separate), 'and the chart renders no start, webhook or callback routes')
 render(mono(deep_merge(ROUTED, 'web' => {'start' => {'namespace' => 'core'}})), failure: 'an Ingress cannot reach a Service in another namespace')
-split = render(mono('web' => {'start' => {'namespace' => 'core'}}))
+split = render(mono({'web' => {'start' => {'namespace' => 'core'}}}))
 check({'patchworks-start' => core_only, 'patchworks-webhook' => core_only, 'patchworks-callback' => core_only}, routes(split),
   'routing left to the operator works across namespaces')
 check('http://patchworks-start.core.svc.cluster.local:80', inbound_env(workers(split)['patchworks-workers'])['INBOUND_CORE_URL'],
   'the derived coreUrl names the start Service\'s namespace')
-render(mono('workers' => {'mono' => {'scheduler' => {'mode' => 'disabled'}, 'autoscaling' => {'enabled' => true, 'minReplicas' => 0}}}),
+render(mono({'workers' => {'mono' => {'scheduler' => {'mode' => 'disabled'}, 'autoscaling' => {'enabled' => true, 'minReplicas' => 0}}}}),
   failure: 'serving inbound triggers cannot scale or pause to zero')
 
 puts 'Mono hub serves inbound triggers'

@@ -57,24 +57,24 @@ baseline.select { |d| d['kind'] == 'Deployment' && !%w[gateway start].include?(d
 end
 
 custom_state = '/tmp/octane state "quoted".json'
-custom = render('web' => {
+custom = render({'web' => {
   'preStopSleepSeconds' => 5, 'terminationGracePeriodSeconds' => 240,
   'gateway' => { 'preStopSleepSeconds' => 0, 'terminationGracePeriodSeconds' => 250,
                  'roadrunner' => { 'drainTimeoutSeconds' => 220, 'stateFile' => custom_state } }
-})
+}})
 check_hook(pod(custom, 'gateway'), 0, 220, 250, custom_state)
 check_hook(pod(custom, 'start'), 5, 160, 240)
 
-franken = render('runtime' => { 'frankenphp' => { 'enabled' => true } })
+franken = render({'runtime' => { 'frankenphp' => { 'enabled' => true } }})
 %w[gateway start].each do |component|
   spec = pod(franken, component)
   assert(hook(spec).nil? && !spec.key?('terminationGracePeriodSeconds'), 'RoadRunner settings leaked into FrankenPHP')
 end
-mixed = render('runtime' => { 'frankenphp' => { 'enabled' => true } },
-               'web' => { 'start' => { 'frankenphp' => { 'enabled' => false } } })
+mixed = render({'runtime' => { 'frankenphp' => { 'enabled' => true } },
+               'web' => { 'start' => { 'frankenphp' => { 'enabled' => false } } }})
 assert(hook(pod(mixed, 'gateway')).nil?, 'Gateway runtime override was ignored')
 check_hook(pod(mixed, 'start'), 20, 160, 200)
-disabled = render('web' => { 'gateway' => { 'enabled' => false }, 'start' => { 'enabled' => false } })
+disabled = render({'web' => { 'gateway' => { 'enabled' => false }, 'start' => { 'enabled' => false } }})
 assert(disabled.none? { |d| %w[gateway start].include?(d.dig('metadata', 'labels', 'app.kubernetes.io/component')) }, 'Disabled web resources rendered')
 
 [-1, 1.5, 'invalid'].each do |delay|
