@@ -625,11 +625,11 @@ func TestHumanizeComponentUsesExpectedCasing(t *testing.T) {
 }
 
 func TestFormatInstallRowsKeepsAllRowsAlphabetically(t *testing.T) {
-	rendered := formatInstallRows("Application progress", []installComponentRow{
-		{Name: "RabbitMQ", Status: installStatusInProgress, Detail: "0/1 replicas ready"},
-		{Name: "Dashboard", Status: installStatusComplete, Detail: "1/1 replicas ready"},
-		{Name: "Fabric", Status: installStatusFailed, Detail: "0/1 replicas ready"},
-	})
+	rendered := formatInstallRows([]installComponentRow{
+		{Name: "RabbitMQ", Status: installStatusInProgress, Detail: "0/1 ready"},
+		{Name: "Dashboard", Status: installStatusComplete, Detail: "1/1 ready"},
+		{Name: "Fabric", Status: installStatusFailed, Detail: "0/1 ready"},
+	}, 0)
 
 	dashboardIndex := strings.Index(rendered, "Dashboard")
 	fabricIndex := strings.Index(rendered, "Fabric")

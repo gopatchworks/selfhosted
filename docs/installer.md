@@ -17,8 +17,37 @@ It checks for:
 
 Cluster discovery is performed through the Kubernetes API from inside the Go
 application. The installer does not shell out to `kubectl`. The interface uses
-Charm's `huh` package for confirmations, text inputs, and select lists, with a
-small Bubble Tea screen for cluster inspection progress.
+Charm's `huh` package for confirmations, text inputs, and select lists, and small
+Bubble Tea screens for cluster inspection and each long-running step.
+
+Only the step in progress is drawn live. When a step finishes, its live view is
+replaced by one line, so the terminal keeps a short record of the run:
+
+```text
+Patchworks Self-Hosted installer 1.4.0
+
+✓ Cluster talos · /Users/me/.kube/config
+  storage local-path · ingress contour · cert-manager not installed
+✓ Prepared charts 0.2.14 (github) · 1s
+✓ Wrote patchworks.values.yaml
+  namespace patchworks · https://selfhosted.example.com · infrastructure bundled, install/upgrade infra
+  chart release pinned in patchworks.values.yaml.charts.lock.yaml
+✓ Created pull secret quay-credentials in patchworks
+✓ Installed infrastructure · 2m13s
+  ! would violate PodSecurity "restricted:latest" (6 times)
+✓ Installed application · 4m2s
+✓ Workloads in patchworks · 14/14 replicas ready · pods: 14 running, 9 succeeded
+```
+
+Warnings from Helm and the Kubernetes API, such as PodSecurity warnings, are
+collected while a step runs and printed under it, grouped and at most once per
+run, so they cannot garble the live view.
+
+Press Esc or Ctrl+C during a step to stop the installer. It asks first and says
+what stopping leaves behind; press Y or Enter (or Ctrl+C again) to stop. A
+stopped Helm install or upgrade is recorded as failed, not left pending, so the
+next run can upgrade it; resources already created stay in the cluster. While
+the step winds down, Ctrl+C quits at once.
 
 ## Install and run
 
@@ -195,24 +224,27 @@ chart release cannot serve them (its chart predates the setting, or its
 Monocore image is `v0.2.12` or older), the installer leaves them off, says why in
 the install summary, and keeps the saved answers for a run with a newer release.
 
-When complete, it writes the selected values to disk and prints the Helm
-commands to install the infra and app charts with that shared values file. It
-shows an install summary before applying the Patchworks releases. Contour, if
-requested, is installed earlier during cluster setup. If installation is enabled,
-it can create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in
-the selected namespace, runs the install through the Helm Go SDK using the
-prepared charts, then checks workload status through the Kubernetes API. The Helm
-CLI is only needed if you choose to copy and run the manual commands yourself.
+When complete, it shows an install summary and writes the selected values to
+disk. Contour, if requested, is installed earlier during cluster setup. If you
+choose **Only write values**, it prints the Helm commands to install the infra
+and app charts with that shared values file. If installation is enabled, it can
+create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in the
+selected namespace, runs the install through the Helm Go SDK using the prepared
+charts, then checks workload status through the Kubernetes API. The Helm CLI is
+only needed if you choose to copy and run the manual commands yourself.
 
 During the infra and app Helm installs, the progress screen polls Kubernetes
 Jobs and readiness state so it can show phases such as credential generation,
 RabbitMQ queue setup, Fabric migrations, Fabric seeders, Core migrations, and
-Core seeders. When multiple hook Jobs or deployments are active at the same
-time, the progress screen lists all of them.
+Core seeders, alongside each Deployment's readiness. When the list is taller
+than the terminal, it shows the components in progress or failed and counts the
+rest. A hook Job that failed an attempt and is retrying is shown as in progress
+until Kubernetes gives up on it.
 
-If the application install fails during a hook, the installer prints failed Job
-status, pod container state, pod events, and recent container logs before
-exiting. Obvious secret values in logs are redacted before display. Hook Jobs
+If the infra or application install fails, the installer keeps the unfinished
+components on screen, then prints failed Job status, pod container state, pod
+events, recent container logs, and the manual install commands before exiting.
+Obvious secret values in logs are redacted before display. Hook Jobs
 use `restartPolicy: Never` by default so failed Pods are kept long enough to
 inspect. Repeatable hook resources are deleted before the next hook run and
 after successful completion. Seed hook Jobs are kept after success so later
@@ -255,8 +287,9 @@ release. If you selected **Only write values**, create any requested Quay pull
 Secret separately before the manual install; it is created automatically only
 when the installer performs the installation.
 
-After writing values, the installer prints the dashboard URL and initial admin
-email address. User-provided passwords are not displayed. If the admin password
+The installer prints the dashboard URL and initial admin email address once:
+after a successful install, or after writing values when you selected **Only
+write values**. User-provided passwords are not displayed. If the admin password
 is left blank, the chart generates it into the `patchworks-tenant-admin` Secret
 under the `adminPassword` key, and the installer displays the generated value
 after a successful install when it can read the Secret.

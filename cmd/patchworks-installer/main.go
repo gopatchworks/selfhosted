@@ -16,8 +16,6 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver/v3"
-	"github.com/charmbracelet/bubbles/spinner"
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	embeddedcharts "github.com/patchworks/selfhosted/charts"
@@ -53,7 +51,10 @@ type clusterInfo struct {
 	HasContour        bool
 	HasCertManager    bool
 	QuaySecretPresent bool
-	Warnings          []string
+	// Connected is set once the cluster answered, so the inspection result
+	// describes the cluster rather than a failed connection.
+	Connected bool
+	Warnings  []string
 }
 
 type kubeAccess struct {
@@ -507,28 +508,6 @@ type cliOptions struct {
 	ChartsOutputDir string
 }
 
-type inspectResult struct {
-	Info clusterInfo
-	Err  error
-}
-
-type inspectModel struct {
-	info        clusterInfo
-	kubeconfig  string
-	contextName string
-	err         error
-	aborted     bool
-	quitConfirm bool
-	spinner     spinner.Model
-	width       int
-}
-
-type progressResult struct {
-	err error
-}
-
-type progressPhaseMsg string
-
 type installComponentStatus string
 
 const (
@@ -543,28 +522,6 @@ type installComponentRow struct {
 	Status installComponentStatus
 	Detail string
 }
-
-type progressModel struct {
-	title   string
-	detail  string
-	run     func() error
-	phase   func() string
-	err     error
-	spinner spinner.Model
-	started time.Time
-	width   int
-}
-
-var (
-	brandStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("205"))
-	subtleStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
-	panelStyle   = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(lipgloss.Color("63")).Padding(1, 2)
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Bold(true)
-	successStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("42")).Bold(true)
-	keyStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("63")).Bold(true)
-	codeStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("252"))
-)
 
 const installerLabelKey = "selfhosted.patchworks.io/installed-by"
 const installerLabelValue = "patchworks-installer"
@@ -581,11 +538,12 @@ func main() {
 	}
 
 	if opts.Command == "uninstall" {
+		captureBackgroundOutput()
 		if err := runUninstall(opts); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
 				return
 			}
-			fmt.Fprintf(os.Stderr, "uninstall failed: %v\n", err)
+			fmt.Fprintf(os.Stderr, "\n%s %v\n", errorStyle.Render("✗ Uninstall failed:"), err)
 			os.Exit(1)
 		}
 		return
@@ -603,11 +561,12 @@ func main() {
 		return
 	}
 
+	captureBackgroundOutput()
 	if err := runInstaller(opts); err != nil {
 		if errors.Is(err, huh.ErrUserAborted) {
 			return
 		}
-		fmt.Fprintf(os.Stderr, "installer failed: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n%s %v\n", errorStyle.Render("✗ Install failed:"), err)
 		os.Exit(1)
 	}
 }
@@ -695,12 +654,13 @@ func parseCLI(args []string) (cliOptions, error) {
 }
 
 func runInstaller(opts cliOptions) error {
+	printHeader()
 	defaults, loaded, err := loadLocalConfig(opts.ConfigPath)
 	if err != nil {
 		return err
 	}
 	if loaded {
-		fmt.Printf("%s %s\n", successStyle.Render("Values loaded from"), opts.ConfigPath)
+		printDone("Loaded settings from " + opts.ConfigPath)
 	}
 
 	access, err := selectKubeAccess(defaults)
@@ -729,7 +689,10 @@ func runInstaller(opts cliOptions) error {
 		}
 		if installContourChoice {
 			if err := installContour(access); err != nil {
-				fmt.Fprintf(os.Stderr, "%s %v\n", warningStyle.Render("Contour install failed:"), err)
+				if errors.Is(err, huh.ErrUserAborted) {
+					return err
+				}
+				fmt.Println(warningLine(err.Error()))
 				continueWithoutContour := true
 				if confirmErr := runFormWithQuitConfirm(huh.NewForm(
 					huh.NewGroup(
@@ -770,7 +733,13 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 	var charts *preparedCharts
-	if err := runProgress("Preparing Patchworks charts", "Resolving the chart release and validating both charts", func() error {
+	if err := runProgress(progressStep{
+		Title:  "Preparing Patchworks charts",
+		Detail: "Resolving the chart release and validating both charts",
+		DoneFunc: func() string {
+			return fmt.Sprintf("Prepared charts %s (%s)", charts.Lock.Version, charts.Lock.Source)
+		},
+	}, func(_ context.Context) error {
 		var prepareErr error
 		charts, prepareErr = prepareCharts(request, pinned)
 		return prepareErr
@@ -813,40 +782,53 @@ func runInstaller(opts cliOptions) error {
 	if err := writeChartLock(lockPath, charts.Lock); err != nil {
 		return err
 	}
-	fmt.Printf("Chart release pinned in %s\n", lockPath)
+	printDone("Wrote "+config.Output,
+		strings.Join(nonEmpty([]string{
+			"namespace " + config.Values["namespace"],
+			dashboardURL(config.Values),
+			"infrastructure " + infrastructureSummary(config.Values),
+		}), " · "),
+		"chart release pinned in "+lockPath,
+	)
 
 	if opts.SaveConfig {
 		if err := saveLocalConfig(opts.ConfigPath, localConfigFromInstallConfig(config, runInstall)); err != nil {
 			return err
 		}
-		fmt.Printf("%s %s\n", successStyle.Render("Values saved to"), opts.ConfigPath)
+		printDone("Saved settings to " + opts.ConfigPath)
 	}
 
 	commands := selectedHelmCommandText(config.Values["namespace"], config.Output, installInfrastructure)
-	fmt.Println(valuesCreatedView(96, config.Output, commands))
-	fmt.Println(accessDetailsView(96, config.Values, "", false))
-
 	if !runInstall {
+		fmt.Print(manualInstallView(commands))
+		fmt.Print(accessDetailsView(config.Values, "", false))
 		return nil
 	}
 
 	if config.Quay != nil {
-		if err := runProgress("Creating Quay pull secret", fmt.Sprintf("Creating %s in namespace %s", config.Quay.SecretName, config.Values["namespace"]), func() error {
-			return createQuayPullSecret(access, config.Values["namespace"], *config.Quay)
+		if err := runProgress(progressStep{
+			Title:  "Creating Quay pull secret",
+			Done:   fmt.Sprintf("Created pull secret %s in %s", config.Quay.SecretName, config.Values["namespace"]),
+			Detail: fmt.Sprintf("Creating %s in namespace %s", config.Quay.SecretName, config.Values["namespace"]),
+		}, func(ctx context.Context) error {
+			return createQuayPullSecret(ctx, access, config.Values["namespace"], *config.Quay)
 		}); err != nil {
 			return err
 		}
 	}
 
 	if err := installPatchworks(access, config.Values["namespace"], config.Output, installInfrastructure, charts); err != nil {
+		if !errors.Is(err, huh.ErrUserAborted) {
+			fmt.Print(manualInstallView(commands))
+		}
 		return err
 	}
 
-	status, err := workloadStatus(access, config.Values["namespace"])
-	if err != nil {
-		return err
+	if status, err := workloadStatus(access, config.Values["namespace"]); err != nil {
+		fmt.Println(warningLine(fmt.Sprintf("Could not read workload status: %v", err)))
+	} else {
+		fmt.Println(status)
 	}
-	fmt.Println(page(96, plainPanel(96, status)))
 	generatedAdminPassword := ""
 	if config.Values["adminPassword"] == "" {
 		password, err := tenantAdminPassword(access, config.Values["namespace"])
@@ -854,7 +836,8 @@ func runInstaller(opts cliOptions) error {
 			generatedAdminPassword = password
 		}
 	}
-	fmt.Println(accessDetailsView(96, config.Values, generatedAdminPassword, true))
+	printCapturedOutput()
+	fmt.Print(accessDetailsView(config.Values, generatedAdminPassword, true))
 	return nil
 }
 
@@ -978,8 +961,6 @@ func huhOptions(values []string) []huh.Option[string] {
 }
 
 func installContour(access kubeAccess) error {
-	fmt.Println(brandStyle.Render("Installing Contour"))
-
 	settings, cfg, err := helmRuntime(access, "projectcontour")
 	if err != nil {
 		return err
@@ -987,7 +968,11 @@ func installContour(access kubeAccess) error {
 
 	var chart helmchart.Charter
 	var values map[string]any
-	if err := runProgress("Fetching Contour chart", "Downloading chart metadata and loading contour/contour", func() error {
+	if err := runProgress(progressStep{
+		Title:  "Fetching Contour chart",
+		Done:   "Fetched Contour chart",
+		Detail: "Downloading chart metadata and loading contour/contour",
+	}, func(_ context.Context) error {
 		var loadErr error
 		chart, values, loadErr = loadHelmChart(settings, "contour", "https://projectcontour.github.io/helm-charts/", "")
 		return loadErr
@@ -996,19 +981,23 @@ func installContour(access kubeAccess) error {
 	}
 	mergeCommonLabels(values, installerLabels())
 
-	if err := runProgress("Installing Contour", "Applying release contour in namespace projectcontour", func() error {
-		return helmUpgradeOrInstall(cfg, "contour", "projectcontour", chart, values, true, 10*time.Minute, installerLabels())
-	}); err != nil {
-		return err
-	}
+	return runProgress(progressStep{
+		Title:    "Installing Contour",
+		Done:     "Installed Contour · ingress class contour",
+		Detail:   "Applying release contour in namespace projectcontour",
+		StopNote: helmStopNote("contour"),
+	}, func(ctx context.Context) error {
+		return helmUpgradeOrInstall(ctx, cfg, "contour", "projectcontour", chart, values, true, 10*time.Minute, installerLabels())
+	})
+}
 
-	fmt.Println(successStyle.Render("Contour installed. Ingress class: contour"))
-	return nil
+// helmStopNote explains what stopping a Helm install or upgrade leaves:
+// Helm records the release as failed, which a later run can upgrade.
+func helmStopNote(release string) string {
+	return fmt.Sprintf("Helm marks release %s as failed and keeps what it created. Run the installer again to retry.", release)
 }
 
 func installPatchworks(access kubeAccess, namespace, valuesFile string, installInfrastructure bool, charts *preparedCharts) error {
-	fmt.Println(brandStyle.Render("Installing Patchworks"))
-
 	settings, cfg, err := helmRuntime(access, namespace)
 	if err != nil {
 		return err
@@ -1019,30 +1008,37 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string, installI
 		return err
 	}
 	if installInfrastructure {
-		if err := runProgressWithPhase("Installing infrastructure", "Applying release patchworks-infra and waiting for readiness", installPhaseMonitor(access, namespace, "infra"), func() error {
-			return helmUpgradeOrInstall(cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
+		if err := runProgress(progressStep{
+			Title:    "Installing infrastructure",
+			Done:     "Installed infrastructure",
+			Detail:   "Applying release patchworks-infra and waiting for readiness",
+			Monitor:  installPhaseMonitor(access, namespace, "infra"),
+			StopNote: helmStopNote("patchworks-infra"),
+		}, func(ctx context.Context) error {
+			return helmUpgradeOrInstall(ctx, cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
 		}); err != nil {
+			if !errors.Is(err, huh.ErrUserAborted) {
+				printInstallFailureDiagnostics(access, namespace)
+			}
 			return err
 		}
 	}
 
-	if err := runProgressWithPhase("Installing application", "Applying release patchworks-app and waiting for hooks/readiness", installPhaseMonitor(access, namespace, "app"), func() error {
-		return helmUpgradeOrInstall(cfg, "patchworks-app", namespace, charts.Charts["patchworks-app"], values, false, 15*time.Minute, installerLabels())
+	if err := runProgress(progressStep{
+		Title:    "Installing application",
+		Done:     "Installed application",
+		Detail:   "Applying release patchworks-app and waiting for hooks and readiness",
+		Monitor:  installPhaseMonitor(access, namespace, "app"),
+		StopNote: helmStopNote("patchworks-app"),
+	}, func(ctx context.Context) error {
+		return helmUpgradeOrInstall(ctx, cfg, "patchworks-app", namespace, charts.Charts["patchworks-app"], values, false, 15*time.Minute, installerLabels())
 	}); err != nil {
-		printInstallFailureDiagnostics(access, namespace)
+		if !errors.Is(err, huh.ErrUserAborted) {
+			printInstallFailureDiagnostics(access, namespace)
+		}
 		return err
 	}
-
-	if installInfrastructure {
-		if err := runProgress("Checking infra release", "Reading Helm status for patchworks-infra", func() error {
-			return helmPrintStatus(cfg, "patchworks-infra")
-		}); err != nil {
-			return err
-		}
-	}
-	return runProgress("Checking app release", "Reading Helm status for patchworks-app", func() error {
-		return helmPrintStatus(cfg, "patchworks-app")
-	})
+	return nil
 }
 
 func chooseInfrastructureInstall(access kubeAccess, namespace string, values map[string]string) (bool, error) {
@@ -1095,18 +1091,20 @@ func allInfrastructureComponentsDisabled(values map[string]string) bool {
 }
 
 func runUninstall(opts cliOptions) error {
+	printHeader()
 	defaults, loaded, err := loadLocalConfig(opts.ConfigPath)
 	if err != nil {
 		return err
 	}
 	if loaded {
-		fmt.Printf("%s %s\n", successStyle.Render("Values loaded from"), opts.ConfigPath)
+		printDone("Loaded settings from " + opts.ConfigPath)
 	}
 
 	access, err := selectKubeAccess(defaults)
 	if err != nil {
 		return err
 	}
+	printDone("Context "+stringDefault(access.Context, "(current context)"), access.Kubeconfig)
 
 	namespace := stringDefault(defaults.Namespace, "patchworks")
 	pullSecretName := stringDefault(defaults.PullSecret, "quay-credentials")
@@ -1158,8 +1156,15 @@ func runUninstall(opts cliOptions) error {
 	}
 
 	if strings.TrimSpace(pullSecretName) != "" {
-		if err := runProgress("Removing Quay pull secret", fmt.Sprintf("Deleting %s only if installer-labelled", pullSecretName), func() error {
-			return deleteInstallerPullSecret(access, namespace, pullSecretName)
+		var outcome string
+		if err := runProgress(progressStep{
+			Title:    "Removing Quay pull secret",
+			Detail:   fmt.Sprintf("Deleting %s only if installer-labelled", pullSecretName),
+			DoneFunc: func() string { return outcome },
+		}, func(ctx context.Context) error {
+			var deleteErr error
+			outcome, deleteErr = deleteInstallerPullSecret(ctx, access, namespace, pullSecretName)
+			return deleteErr
 		}); err != nil {
 			return err
 		}
@@ -1171,7 +1176,8 @@ func runUninstall(opts cliOptions) error {
 		}
 	}
 
-	fmt.Println(successStyle.Render("Uninstall complete"))
+	fmt.Println()
+	printDone("Uninstall complete")
 	return nil
 }
 
@@ -1217,12 +1223,22 @@ func uninstallPatchworks(access kubeAccess, namespace string) error {
 		return err
 	}
 
-	if err := runProgress("Uninstalling application", "Removing release patchworks-app", func() error {
+	if err := runProgress(progressStep{
+		Title:    "Uninstalling application",
+		Done:     "Removed release patchworks-app",
+		Detail:   "Removing release patchworks-app",
+		StopNote: helmUninstallStopNote("patchworks-app"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "patchworks-app", 10*time.Minute)
 	}); err != nil {
 		return err
 	}
-	return runProgress("Uninstalling infrastructure", "Removing release patchworks-infra", func() error {
+	return runProgress(progressStep{
+		Title:    "Uninstalling infrastructure",
+		Done:     "Removed release patchworks-infra",
+		Detail:   "Removing release patchworks-infra",
+		StopNote: helmUninstallStopNote("patchworks-infra"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "patchworks-infra", 10*time.Minute)
 	})
 }
@@ -1232,9 +1248,21 @@ func uninstallContour(access kubeAccess) error {
 	if err != nil {
 		return err
 	}
-	return runProgress("Uninstalling Contour", "Removing release contour from namespace projectcontour", func() error {
+	return runProgress(progressStep{
+		Title:    "Uninstalling Contour",
+		Done:     "Removed release contour",
+		Detail:   "Removing release contour from namespace projectcontour",
+		StopNote: helmUninstallStopNote("contour"),
+	}, func(_ context.Context) error {
 		return helmUninstall(cfg, "contour", 10*time.Minute)
 	})
+}
+
+// helmUninstallStopNote explains what stopping an uninstall leaves. Helm's
+// uninstall takes no context, so the installer stops waiting rather than
+// cancelling it.
+func helmUninstallStopNote(release string) string {
+	return fmt.Sprintf("Release %s may be left partly removed. Run uninstall again to finish.", release)
 }
 
 func helmRuntime(access kubeAccess, namespace string) (*cli.EnvSettings, *action.Configuration, error) {
@@ -1244,7 +1272,7 @@ func helmRuntime(access kubeAccess, namespace string) (*cli.EnvSettings, *action
 	settings.SetNamespace(namespace)
 
 	registryClient, err := registry.NewClient(
-		registry.ClientOptWriter(os.Stdout),
+		registry.ClientOptWriter(io.Discard),
 		registry.ClientOptCredentialsFile(settings.RegistryConfig),
 	)
 	if err != nil {
@@ -1334,7 +1362,7 @@ func mergeHelmValues(settings *cli.EnvSettings, valuesFile string) (map[string]a
 	return valueOptions.MergeValues(getter.All(settings))
 }
 
-func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace string, chart helmchart.Charter, values map[string]any, createNamespace bool, timeout time.Duration, labels map[string]string) error {
+func helmUpgradeOrInstall(ctx context.Context, cfg *action.Configuration, releaseName, namespace string, chart helmchart.Charter, values map[string]any, createNamespace bool, timeout time.Duration, labels map[string]string) error {
 	exists := helmReleaseExists(cfg, releaseName)
 	if !exists {
 		install := action.NewInstall(cfg)
@@ -1346,7 +1374,7 @@ func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace stri
 		install.Timeout = timeout
 		install.DependencyUpdate = true
 		install.Labels = labels
-		_, err := install.Run(chart, values)
+		_, err := install.RunWithContext(ctx, chart, values)
 		return err
 	}
 
@@ -1357,7 +1385,7 @@ func helmUpgradeOrInstall(cfg *action.Configuration, releaseName, namespace stri
 	upgrade.Timeout = timeout
 	upgrade.DependencyUpdate = true
 	upgrade.Labels = labels
-	_, err := upgrade.Run(releaseName, chart, values)
+	_, err := upgrade.RunWithContext(ctx, releaseName, chart, values)
 	return err
 }
 
@@ -1414,18 +1442,6 @@ func helmUninstall(cfg *action.Configuration, releaseName string, timeout time.D
 	return err
 }
 
-func helmPrintStatus(cfg *action.Configuration, releaseName string) error {
-	status := action.NewStatus(cfg)
-	release, err := status.Run(releaseName)
-	if err != nil {
-		return err
-	}
-	if typedRelease, ok := release.(*releasev1.Release); ok && typedRelease.Info != nil {
-		return nil
-	}
-	return nil
-}
-
 func helmCommandText(namespace, valuesFile string, installInfrastructure bool) string {
 	if !installInfrastructure {
 		return fmt.Sprintf(`helm upgrade --install patchworks-app ./charts/patchworks-app -n %s --create-namespace -f %s --timeout 15m --wait`,
@@ -1434,27 +1450,6 @@ func helmCommandText(namespace, valuesFile string, installInfrastructure bool) s
 	return fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout 15m --wait
 helm upgrade --install patchworks-app ./charts/patchworks-app -n %s -f %s --timeout 15m --wait`,
 		shellQuote(namespace), shellQuote(cleanPath(valuesFile)), shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
-}
-
-func valuesCreatedView(width int, output, commands string) string {
-	return strings.Join([]string{
-		successStyle.Render("Values file created"),
-		keyValue("File", output),
-		keyStyle.Render("Manual install commands:"),
-		codeStyle.Render(commands),
-	}, "\n\n") + "\n"
-}
-
-func accessDetailsView(width int, values map[string]string, generatedAdminPassword string, installed bool) string {
-	dashboard := dashboardURL(values)
-	body := strings.Join([]string{
-		successStyle.Render("Access details"),
-		"",
-		keyValue("Dashboard", terminalLink(dashboard, dashboard)),
-		keyValue("Email", values["adminEmail"]),
-		keyValue("Password", adminPasswordSummary(values, generatedAdminPassword, installed)),
-	}, "\n")
-	return page(width, plainPanel(width, body))
 }
 
 func dashboardURL(values map[string]string) string {
@@ -1519,6 +1514,14 @@ func inspectCluster(kubeconfigPath, contextName string) inspectResult {
 		info.Warnings = append(info.Warnings, fmt.Sprintf("could not create dynamic Kubernetes client: %v", err))
 		return inspectResult{Info: info}
 	}
+
+	// A forbidden answer still means the cluster is there; RBAC may only
+	// limit what the rest of the inspection can read.
+	if _, err := client.Discovery().RESTClient().Get().AbsPath("/version").DoRaw(ctx); err != nil && !apierrors.IsForbidden(err) {
+		info.Warnings = append(info.Warnings, fmt.Sprintf("could not connect to the cluster: %v", err))
+		return inspectResult{Info: info}
+	}
+	info.Connected = true
 
 	info.StorageClasses = storageClasses(ctx, client)
 	info.IngressClasses = ingressClasses(ctx, client)
@@ -1605,7 +1608,7 @@ func secretExistsInNamespace(kubeconfigPath, contextName, namespace, name string
 	return err == nil
 }
 
-func createQuayPullSecret(access kubeAccess, namespace string, creds quayCredentials) error {
+func createQuayPullSecret(ctx context.Context, access kubeAccess, namespace string, creds quayCredentials) error {
 	if creds.SecretName == "" {
 		return fmt.Errorf("pull secret name cannot be empty")
 	}
@@ -1616,7 +1619,7 @@ func createQuayPullSecret(access kubeAccess, namespace string, creds quayCredent
 		return fmt.Errorf("quay password/token cannot be empty")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	client, err := kubernetesClient(access)
@@ -1705,68 +1708,64 @@ func tenantAdminPassword(access kubeAccess, namespace string) (string, error) {
 	return password, nil
 }
 
-func deleteInstallerPullSecret(access kubeAccess, namespace, name string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+// deleteInstallerPullSecret deletes the pull secret only when this installer
+// created it, and returns what it did for the step's trail line.
+func deleteInstallerPullSecret(ctx context.Context, access kubeAccess, namespace, name string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	client, err := kubernetesClient(access)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	secret, err := client.CoreV1().Secrets(namespace).Get(ctx, name, metav1.GetOptions{})
 	if apierrors.IsNotFound(err) {
-		return nil
+		return fmt.Sprintf("Pull secret %s not found", name), nil
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 	if secret.Labels[installerLabelKey] != installerLabelValue {
-		fmt.Printf("%s %s is not labelled as installer-created; keeping it.\n", warningStyle.Render("Skipped:"), name)
-		return nil
+		return fmt.Sprintf("Kept pull secret %s: not created by this installer", name), nil
 	}
-	return client.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err := client.CoreV1().Secrets(namespace).Delete(ctx, name, metav1.DeleteOptions{}); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Removed pull secret %s", name), nil
 }
 
-func installPhaseMonitor(access kubeAccess, namespace, chart string) func() string {
-	return func() string {
-		phase, err := currentInstallPhase(access, namespace, chart)
-		if err != nil || strings.TrimSpace(phase) == "" {
-			switch chart {
-			case "infra":
-				return "Installing infrastructure resources and waiting for readiness"
-			case "app":
-				return "Installing application resources and waiting for hooks/readiness"
-			default:
-				return ""
-			}
+// installPhaseMonitor lists the chart's hook Jobs and Deployments for the
+// live install view. It returns nil when the cluster cannot be read, and the
+// view keeps its last snapshot.
+func installPhaseMonitor(access kubeAccess, namespace, chart string) func() []installComponentRow {
+	return func() []installComponentRow {
+		rows, err := currentInstallRows(access, namespace, chart)
+		if err != nil {
+			return nil
 		}
-		return phase
+		return rows
 	}
 }
 
-func currentInstallPhase(access kubeAccess, namespace, chart string) (string, error) {
+func currentInstallRows(access kubeAccess, namespace, chart string) ([]installComponentRow, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	client, err := kubernetesClient(access)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	jobs, err := listInstallJobs(ctx, client, namespace)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-
-	switch chart {
-	case "infra":
-		return infrastructureReadinessPhase(ctx, client, namespace, jobs.Items)
-	case "app":
-		return applicationReadinessPhase(ctx, client, namespace, jobs.Items)
-	default:
-		return "", nil
+	deployments, err := listInstallDeployments(ctx, client, namespace, chart)
+	if err != nil {
+		return nil, err
 	}
+	return installComponentRows(jobs.Items, deployments.Items, chart), nil
 }
 
 func phaseJobs(jobs []batchv1.Job, chart string) []batchv1.Job {
@@ -1821,30 +1820,10 @@ func phaseNamesForChart(chart string) map[string]string {
 	return map[string]string{}
 }
 
-func infrastructureReadinessPhase(ctx context.Context, client kubernetes.Interface, namespace string, jobs []batchv1.Job) (string, error) {
-	deployments, err := listInstallDeployments(ctx, client, namespace, "infra")
-	if err != nil {
-		return "", err
-	}
-	rows := installComponentRows(jobs, deployments.Items, "infra")
-	return formatInstallRows("Infrastructure progress", rows), nil
-}
-
-func applicationReadinessPhase(ctx context.Context, client kubernetes.Interface, namespace string, jobs []batchv1.Job) (string, error) {
-	deployments, err := listInstallDeployments(ctx, client, namespace, "app")
-	if err != nil {
-		return "", err
-	}
-	rows := installComponentRows(jobs, deployments.Items, "app")
-	return formatInstallRows("Application progress", rows), nil
-}
-
 func installComponentRows(jobs []batchv1.Job, deployments []appsv1.Deployment, chart string) []installComponentRow {
 	rows := hookComponentRows(jobs, chart)
 	rows = append(rows, deploymentComponentRows(deployments)...)
-	sort.SliceStable(rows, func(i, j int) bool {
-		return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name)
-	})
+	sortInstallRows(rows)
 	return rows
 }
 
@@ -1868,7 +1847,7 @@ func hookComponentRows(jobs []batchv1.Job, chart string) []installComponentRow {
 		rows = append(rows, installComponentRow{
 			Name:   name,
 			Status: jobInstallStatus(job),
-			Detail: jobStatusShort(job),
+			Detail: jobProgressDetail(job),
 		})
 	}
 	return rows
@@ -1889,20 +1868,24 @@ func deploymentComponentRows(deployments []appsv1.Deployment) []installComponent
 		rows = append(rows, installComponentRow{
 			Name:   name,
 			Status: deploymentInstallStatus(deployment, desired),
-			Detail: fmt.Sprintf("%d/%d replicas ready", deployment.Status.ReadyReplicas, desired),
+			Detail: fmt.Sprintf("%d/%d ready", deployment.Status.ReadyReplicas, desired),
 		})
 	}
 	return rows
 }
 
+// jobInstallStatus treats a Job as failed only once Kubernetes gives up on it.
+// A Job that failed an attempt and is retrying is still in progress.
 func jobInstallStatus(job batchv1.Job) installComponentStatus {
-	if job.Status.Failed > 0 {
-		return installStatusFailed
-	}
 	if job.Status.Succeeded > 0 {
 		return installStatusComplete
 	}
-	if job.Status.Active > 0 {
+	for _, condition := range job.Status.Conditions {
+		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
+			return installStatusFailed
+		}
+	}
+	if job.Status.Active > 0 || job.Status.Failed > 0 {
 		return installStatusInProgress
 	}
 	return installStatusWaiting
@@ -1923,41 +1906,14 @@ func deploymentInstallStatus(deployment appsv1.Deployment, desired int32) instal
 	return installStatusInProgress
 }
 
-func formatInstallRows(title string, rows []installComponentRow) string {
-	if len(rows) == 0 {
-		return title
+func jobProgressDetail(job batchv1.Job) string {
+	switch {
+	case job.Status.Failed == 1:
+		return "1 failed attempt"
+	case job.Status.Failed > 1:
+		return fmt.Sprintf("%d failed attempts", job.Status.Failed)
 	}
-	sort.SliceStable(rows, func(i, j int) bool {
-		return strings.ToLower(rows[i].Name) < strings.ToLower(rows[j].Name)
-	})
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n", title)
-	for _, row := range rows {
-		label := statusLabel(row.Status)
-		line := fmt.Sprintf("- %s %s", label, row.Name)
-		if strings.TrimSpace(row.Detail) != "" {
-			line = fmt.Sprintf("%s %s", line, subtleStyle.Render("("+row.Detail+")"))
-		}
-		fmt.Fprintln(&b, line)
-	}
-	return strings.TrimRight(b.String(), "\n")
-}
-
-func statusLabel(status installComponentStatus) string {
-	switch status {
-	case installStatusComplete:
-		return successStyle.Render("complete")
-	case installStatusFailed:
-		return errorStyle.Render("failed")
-	case installStatusInProgress:
-		return warningStyle.Render("in progress")
-	default:
-		return warningStyle.Render("waiting")
-	}
-}
-
-func jobStatusShort(job batchv1.Job) string {
-	return fmt.Sprintf("active=%d succeeded=%d failed=%d", job.Status.Active, job.Status.Succeeded, job.Status.Failed)
+	return ""
 }
 
 func jobLastTransition(job batchv1.Job) time.Time {
@@ -2040,13 +1996,17 @@ func componentDisplayNames() map[string]string {
 func printInstallFailureDiagnostics(access kubeAccess, namespace string) {
 	details, err := installFailureDiagnostics(access, namespace)
 	if err != nil {
-		fmt.Printf("\n%s %v\n", warningStyle.Render("Unable to collect install diagnostics:"), err)
+		fmt.Println(warningLine(fmt.Sprintf("Unable to collect install diagnostics: %v", err)))
 		return
 	}
 	if strings.TrimSpace(details) == "" {
 		return
 	}
-	fmt.Println(page(96, plainPanel(96, details)))
+	fmt.Println()
+	for _, line := range strings.Split(details, "\n") {
+		fmt.Println(strings.TrimRight("  "+line, " "))
+	}
+	printCapturedOutput()
 }
 
 func installFailureDiagnostics(access kubeAccess, namespace string) (string, error) {
@@ -2315,38 +2275,32 @@ func workloadStatus(access kubeAccess, namespace string) (string, error) {
 		return "", err
 	}
 
-	var b strings.Builder
-	fmt.Fprintf(&b, "%s\n\n", successStyle.Render("Patchworks status"))
-	fmt.Fprintf(&b, "%s\n", keyValue("Namespace", namespace))
-	fmt.Fprintf(&b, "%s\n", keyValue("Deployments", deploymentSummary(deployments.Items)))
-	fmt.Fprintf(&b, "%s\n", keyValue("Pods", podSummary(pods.Items)))
-	fmt.Fprintf(&b, "%s\n", keyValue("Jobs", jobSummary(jobs.Items)))
+	return workloadStatusLines(namespace, deployments.Items, pods.Items, jobs.Items), nil
+}
 
-	notReadyDeployments := notReadyDeploymentNames(deployments.Items)
-	if len(notReadyDeployments) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", warningStyle.Render("Deployments not fully ready"))
-		for _, name := range notReadyDeployments {
-			fmt.Fprintf(&b, "- %s\n", name)
-		}
+// workloadStatusLines is the trail line for the namespace's workloads after
+// an install, followed by anything that needs attention.
+func workloadStatusLines(namespace string, deployments []appsv1.Deployment, pods []corev1.Pod, jobs []batchv1.Job) string {
+	var problems []string
+	if names := notReadyDeploymentNames(deployments); len(names) > 0 {
+		problems = append(problems, "Not ready: "+strings.Join(names, ", "))
+	}
+	if names := problemPodNames(pods); len(names) > 0 {
+		problems = append(problems, "Pods needing attention: "+strings.Join(names, ", "))
+	}
+	if names := failedJobNames(jobs); len(names) > 0 {
+		problems = append(problems, "Failed jobs: "+strings.Join(names, ", "))
 	}
 
-	problemPods := problemPodNames(pods.Items)
-	if len(problemPods) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", warningStyle.Render("Pods needing attention"))
-		for _, name := range problemPods {
-			fmt.Fprintf(&b, "- %s\n", name)
-		}
+	headline := fmt.Sprintf("Workloads in %s · %s · pods: %s", namespace, deploymentSummary(deployments), podSummary(pods))
+	lines := []string{doneLine(headline, 0)}
+	if len(problems) > 0 {
+		lines[0] = warningStyle.Render("!") + " " + headline
 	}
-
-	failedJobs := failedJobNames(jobs.Items)
-	if len(failedJobs) > 0 {
-		fmt.Fprintf(&b, "\n%s\n", warningStyle.Render("Failed jobs"))
-		for _, name := range failedJobs {
-			fmt.Fprintf(&b, "- %s\n", name)
-		}
+	for _, problem := range problems {
+		lines = append(lines, warningLine(problem))
 	}
-
-	return b.String(), nil
+	return strings.Join(lines, "\n")
 }
 
 func deploymentSummary(deployments []appsv1.Deployment) string {
@@ -2370,23 +2324,13 @@ func podSummary(pods []corev1.Pod) string {
 	parts := []string{}
 	for _, phase := range []corev1.PodPhase{corev1.PodRunning, corev1.PodPending, corev1.PodSucceeded, corev1.PodFailed, corev1.PodUnknown} {
 		if counts[phase] > 0 {
-			parts = append(parts, fmt.Sprintf("%s=%d", phase, counts[phase]))
+			parts = append(parts, fmt.Sprintf("%d %s", counts[phase], strings.ToLower(string(phase))))
 		}
 	}
 	if len(parts) == 0 {
 		return "none"
 	}
 	return strings.Join(parts, ", ")
-}
-
-func jobSummary(jobs []batchv1.Job) string {
-	var succeeded, failed, active int32
-	for _, job := range jobs {
-		succeeded += job.Status.Succeeded
-		failed += job.Status.Failed
-		active += job.Status.Active
-	}
-	return fmt.Sprintf("succeeded=%d, active=%d, failed=%d", succeeded, active, failed)
 }
 
 func notReadyDeploymentNames(deployments []appsv1.Deployment) []string {
@@ -2435,7 +2379,7 @@ func podPendingReason(pod corev1.Pod) string {
 func failedJobNames(jobs []batchv1.Job) []string {
 	names := []string{}
 	for _, job := range jobs {
-		if job.Status.Failed > 0 {
+		if jobInstallStatus(job) == installStatusFailed {
 			names = append(names, fmt.Sprintf("%s (%d failed)", job.Name, job.Status.Failed))
 		}
 	}
@@ -3344,172 +3288,6 @@ func runFormWithQuitConfirm(form *huh.Form) error {
 	}
 }
 
-func runInspection(kubeconfig, contextName string) (clusterInfo, error) {
-	spin := spinner.New()
-	spin.Spinner = spinner.Dot
-	initial := inspectModel{
-		kubeconfig:  kubeconfig,
-		contextName: contextName,
-		spinner:     spin,
-	}
-
-	finalModel, err := tea.NewProgram(initial).Run()
-	if err != nil {
-		return clusterInfo{}, err
-	}
-
-	model, ok := finalModel.(inspectModel)
-	if !ok {
-		return clusterInfo{}, fmt.Errorf("unexpected inspection result")
-	}
-	if model.aborted {
-		return clusterInfo{}, huh.ErrUserAborted
-	}
-	return model.info, model.err
-}
-
-func runProgress(title, detail string, fn func() error) error {
-	return runProgressWithPhase(title, detail, nil, fn)
-}
-
-func runProgressWithPhase(title, detail string, phase func() string, fn func() error) error {
-	spin := spinner.New()
-	spin.Spinner = spinner.Dot
-	initial := progressModel{
-		title:   title,
-		detail:  detail,
-		run:     fn,
-		phase:   phase,
-		spinner: spin,
-		started: time.Now(),
-	}
-
-	finalModel, err := tea.NewProgram(initial).Run()
-	if err != nil {
-		return err
-	}
-
-	model, ok := finalModel.(progressModel)
-	if !ok {
-		return fmt.Errorf("unexpected progress result")
-	}
-	if model.err != nil {
-		return model.err
-	}
-
-	fmt.Printf("%s %s\n", successStyle.Render("Done:"), title)
-	return nil
-}
-
-func (m progressModel) Init() tea.Cmd {
-	runCmd := func() tea.Msg {
-		return progressResult{err: m.run()}
-	}
-	return tea.Batch(runCmd, m.spinner.Tick, m.phaseTick())
-}
-
-func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case progressResult:
-		m.err = msg.err
-		return m, tea.Quit
-	case progressPhaseMsg:
-		if strings.TrimSpace(string(msg)) != "" {
-			m.detail = string(msg)
-		}
-		return m, m.phaseTick()
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		return m, nil
-	}
-	return m, nil
-}
-
-func (m progressModel) phaseTick() tea.Cmd {
-	if m.phase == nil {
-		return nil
-	}
-	return tea.Tick(2*time.Second, func(time.Time) tea.Msg {
-		return progressPhaseMsg(m.phase())
-	})
-}
-
-func (m progressModel) View() string {
-	elapsed := time.Since(m.started).Round(time.Second)
-	body := fmt.Sprintf("%s %s\n\n%s\n%s",
-		m.spinner.View(),
-		m.title,
-		m.detail,
-		subtleStyle.Render(fmt.Sprintf("Elapsed: %s", elapsed)),
-	)
-	return page(m.width, inspectPanel(m.width, body))
-}
-
-func (m inspectModel) Init() tea.Cmd {
-	inspectCmd := func() tea.Msg {
-		return inspectCluster(m.kubeconfig, m.contextName)
-	}
-	return tea.Batch(inspectCmd, m.spinner.Tick)
-}
-
-func (m inspectModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case inspectResult:
-		m.info = msg.Info
-		m.err = msg.Err
-		return m, tea.Quit
-	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		return m, nil
-	case tea.KeyMsg:
-		if m.quitConfirm {
-			switch msg.String() {
-			case "y", "Y", "enter", "ctrl+c":
-				m.aborted = true
-				return m, tea.Quit
-			case "n", "N", "esc":
-				m.quitConfirm = false
-				return m, nil
-			}
-			return m, nil
-		}
-
-		if msg.String() == "ctrl+c" || msg.String() == "esc" {
-			m.quitConfirm = true
-			return m, nil
-		}
-	}
-
-	return m, nil
-}
-
-func (m inspectModel) View() string {
-	if m.quitConfirm {
-		body := fmt.Sprintf("%s\n\n%s\n\n%s",
-			warningStyle.Render("Quit installer?"),
-			"Any unsaved selections will be lost.",
-			subtleStyle.Render("Y/Enter: quit  N/Esc: continue"),
-		)
-		return page(m.width, inspectPanel(m.width, body))
-	}
-
-	body := fmt.Sprintf("%s Inspecting cluster\n\n%s\n%s\n\n%s",
-		m.spinner.View(),
-		keyValue("Kubeconfig", m.kubeconfig),
-		keyValue("Context", m.contextName),
-		subtleStyle.Render("Enter: continue  Esc/Ctrl+C: quit"),
-	)
-	return page(m.width, inspectPanel(m.width, body))
-}
-
 func clusterSummaryCompact(info clusterInfo) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n", keyStyle.Render("Cluster"))
@@ -3525,52 +3303,6 @@ func clusterSummaryCompact(info clusterInfo) string {
 		}
 	}
 	return b.String()
-}
-
-func inspectPanel(width int, body string) string {
-	return panelStyle.Width(panelOuterWidth(width)).Render(body)
-}
-
-func plainPanel(width int, body string) string {
-	return panelStyle.Width(panelOuterWidth(width)).Render(body)
-}
-
-func panelOuterWidth(width int) int {
-	panelWidth := width - 14
-	if width <= 0 {
-		return 76
-	}
-	if panelWidth < 28 {
-		return 28
-	}
-	return panelWidth
-}
-
-func panelContentWidth(width int) int {
-	contentWidth := panelOuterWidth(width) - panelStyle.GetHorizontalFrameSize()
-	if contentWidth < 24 {
-		return 24
-	}
-	return contentWidth
-}
-
-func keyValue(key, value string) string {
-	if value == "" {
-		value = "unset"
-	}
-	return fmt.Sprintf("%s %s", keyStyle.Render(key+":"), value)
-}
-
-func page(width int, body string) string {
-	header := brandStyle.Render("Patchworks Self-Hosted")
-	if width <= 0 {
-		return header + "\n\n" + body + "\n"
-	}
-	contentWidth := width - 4
-	if contentWidth < 30 {
-		contentWidth = 30
-	}
-	return lipgloss.NewStyle().Width(contentWidth).Padding(1, 2).Render(header+"\n\n"+body) + "\n"
 }
 
 func writeValues(path string, values map[string]string) error {
