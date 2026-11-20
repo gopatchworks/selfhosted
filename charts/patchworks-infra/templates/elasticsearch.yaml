@@ -46,15 +46,18 @@ spec:
       # volumes with root ownership.
       securityContext:
         fsGroup: 1000
+      {{- if (.Values.elasticsearch.sysctlInitContainer | default dict).enabled }}
       initContainers:
         # Elasticsearch requires vm.max_map_count >= 262144. This init container
-        # sets it on the host node (requires privileged access). If your nodes
-        # are pre-configured, you can remove this init container.
+        # sets it on the host node (requires privileged access). Turn it off with
+        # elasticsearch.sysctlInitContainer.enabled=false when the nodes already
+        # set it.
         - name: sysctl
           image: busybox:1.37
           securityContext:
             privileged: true
           command: ["sysctl", "-w", "vm.max_map_count=262144"]
+      {{- end }}
       containers:
         - name: elasticsearch
           image: "{{ .Values.elasticsearch.image.repository }}:{{ .Values.elasticsearch.image.tag }}"

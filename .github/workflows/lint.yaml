@@ -67,6 +67,9 @@ jobs:
       - name: Pod DNS render tests
         run: ruby tests/ndots_test.rb
 
+      - name: Elasticsearch sysctl init container render tests
+        run: ruby tests/elasticsearch_sysctl_test.rb
+
       - name: Media bucket render tests
         run: ruby tests/media_bucket_test.rb
 

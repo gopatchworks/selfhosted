@@ -1209,6 +1209,17 @@ elasticsearch:
     repository: elasticsearch
     tag: "8.15.0"
     pullPolicy: IfNotPresent
+  # Elasticsearch needs vm.max_map_count >= 262144 on every node it can run on.
+  # With this off (the default), the nodes must already have it set, for example
+  # on Talos Linux through the machine config:
+  #   machine:
+  #     sysctls:
+  #       vm.max_map_count: "262144"
+  # Set enabled: true to add a privileged busybox init container that runs
+  # `sysctl -w vm.max_map_count=262144` on the node. Namespaces that enforce the
+  # Pod Security "baseline" or "restricted" level reject that pod.
+  sysctlInitContainer:
+    enabled: false
   persistence:
     existingClaim: ""
     accessModes: [ReadWriteOnce]

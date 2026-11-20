@@ -71,6 +71,10 @@ To enable ingress, set:
 {{- end }}
 {{- if .Values.elasticsearch.enabled }}
   Elasticsearch: in-cluster  ({{ include "patchworks.fullname" . }}-elasticsearch:9200)
+{{- if not (.Values.elasticsearch.sysctlInitContainer | default dict).enabled }}
+                 Nodes must have vm.max_map_count >= 262144 (on Talos Linux, set
+                 machine.sysctls), or set elasticsearch.sysctlInitContainer.enabled=true.
+{{- end }}
 {{- else }}
   Elasticsearch: external    ({{ .Values.elasticsearch.external.host }}:{{ .Values.elasticsearch.external.port }})
 {{- end }}

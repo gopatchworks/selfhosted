@@ -218,7 +218,7 @@ kubectl -n patchworks describe pod <stuck-pod>
 
 **Elasticsearch stuck in `Init:0/1`**
 
-The init container sets `vm.max_map_count` on the node via a privileged sysctl. If it fails, set it directly:
+`docs/kind/values.yaml` sets `elasticsearch.sysctlInitContainer.enabled: true`, so a privileged init container sets `vm.max_map_count` on the node. The chart leaves it off by default: on other clusters, set `vm.max_map_count >= 262144` on the nodes yourself. If the init container fails, set it directly:
 
 ```bash
 docker exec patchworks-control-plane sysctl -w vm.max_map_count=262144
