@@ -3,12 +3,14 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/huh"
 	yaml "go.yaml.in/yaml/v3"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -191,6 +193,52 @@ func TestWaitForLoadBalancerAddressMissingService(t *testing.T) {
 	}
 	if got := ingressAddressDone(nil, "projectcontour/contour-envoy"); !strings.Contains(got, "could not read") {
 		t.Errorf("trail line = %q", got)
+	}
+}
+
+func TestContourAddressStepReportsTimeoutAsChecked(t *testing.T) {
+	client := fake.NewClientset(envoyService())
+	var svc *corev1.Service
+	step, run := contourAddressStep(client, &svc, 30*time.Millisecond, 10*time.Millisecond)
+	model, ctx := newStepModel(step)
+	done, _ := send(model, progressResult{err: run(ctx)})
+	if err := done.result(); err != nil {
+		t.Fatalf("running out of time should not fail the step: %v", err)
+	}
+	if summary := done.summary(); !strings.HasPrefix(summary, "✓ Checked Envoy address · Service projectcontour/contour-envoy") {
+		t.Fatalf("timeout summary: %q", summary)
+	}
+	if svc == nil || !loadBalancerPending(*svc) {
+		t.Fatalf("step stored %+v, want the pending Service", svc)
+	}
+}
+
+func TestContourAddressStepReportsStop(t *testing.T) {
+	client := fake.NewClientset(envoyService())
+	var svc *corev1.Service
+	step, run := contourAddressStep(client, &svc, time.Minute, 10*time.Millisecond)
+	model, ctx := newStepModel(step)
+	result := make(chan error, 1)
+	go func() { result <- run(ctx) }()
+
+	asking, _ := send(model, keyMsg("esc"))
+	if view := asking.View(); !strings.Contains(view, "Stop waiting for Envoy's LoadBalancer address?") || !strings.Contains(view, "Contour stays installed") {
+		t.Fatalf("stop question:\n%s", view)
+	}
+	stopping, _ := send(asking, keyMsg("y"))
+	var err error
+	select {
+	case err = <-result:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the wait did not end when the step was stopped")
+	}
+	stopped, _ := send(stopping, progressResult{err: err})
+	if !errors.Is(stopped.result(), huh.ErrUserAborted) {
+		t.Fatalf("stopped wait should return huh.ErrUserAborted, got %v", stopped.result())
+	}
+	summary := stopped.summary()
+	if !strings.Contains(summary, "✗ Waiting for Envoy's LoadBalancer address stopped") || !strings.Contains(summary, "Contour stays installed") {
+		t.Fatalf("stopped summary:\n%s", summary)
 	}
 }
 

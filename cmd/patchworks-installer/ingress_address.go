@@ -163,23 +163,34 @@ func waitForContourAddress(access kubeAccess) (*corev1.Service, error) {
 	if err != nil {
 		return nil, nil
 	}
-	ref := contourNamespace + "/" + contourEnvoyService
 	var svc *corev1.Service
-	err = runProgress(progressStep{
-		Title:  "Waiting for Envoy's LoadBalancer address",
-		Detail: fmt.Sprintf("Reading Service %s for up to %s", ref, ingressAddressWait),
-		DoneFunc: func() string {
-			return ingressAddressDone(svc, ref)
-		},
-		StopNote: "Contour stays installed. Run the installer again to continue.",
-	}, func(ctx context.Context) error {
-		svc, _ = waitForLoadBalancerAddress(ctx, client, contourNamespace, contourEnvoyService, ingressAddressWait, ingressAddressPoll)
-		return nil
-	})
-	if errors.Is(err, huh.ErrUserAborted) {
+	step, run := contourAddressStep(client, &svc, ingressAddressWait, ingressAddressPoll)
+	if err := runProgress(step, run); errors.Is(err, huh.ErrUserAborted) {
 		return nil, err
 	}
 	return svc, nil
+}
+
+// contourAddressStep is the Envoy address wait as a progress step. The step
+// stores the Service it last read in *svc. Its function returns an error
+// only when stopped, so a stop is reported as one and running out of time is
+// not.
+func contourAddressStep(client kubernetes.Interface, svc **corev1.Service, wait, poll time.Duration) (progressStep, func(context.Context) error) {
+	ref := contourNamespace + "/" + contourEnvoyService
+	step := progressStep{
+		Title:  "Waiting for Envoy's LoadBalancer address",
+		Detail: fmt.Sprintf("Reading Service %s for up to %s", ref, wait),
+		DoneFunc: func() string {
+			return ingressAddressDone(*svc, ref)
+		},
+		StopNote: "Contour stays installed. Run the installer again to continue.",
+	}
+	run := func(ctx context.Context) error {
+		var err error
+		*svc, err = waitForLoadBalancerAddress(ctx, client, contourNamespace, contourEnvoyService, wait, poll)
+		return err
+	}
+	return step, run
 }
 
 // ingressAddressDone is the trail line of the Envoy address wait. A missing
