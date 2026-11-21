@@ -768,6 +768,11 @@ func runInstaller(opts cliOptions) error {
 	if config.Values["monoInbound"] == "true" {
 		config.Values["monoInboundUnsupported"] = monoInboundUnsupportedReason(charts.Charts["patchworks-app"])
 	}
+	if defaultWorkerMode(config.Values["workerMode"]) == "mono" {
+		reason := monoAllCompaniesUnsupportedReason(charts.Charts["patchworks-app"])
+		config.Values["monoAllCompaniesUnsupported"] = reason
+		config.Values["monoAllCompanies"] = fmt.Sprintf("%t", reason == "")
+	}
 
 	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
 	if err != nil {
@@ -3203,6 +3208,7 @@ func installSummary(config installConfig) string {
 	)
 	if defaultWorkerMode(values["workerMode"]) == "mono" {
 		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
+		lines = append(lines, keyValue("Monocore for every company", monoAllCompaniesSummary(values)))
 	}
 	if config.Quay != nil {
 		lines = append(lines, keyValue("Quay secret action", fmt.Sprintf("create/update %s", config.Quay.SecretName)))
@@ -3422,12 +3428,18 @@ func writeValues(path string, values map[string]string) error {
 
 	fmt.Fprintf(&b, "workers:\n")
 	fmt.Fprintf(&b, "  type: %s\n", quote(defaultWorkerMode(values["workerMode"])))
-	if monoInboundEnabled(values) {
+	if monoInboundEnabled(values) || monoAllCompaniesEnabled(values) {
 		fmt.Fprintf(&b, "  mono:\n")
+	}
+	if monoInboundEnabled(values) {
 		fmt.Fprintf(&b, "    inbound:\n")
 		fmt.Fprintf(&b, "      enabled: true\n")
 		fmt.Fprintf(&b, "      ingress:\n")
 		fmt.Fprintf(&b, "        enabled: %t\n", values["monoInboundRoutes"] == "true")
+	}
+	if monoAllCompaniesEnabled(values) {
+		fmt.Fprintf(&b, "    allCompanies:\n")
+		fmt.Fprintf(&b, "      enabled: true\n")
 	}
 	fmt.Fprintf(&b, "\n")
 
@@ -3681,6 +3693,53 @@ func monoInboundUnsupportedReason(chart helmchart.Charter) string {
 		return fmt.Sprintf("Monocore %s predates them", tag)
 	}
 	return ""
+}
+
+// lastCoreWithoutMonocoreAutoEnable is the last Patchworks release whose Core
+// image has no monocore:auto-enable command or new-company listener, so its
+// companies would not get Monocore switched on.
+const lastCoreWithoutMonocoreAutoEnable = "0.2.16"
+
+// monoAllCompaniesUnsupportedReason says why the selected app chart cannot run
+// every company on Monocore (workers.mono.allCompanies), or "" when it can. A
+// mono installation deploys no Core flow workers, so this is written without
+// asking whenever the release supports it.
+func monoAllCompaniesUnsupportedReason(chart helmchart.Charter) string {
+	accessor, err := helmchart.NewAccessor(chart)
+	if err != nil {
+		return "the app chart could not be read"
+	}
+	values := accessor.Values()
+	workers, _ := values["workers"].(map[string]any)
+	mono, _ := workers["mono"].(map[string]any)
+	if _, ok := mono["allCompanies"].(map[string]any); !ok {
+		return "this chart release cannot switch it on"
+	}
+	image, _ := values["image"].(map[string]any)
+	tag, _ := image["tag"].(string)
+	// A tag that is not a version (a branch build) cannot be compared.
+	if version, err := semver.NewVersion(strings.TrimPrefix(tag, "v")); err == nil &&
+		!version.GreaterThan(semver.MustParse(lastCoreWithoutMonocoreAutoEnable)) {
+		return fmt.Sprintf("Core %s predates it", tag)
+	}
+	return ""
+}
+
+// monoAllCompaniesEnabled is whether the values file runs every company on
+// Monocore: mono workers and a selected release checked to support it.
+func monoAllCompaniesEnabled(values map[string]string) bool {
+	return defaultWorkerMode(values["workerMode"]) == "mono" && values["monoAllCompanies"] == "true"
+}
+
+func monoAllCompaniesSummary(values map[string]string) string {
+	switch {
+	case monoAllCompaniesEnabled(values):
+		return "on: Core turns Monocore and its scheduler on for each new company; Core's short processor and gateway schedule are off"
+	case values["monoAllCompaniesUnsupported"] != "":
+		return "off: " + values["monoAllCompaniesUnsupported"] + "; turn Monocore on for each company from its feature settings, or choose a newer release with --chart-version"
+	default:
+		return "off"
+	}
 }
 
 // monoInboundEnabled is whether the values file turns inbound triggers on:

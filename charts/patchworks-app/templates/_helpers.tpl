@@ -118,6 +118,52 @@ rendered by workers-mono.yaml.
 {{- end }}
 
 {{/*
+"true" when Monocore runs every company (workers.mono.allCompanies.enabled with
+Monocore workers deployed), else empty.
+*/}}
+{{- define "patchworks.mono.allCompanies" -}}
+{{- $all := .Values.workers.mono.allCompanies | default (dict) -}}
+{{- if and .Values.workers.enabled (eq .Values.workers.type "mono") $all.enabled -}}true{{- end -}}
+{{- end }}
+
+{{/*
+"true" when those companies' scheduling goes to Monocore too, else empty. The
+monocore-scheduler feature hands a company's crons to the hub's scheduler, so
+asking for it without one is a configuration error.
+*/}}
+{{- define "patchworks.mono.allCompaniesScheduler" -}}
+{{- if and (include "patchworks.mono.allCompanies" .) (dig "scheduler" true (.Values.workers.mono.allCompanies | default (dict))) -}}
+{{- if or (not .Values.workers.hub.enabled) (eq .Values.workers.mono.scheduler.mode "disabled") -}}
+{{- fail "workers.mono.allCompanies.scheduler needs the hub's scheduler: enable workers.hub and set workers.mono.scheduler.mode, or set workers.mono.allCompanies.scheduler to false" -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+"true" when a processor's Deployment and schedule CronJob render: processors[]
+enabled (the default), and not left out by workers.mono.allCompanies.
+Takes (dict "root" $ "processor" $processor).
+*/}}
+{{- define "patchworks.processorEnabled" -}}
+{{- $root := .root -}}
+{{- $processor := .processor -}}
+{{- if and $processor (dig "enabled" true $processor) -}}
+{{- $leftOut := and (include "patchworks.mono.allCompanies" $root) (has $processor.queue ($root.Values.workers.mono.allCompanies.disableProcessors | default (list))) -}}
+{{- if not $leftOut -}}true{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+"true" when workers.mono.allCompanies leaves out a processor's schedule CronJob
+while its Deployment keeps running. Takes (dict "root" $ "processor" $processor).
+*/}}
+{{- define "patchworks.processorSchedulerLeftOut" -}}
+{{- $root := .root -}}
+{{- if and (include "patchworks.mono.allCompanies" $root) (has .processor.queue ($root.Values.workers.mono.allCompanies.disableSchedulers | default (list))) -}}true{{- end -}}
+{{- end }}
+
+{{/*
 Core Gateway URL consumed by Fabric when provisioning company databases.
 Match gateway.yaml's service settings and namespace cascade; an explicit URL
 also supports a Gateway managed by another release or outside Kubernetes.
@@ -1733,6 +1779,10 @@ FABRIC_DB_USERNAME: {{ include "patchworks.fabric.mysql.username" . | quote }}
 MONOCORE_URL: {{ include "patchworks.monocore.url" . | quote }}
 MONOCORE_TIMEOUT: {{ .Values.monocore.timeout | quote }}
 {{- end }}
+{{- if include "patchworks.mono.allCompanies" . }}
+MONOCORE_AUTO_ENABLE_FOR_NEW_COMPANIES: "true"
+MONOCORE_SCHEDULER_AUTO_ENABLE_FOR_NEW_COMPANIES: {{ include "patchworks.mono.allCompaniesScheduler" . | eq "true" | quote }}
+{{- end }}
 {{- if .Values.s3.enabled }}
 TENANT_CACHE_AWS_ENDPOINT_URL: {{ include "patchworks.s3.endpoint" . | quote }}
 TENANT_CACHE_AWS_USE_PATH_STYLE_ENDPOINT: "true"
@@ -2606,6 +2656,12 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
 - name: MONOCORE_TIMEOUT
   value: {{ .Values.monocore.timeout | quote }}
 {{- end }}
+{{- if include "patchworks.mono.allCompanies" . }}
+- name: MONOCORE_AUTO_ENABLE_FOR_NEW_COMPANIES
+  value: "true"
+- name: MONOCORE_SCHEDULER_AUTO_ENABLE_FOR_NEW_COMPANIES
+  value: {{ include "patchworks.mono.allCompaniesScheduler" . | eq "true" | quote }}
+{{- end }}
 - name: TENANT_REDIS_HOST
   value: {{ include "patchworks.redis.host" . | quote }}
 - name: TENANT_REDIS_PORT
@@ -2850,9 +2906,10 @@ annotations:
 {{- if .Values.web.gateway.enabled -}}{{- $_ := set $core (include "patchworks.gateway.namespace" .) true -}}{{- end -}}
 {{- if .Values.web.start.enabled -}}{{- $_ := set $core (include "patchworks.start.namespace" .) true -}}{{- end -}}
 {{- range $processor := .Values.processors -}}
-  {{- if and $processor (dig "enabled" true $processor) -}}
+  {{- if include "patchworks.processorEnabled" (dict "root" $root "processor" $processor) -}}
     {{- $scheduler := mergeOverwrite (deepCopy $root.Values.scheduler) ($processor.scheduler | default (dict)) -}}
-    {{- if or $root.Values.processorDeployments.enabled (and $root.Values.scheduler.enabled $scheduler.enabled) -}}
+    {{- $schedulerRenders := and $root.Values.scheduler.enabled $scheduler.enabled (not (include "patchworks.processorSchedulerLeftOut" (dict "root" $root "processor" $processor))) -}}
+    {{- if or $root.Values.processorDeployments.enabled $schedulerRenders -}}
       {{- $_ := set $core ($processor.namespace | default (include "patchworks.workers.namespace" $root)) true -}}
     {{- end -}}
   {{- end -}}

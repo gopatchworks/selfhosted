@@ -675,7 +675,11 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.scheduler.timezone` | `UTC` | Must match Core's application timezone |
 | `workers.mono.scheduler.estate` | fullname | Stable scheduling estate identity |
 | `workers.mono.scheduler.rbac.create` | `true` | Bind scheduler permissions to the shared service account in the hub namespace |
-| `workers.mono.scheduler.admitAllTriggers` | `false` | `SCHEDULER_ADMIT_ALL_TRIGGERS` on the hub: admit every queued `scheduled_flows` row (API, webhook, Shape and other triggers) of a `monocore-scheduler` company, not only cron rows. Turn on only once Core leaves those rows to Monocore, or a row both engines admit runs twice. See [Monocore inbound triggers](#monocore-inbound-triggers) |
+| `workers.mono.scheduler.admitAllTriggers` | `false` | `SCHEDULER_ADMIT_ALL_TRIGGERS` on the hub: admit every queued `scheduled_flows` row (API, webhook, Shape and other triggers) of a `monocore-scheduler` company, not only cron rows. Turn on only once Core leaves those rows to Monocore, or a row both engines admit runs twice. `workers.mono.allCompanies.scheduler` turns it on. See [Monocore inbound triggers](#monocore-inbound-triggers) |
+| `workers.mono.allCompanies.enabled` | `false` | Run every company on Monocore: Core turns the `monocore` feature on as it provisions each company, the Core seed job does so for companies with no stored value, and the Core processors in the two lists below are left out. Needs a release later than `v0.2.16`. See [Running every company on Monocore](#running-every-company-on-monocore) |
+| `workers.mono.allCompanies.scheduler` | `true` | Also turn `monocore-scheduler` on for those companies and set `admitAllTriggers`. Needs the hub's scheduler: rendering fails with `workers.mono.scheduler.mode=disabled` or `workers.hub.enabled=false` unless this is `false` |
+| `workers.mono.allCompanies.disableProcessors` | `[short-processor]` | Processor queues whose Deployment and schedule CronJob are left out, and dropped from the RabbitMQ topology |
+| `workers.mono.allCompanies.disableSchedulers` | `[gateway]` | Processor queues whose schedule CronJob alone is left out |
 | `workers.mono.inbound.enabled` | `false` | Serve Core's webhook, callback and start API endpoints from the hub's public listener (port 8082) and its `<fullname>-<nameSuffix>-inbound` Service. Needs a mono hub and a Monocore image later than `v0.2.12` |
 | `workers.mono.inbound.ingress.enabled` | `false` | Route the paths Monocore serves on the start, webhook and callback hosts to it. Off, routing is left to you. Turn it on in the second of the [two enabling upgrades](#monocore-inbound-triggers) |
 | `workers.mono.inbound.coreUrl` | `""` | Where Monocore forwards the requests of companies Core runs (`INBOUND_CORE_URL`). Empty derives Core's in-cluster start Service; required when `web.start.enabled=false`. Never an ingress host |
@@ -1748,7 +1752,48 @@ Before exposing the listener to the internet, check that the Monocore release
 bounds request bodies and header timeouts (monocore-rod.7). Turn on
 `workers.mono.scheduler.admitAllTriggers` only after Core's
 `MonocoreSchedulerOwnership::restrictPendingToCore` excludes every trigger for
-`monocore-scheduler` companies (monocore-rod.6).
+`monocore-scheduler` companies (monocore-rod.6). Core does from the release
+after `v0.2.16`.
+
+### Running every company on Monocore
+
+With `workers.type=mono` the chart deploys no Core flow workers, so a company
+runs only once Core's `monocore` company feature is on: without it, its flows
+are queued where nothing consumes them. Both features default to off, and
+Monocore reads their stored values from Core's `features` table, counting a
+company with none as off, so they have to be stored for each company.
+`workers.mono.allCompanies.enabled=true` does that:
+
+- Core pods get `MONOCORE_AUTO_ENABLE_FOR_NEW_COMPANIES=true`, so Core turns
+  `monocore` on for every company it provisions through Fabric.
+  `MONOCORE_SCHEDULER_AUTO_ENABLE_FOR_NEW_COMPANIES` (from
+  `allCompanies.scheduler`) adds `monocore-scheduler`, handing the company's
+  scheduling to the hub, and the hub admits every trigger.
+- The Core seed job runs `php artisan monocore:auto-enable` after
+  `migrate:tenants --create`, which provisions the seeded tenant without the
+  event Core's listener uses. The command only changes companies with no stored
+  `monocore` value, so it is safe on every Argo CD sync and never reverses a
+  setting. A Core image without the command (`v0.2.16` and earlier) skips it
+  with a note.
+- Companies with a stored value keep it. Switch an existing company from its
+  feature settings, with `monocore` first; `monocore-scheduler` needs a
+  coordinated handover of its pending cron work.
+
+It also leaves out the Core processes Monocore companies don't need:
+
+| Left out | Why |
+|---|---|
+| `short-processor` Deployment and schedule CronJob | No Core code queues work for it; its schedule only queues the hourly health check every other schedule also runs |
+| `gateway` schedule CronJob | It runs only that health check. The gateway processor stays: it handles API jobs, notifications and tenant provisioning |
+
+Everything else stays. The scheduler processor still receives Core's flow
+scheduling jobs every minute, which skip `monocore-scheduler` companies but
+would pile up unconsumed without it. The start, medium-processor,
+long-processor and logging processors, and the scheduler, start,
+medium-processor and long-processor schedules, run platform work Monocore does
+not: flow-run logs of runs started from the dashboard, usage and alert checks,
+pruning, metrics, custom agents, heartbeat clean-up and the licence check.
+Change `disableProcessors` or `disableSchedulers` to keep or leave out others.
 
 ## Worker autoscaling
 

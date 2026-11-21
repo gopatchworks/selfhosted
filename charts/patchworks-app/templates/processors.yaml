@@ -3,9 +3,7 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- range $processor := .Values.processors }}
 {{- if not $processor }}{{- continue }}{{- end }}
-{{- $enabled := true }}
-{{- if hasKey $processor "enabled" }}{{- $enabled = $processor.enabled }}{{- end }}
-{{- if $enabled }}
+{{- if include "patchworks.processorEnabled" (dict "root" $root "processor" $processor) }}
 {{- $queue := required "processors[].queue is required" $processor.queue }}
 {{- $processorName := $processor.name | default $queue }}
 {{- $slug := regexReplaceAll "[^a-z0-9-]" (lower $queue) "-" | trimAll "-" }}

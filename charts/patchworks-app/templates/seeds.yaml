@@ -294,13 +294,20 @@ spec:
               echo "MySQL ready."
       containers:
         {{- $coreSeedSvc := merge (deepCopy .Values.seeds.core) (dict "image" .Values.image) }}
+        {{- $coreSeedCommand := .Values.seeds.core.command }}
+        {{- if include "patchworks.mono.allCompanies" . }}
+        {{- /* After migrate:tenants --create, which provisions the seeded tenant
+        without the event Core's own listener turns Monocore on from. A Core
+        image without the command (v0.2.16 and earlier) skips it with a note. */}}
+        {{- $coreSeedCommand = printf "%s && if php artisan list --raw | grep -q '^monocore:auto-enable '; then php artisan monocore:auto-enable; else echo 'This Core image has no monocore:auto-enable; turn Monocore on for the seeded tenant from its feature settings.'; fi" $coreSeedCommand }}
+        {{- end }}
         - name: core-seeds
           image: {{ include "patchworks.appImage" (dict "svc" $coreSeedSvc "root" .) | quote }}
           imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $coreSeedSvc "root" .) }}
           command:
             - /bin/sh
             - -c
-            - {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $coreSeedSvc "command" .Values.seeds.core.command) | quote }}
+            - {{ include "patchworks.artisanShellCommand" (dict "root" . "svc" $coreSeedSvc "command" $coreSeedCommand) | quote }}
           envFrom:
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
