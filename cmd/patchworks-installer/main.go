@@ -673,6 +673,10 @@ func runInstaller(opts cliOptions) error {
 		return err
 	}
 
+	// ingressService is the ingress controller's Service as last read, for the
+	// warning shown when it has no LoadBalancer address.
+	var ingressService *corev1.Service
+	installedContour := false
 	if !info.HasContour && len(info.IngressClasses) == 0 {
 		installContourChoice := true
 		if err := runFormWithQuitConfirm(huh.NewForm(
@@ -714,6 +718,12 @@ func runInstaller(opts cliOptions) error {
 				info.IngressClasses = append(info.IngressClasses, "contour")
 				sort.Strings(info.IngressClasses)
 				info.Warnings = removeWarning(info.Warnings, "no ingress class detected; public ingress may not work yet")
+				installedContour = true
+				ingressService, err = waitForContourAddress(access)
+				if err != nil {
+					return err
+				}
+				printLoadBalancerWarning(ingressService)
 			}
 		}
 	}
@@ -721,6 +731,16 @@ func runInstaller(opts cliOptions) error {
 	config, err := runSettingsForm(info, access.Kubeconfig, access.Context, defaults)
 	if err != nil {
 		return err
+	}
+	switch {
+	case config.Values["ingressEnabled"] != "true":
+		ingressService = nil
+	case !installedContour || config.Values["ingressProvider"] != "contour":
+		ingressService = existingIngressService(access, config.Values["ingressProvider"])
+		printLoadBalancerWarning(ingressService)
+	}
+	if ingressService != nil {
+		config.Values["ingressAddressNotice"] = loadBalancerNotice(*ingressService)
 	}
 
 	lockPath := cleanPath(config.Output) + ".charts.lock.yaml"
@@ -819,6 +839,7 @@ func runInstaller(opts cliOptions) error {
 	if !runInstall {
 		fmt.Print(manualInstallView(commands))
 		fmt.Print(accessDetailsView(config.Values, "", false))
+		printLoadBalancerWarning(stillPendingIngressService(access, ingressService))
 		return nil
 	}
 
@@ -855,6 +876,7 @@ func runInstaller(opts cliOptions) error {
 	}
 	printCapturedOutput()
 	fmt.Print(accessDetailsView(config.Values, generatedAdminPassword, true))
+	printLoadBalancerWarning(stillPendingIngressService(access, ingressService))
 	return nil
 }
 
@@ -3195,6 +3217,11 @@ func installSummary(config installConfig) string {
 		keyValue("License key", configuredSummary(values["licenseKey"])),
 		keyValue("License server URL", configuredSummary(values["licenseServerUrl"])),
 		keyValue("Ingress", fmt.Sprintf("%s (%s/%s)", values["ingressEnabled"], values["ingressProvider"], values["ingressClass"])),
+	)
+	if values["ingressAddressNotice"] != "" {
+		lines = append(lines, warningStyle.Render("! "+values["ingressAddressNotice"]))
+	}
+	lines = append(lines,
 		keyValue("Dashboard", fmt.Sprintf("%s (%s routing)", values["dashboardEnabled"], values["routingMode"])),
 		keyValue("Worker mode", defaultWorkerMode(values["workerMode"])),
 		keyValue("Cookie/session domain", values["cookieDomain"]),
