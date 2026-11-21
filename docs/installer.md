@@ -243,8 +243,30 @@ Monocore image is `v0.2.12` or older), the installer leaves them off, says why i
 the install summary, and keeps the saved answers for a run with a newer release.
 
 When complete, it shows an install summary and writes the selected values to
-disk. Contour, if requested, is installed earlier during cluster setup. If you
-choose **Only write values**, it prints the Helm commands to install the infra
+disk. Contour, if requested, is installed earlier during cluster setup.
+
+Contour is installed with its chart defaults, so Envoy receives traffic through
+the `LoadBalancer` Service `projectcontour/contour-envoy`. After installing it,
+the installer waits up to 40 seconds for the Service to be given an address
+(Esc or Ctrl+C stops the wait like any other step). When ingress is enabled with
+an existing Contour or ingress-nginx, it reads that controller's Service once
+instead. If a `LoadBalancer` Service has no address, the installer warns that no
+LoadBalancer address was assigned, lists the node ports that work meanwhile,
+and suggests installing a LoadBalancer implementation (MetalLB in L2 mode on
+bare metal) or using NodePort or host ports. The warning also appears in the
+install summary and, if the Service still has no address, under the access
+details at the end. It never stops the install. A `NodePort` or `ClusterIP`
+Service gets no warning.
+
+```text
+✓ Installed Contour · ingress class contour · 48s
+✓ Checked Envoy address · Service projectcontour/contour-envoy · 40s
+  ! No LoadBalancer address was assigned to Service projectcontour/contour-envoy, so the Patchworks hosts will not answer on ports 80 and 443.
+  Until it has one, use node ports 30868 for port 80 and 31618 for port 443 on a node that runs the ingress controller.
+  The cluster may have no LoadBalancer implementation. On bare metal, install one (MetalLB in L2 mode is the usual choice), or expose the ingress controller with NodePort or host ports.
+```
+
+If you choose **Only write values**, it prints the Helm commands to install the infra
 and app charts with that shared values file. If installation is enabled, it can
 create or update a `kubernetes.io/dockerconfigjson` Quay pull secret in the
 selected namespace, runs the install through the Helm Go SDK using the prepared

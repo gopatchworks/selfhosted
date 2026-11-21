@@ -24,6 +24,7 @@ Server separately for the selected mode; fixed replicas remain the default.
 | Persistent storage | A default StorageClass when using bundled infrastructure. kind supplies one. |
 | Patchworks access | A license key and credentials that can pull the Patchworks images from Quay, or an existing image pull Secret in the target namespace. |
 | Public access | An ingress controller, DNS for the chosen domain and service subdomains, and certificates when using HTTPS. The local example below uses HTTP. |
+| LoadBalancer implementation | Needed when the installer installs Contour, whose Envoy Service is type `LoadBalancer`. Cloud clusters provide one. Bare-metal clusters need one installed, such as MetalLB in L2 mode, kube-vip, or Cilium LB IPAM. The local kind example uses host ports instead. |
 | [Homebrew](https://brew.sh) | Used below to install the installer on macOS. |
 | [Docker](https://docs.docker.com/get-docker/) and [kind](https://kind.sigs.k8s.io/docs/user/quick-start/) | Local installs only: start Docker, then `brew install kind`. |
 | [Helm](https://helm.sh/docs/intro/install/) | Local Contour setup or manual Helm installs only: `brew install helm`. |
@@ -44,6 +45,15 @@ Binaries for other platforms are available from
 confirms the detected context before connecting, inspects storage and ingress,
 and offers to install Contour if no ingress controller is detected. Configure
 DNS and, for HTTPS, TLS certificates for your chosen hosts.
+
+The installer installs Contour with its chart defaults, so Envoy receives
+traffic through a `LoadBalancer` Service. On bare metal, install a LoadBalancer
+implementation such as MetalLB first. Without one, the Service never gets an
+address and the hosts do not answer on ports 80 and 443. The installer then
+warns that no address was assigned and lists the node ports you can use
+meanwhile. It gives the same warning for an existing Contour or ingress-nginx
+Service that has no address. Instead of a LoadBalancer, you can install
+Contour yourself with NodePort or host ports, as the kind example below does.
 
 **Local kind cluster:** with Docker running, install the local setup tools:
 
