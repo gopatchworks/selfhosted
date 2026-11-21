@@ -22,9 +22,10 @@
 {{- $_ := unset $checksumWorkers.mono.scheduler "serverShards" }}
 {{/* Renaming builds a new Deployment, so the slug need not roll the old one. */}}
 {{- $_ := unset $checksumWorkers.mono "nameSuffix" }}
-{{/* Both change the hub's env, which rolls it, and no worker's config file. */}}
+{{/* These change the hub's env, which rolls it, and no worker's config file. */}}
 {{- $_ := unset $checksumWorkers.mono.scheduler "admitAllTriggers" }}
 {{- $_ := unset $checksumWorkers.mono "inbound" }}
+{{- $_ := unset $checksumWorkers.mono "allCompanies" }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{/*
 The hub's component slug. Its Deployment, Service, ConfigMaps and companies are
@@ -535,7 +536,7 @@ spec:
               value: {{ printf "%ds" (int $scheduler.drainTimeoutSeconds) | quote }}
             - name: SCHEDULER_TIMEZONE
               value: {{ $scheduler.timezone | quote }}
-            {{- if $scheduler.admitAllTriggers }}
+            {{- if or $scheduler.admitAllTriggers (include "patchworks.mono.allCompaniesScheduler" $root) }}
             # Admit every queued trigger, not only cron rows; Core must already
             # leave them to Monocore.
             - name: SCHEDULER_ADMIT_ALL_TRIGGERS

@@ -2,16 +2,14 @@
 {{- $root := . }}
 {{- range $processor := .Values.processors }}
 {{- if not $processor }}{{- continue }}{{- end }}
-{{- $enabled := true }}
-{{- if hasKey $processor "enabled" }}{{- $enabled = $processor.enabled }}{{- end }}
-{{- if $enabled }}
+{{- if include "patchworks.processorEnabled" (dict "root" $root "processor" $processor) }}
 {{- $queue := required "processors[].queue is required" $processor.queue }}
 {{- $processorName := $processor.name | default $queue }}
 {{- $slug := regexReplaceAll "[^a-z0-9-]" (lower $queue) "-" | trimAll "-" }}
 {{- $processorScheduler := $processor.scheduler | default dict }}
 {{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) $processorScheduler -}}
 {{- $schedSvc := mergeOverwrite (deepCopy $root.Values.workers) $sched -}}
-{{- if $sched.enabled }}
+{{- if and $sched.enabled (not (include "patchworks.processorSchedulerLeftOut" (dict "root" $root "processor" $processor))) }}
 {{- $namespace := $processor.namespace | default (include "patchworks.workers.namespace" $root) -}}
 ---
 apiVersion: batch/v1

@@ -242,6 +242,16 @@ chart release cannot serve them (its chart predates the setting, or its
 Monocore image is `v0.2.12` or older), the installer leaves them off, says why in
 the install summary, and keeps the saved answers for a run with a newer release.
 
+With mono workers the installer also writes
+`workers.mono.allCompanies.enabled=true` without asking, since a mono
+installation deploys no Core flow workers: Core turns Monocore and its scheduler
+on for the seeded tenant and every company after it, and leaves out the Core
+processes those companies don't need (see
+[Running every company on Monocore](../charts/patchworks-app/README.md#running-every-company-on-monocore)).
+A release whose chart predates the setting, or whose Core image is `v0.2.16` or
+older, leaves it off and says so in the install summary; turn Monocore on for
+each company from its feature settings instead.
+
 When complete, it shows an install summary and writes the selected values to
 disk. Contour, if requested, is installed earlier during cluster setup.
 

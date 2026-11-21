@@ -6,9 +6,7 @@
 {{- $queueSet := dict }}
 {{- range .Values.processors }}
 {{- if not . }}{{- continue }}{{- end }}
-{{- $enabled := true }}
-{{- if hasKey . "enabled" }}{{- $enabled = .enabled }}{{- end }}
-{{- if and $enabled .queue }}
+{{- if and (include "patchworks.processorEnabled" (dict "root" $root "processor" .)) .queue }}
 {{- if not (hasKey $queueSet .queue) }}
 {{- $queues = append $queues .queue }}
 {{- $_ := set $queueSet .queue true }}

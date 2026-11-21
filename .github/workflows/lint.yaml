@@ -79,6 +79,9 @@ jobs:
       - name: Core scheduler render tests
         run: ruby tests/core_scheduler_test.rb
 
+      - name: Monocore all-companies render tests
+        run: ruby tests/mono_all_companies_test.rb
+
       - name: RoadRunner shutdown render and process tests
         run: ruby tests/roadrunner_shutdown_test.rb
 
