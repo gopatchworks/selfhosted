@@ -219,9 +219,9 @@ generated credentials.
 | `dashboard.authCookieDomain` | `""` | Browser `authCookieDomain`; defaults to `web.sessionDomain` |
 | `dashboard.inboundUrl` | `""` | Browser `inboundUrl` |
 | `dashboard.webhookHandlerUrl` | `https://webhook-handler.pwks.co` | Browser `webhookHandlerUrl` |
-| `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to the shared `pusher` host |
-| `dashboard.broadcasting.port` | `""` | Browser `broadcasting.port`; defaults to the shared `pusher` port |
-| `dashboard.broadcasting.scheme` | `""` | Browser `broadcasting.scheme`; defaults to the shared `pusher` scheme |
+| `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to `pusher.ingress.host` when the Soketi ingress is enabled, otherwise the shared `pusher` host |
+| `dashboard.broadcasting.port` | `""` | Browser `broadcasting.port`; with the Soketi ingress enabled, defaults to `443` when `pusher.ingress.tlsSecretName` is set or `ingress.scheme=https`, otherwise `80`; without it, the shared `pusher` port |
+| `dashboard.broadcasting.scheme` | `""` | Browser `broadcasting.scheme`; with the Soketi ingress enabled, defaults to `https` when `pusher.ingress.tlsSecretName` is set or `ingress.scheme=https`, otherwise `http`; without it, the shared `pusher` scheme |
 | `dashboard.ga4Tag` | `none` | Browser `ga4Tag` |
 | `dashboard.zendeskUrl` | `none` | Browser `zendeskUrl` |
 | `dashboard.forceRegistrationRequest` | `false` | Browser `forceRegistrationRequests` |
