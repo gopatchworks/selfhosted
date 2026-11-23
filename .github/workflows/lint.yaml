@@ -82,6 +82,9 @@ jobs:
       - name: Monocore all-companies render tests
         run: ruby tests/mono_all_companies_test.rb
 
+      - name: Monocore optional shapes render tests
+        run: ruby tests/mono_optional_shapes_test.rb
+
       - name: Lightweight profile render tests
         run: ruby tests/lightweight_profile_test.rb
 

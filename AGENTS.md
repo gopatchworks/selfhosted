@@ -291,6 +291,8 @@ Monocore workers get their config from a generated `config.yaml` ConfigMap (via 
 
 The Monocore image is licensed. Every Monocore worker, hub and company, gets `LICENSE_KEY` and `LICENSE_SERVER_URL` from `app.license` through `patchworks.mono.licenseEnv`, not `patchworks.licenseEnv`, which adds Core's `LICENSE_ACTIVE` and Fabric's `LICENSE_URL`. Their readiness probe is `/readyz`, which waits for the licence server's first answer; liveness stays on `/healthz`.
 
+Monocore's optional shapes (Merge, Data Processing, Data Transformation, Cross-Reference, and waiting Run Flow with Flow Return) have no step runner unless enabled, and a run that reaches one fails. `workers.mono.enable.*` mirrors Monocore's own chart (`monocore.worker.enable.*` in `helm/monocore/values.yaml`, the authoritative contract) and renders `WORKER_ENABLE_*` as `"true"`/`"false"` on the hub and every company, through `patchworks.mono.enableEnv`. A shape left `null` follows `workers.mono.allCompanies.enabled`; `catchAtRunEnd` defaults to `false` and never follows it. A `WORKER_ENABLE_*` name in the worker's `extraEnv` (`workers.extraEnv`, `workers.mono.extraEnv`, the company's) skips the chart's entry rather than duplicating it. `enable` is unset from the config checksum, like the other env-only keys. When Monocore adds a flag to that block, add it to the helper's list, `values.yaml`, the chart README and `tests/mono_optional_shapes_test.rb`.
+
 ---
 
 ## KubeFaaS
