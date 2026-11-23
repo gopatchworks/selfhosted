@@ -189,6 +189,50 @@ web:
     queue: start
     frankenphp: {}
 
+# ── Installation profile ───────────────────────────────────────────────────────
+# standard runs each Core domain in its own Deployment: gateway and start web
+# pods, one Deployment per processor queue, and a schedule CronJob per
+# processor. lightweight runs Core in two pods, for small installations:
+#   web    — the gateway Deployment also serves the start routes (Core's
+#            APP_DOMAINS); the start Service selects its pods, so ingress,
+#            Monocore and the dashboard reach it unchanged. Needs a Core image
+#            later than v0.2.16. web.gateway's settings apply; web.start's
+#            extraEnv and extraEnvFrom are added to them.
+#   worker — <fullname>-worker consumes every enabled processor queue and runs
+#            each processor's schedule every minute, instead of the processor
+#            Deployments and schedule CronJobs. Per-processor replicas,
+#            processes, resources and autoscaling do not apply; their extraEnv
+#            and extraEnvFrom apply to the shared pod.
+# Monocore workers, Fabric and the dashboard are unchanged.
+profile: standard
+lightweight:
+  web:
+    # Off keeps separate gateway and start Deployments under the lightweight
+    # worker, for Core images without APP_DOMAINS.
+    combine: true
+  worker:
+    replicaCount: 1
+    # Queue workers in the main pool, which takes every enabled processor queue
+    # not in slowQueues, in processors[] order (the first is checked first).
+    processes: 2
+    # Queues whose jobs can run for hours get a pool of their own, so they
+    # cannot hold up scheduling and the API's background jobs.
+    slowQueues:
+      - medium-processor
+      - long-processor
+    slowProcesses: 1
+    # Run each processor's `schedule:run` every minute in the pod, bounded by
+    # scheduler.activeDeadlineSeconds. Off renders the schedule CronJobs as in
+    # the standard profile.
+    schedules: true
+    # Defaults to workers.resources, nodeSelector, tolerations, affinity and
+    # podAnnotations when empty.
+    resources: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+    podAnnotations: {}
+
 # ── Core Scheduler ─────────────────────────────────────────────────────────────
 # Shared defaults for processor scheduler CronJobs.
 scheduler:

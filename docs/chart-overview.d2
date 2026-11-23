@@ -17,9 +17,9 @@ title: "Patchworks Helm Chart — Component Overview" {
 application: "Application (components independently selectable)" {
   style.fill: "#EDF2FF"
 
-  web: "Gateway / Start\nweb.gateway.enabled / web.start.enabled" { shape: rectangle }
-  scheduler: "Processor Schedulers\nscheduler.enabled" { shape: rectangle }
-  processors: "Core Processors\nprocessorDeployments.enabled" { shape: rectangle }
+  web: "Gateway / Start\nweb.gateway.enabled / web.start.enabled\nprofile=lightweight: one Deployment" { shape: rectangle }
+  scheduler: "Processor Schedulers\nscheduler.enabled\nprofile=lightweight: in {name}-processor" { shape: rectangle }
+  processors: "Core Processors\nprocessorDeployments.enabled\nprofile=lightweight: {name}-processor" { shape: rectangle }
   s3manager: "S3 Manager\n(S3_BUCKET_CREATION_ENDPOINT)" { shape: rectangle }
 
   workers: "Workers (workers.enabled)" {

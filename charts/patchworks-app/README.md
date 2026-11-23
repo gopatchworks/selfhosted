@@ -478,6 +478,65 @@ commands use `/usr/local/bin/frankenphp php-cli artisan ...`.
 
 ---
 
+## Installation profile
+
+`profile: standard` (the default) runs each Core domain in its own Deployment:
+gateway and start web pods, one Deployment per processor queue, each with 15
+queue workers by default, and a schedule CronJob per processor.
+`profile: lightweight` runs Core in two pods, for small installations: on a
+mono installation measured on 2026-11-23, the seven processor pods held about
+7.2 GiB between them, almost all of it idle PHP queue workers.
+
+| Key | Default | Description |
+|---|---|---|
+| `profile` | `standard` | `standard` or `lightweight` |
+| `lightweight.web.combine` | `true` | The gateway Deployment also serves the start routes (`APP_DOMAINS=start`) and the start Service selects its pods. Needs a Core image later than `v0.2.16`, and `web.gateway` and `web.start` in one namespace. Off keeps separate gateway and start Deployments |
+| `lightweight.worker.replicaCount` | `1` | Replicas of `<fullname>-processor` |
+| `lightweight.worker.processes` | `2` | Queue workers in the main pool, which consumes every enabled processor queue not in `slowQueues`, in `processors[]` order |
+| `lightweight.worker.slowQueues` | `[medium-processor, long-processor]` | Queues whose jobs can run for hours, given a pool of their own so they cannot hold up scheduling and the API's background jobs |
+| `lightweight.worker.slowProcesses` | `1` | Queue workers in the slow pool |
+| `lightweight.worker.schedules` | `true` | Run each processor's schedule in the pod instead of its CronJob. Off renders the schedule CronJobs as in the standard profile |
+| `lightweight.worker.resources`, `nodeSelector`, `tolerations`, `affinity`, `podAnnotations` | empty | Default to the matching `workers.*` settings |
+
+What changes under `profile: lightweight`:
+
+- **Web.** The gateway Deployment gets `APP_DOMAINS=start`, so one process
+  loads both the gateway and start routes, and the start Deployment is not
+  rendered. The start Service keeps its name and selects the gateway pods, so
+  ingress routes, Monocore inbound, the dashboard and Fabric reach it
+  unchanged. `web.gateway`'s settings apply; `web.start`'s `extraEnv` and
+  `extraEnvFrom` are added to them, after the gateway's. The start routes are
+  scoped to their own hosts where they overlap the gateway's, so each host
+  still reaches its own route.
+- **Worker.** `<fullname>-processor` replaces the processor Deployments and
+  schedule CronJobs. It runs supervisord with:
+  - a main queue pool and a slow pool, each a `queue:work` over several queues.
+    Each pool's `APP_DOMAIN` is one of its queues (`gateway` for the main pool
+    when it has it), so follow-up jobs return to that pool;
+  - one `schedule-<queue>` loop per processor schedule, running `schedule:run`
+    with that `APP_DOMAIN` at the start of every minute, stopped after the
+    processor's `scheduler.activeDeadlineSeconds`. A processor's
+    `scheduler.enabled: false` or `suspend: true` leaves its loop out; other
+    CronJob settings (`schedule`, history limits) do not apply.
+
+  No program sets a per-processor `APP_NAME`, so every Core process shares one
+  cache prefix and the unique-job and schedule locks one process takes are the
+  ones another releases. Per-processor `replicas`, `processes`, `resources`
+  and `namespace` do not apply; `processors[].extraEnv` and `extraEnvFrom`
+  apply to the shared pod. Per-queue autoscaling is refused. The RabbitMQ
+  topology hook declares the same queues as before.
+- **Unchanged.** Monocore workers, Fabric, the dashboard, S3 Manager and the
+  infra chart. With `workers.mono.allCompanies` its left-out processors and
+  schedules stay out of the worker too.
+
+A standard installation can switch in an upgrade. The processor pods stop and
+`<fullname>-processor` starts, with queued jobs waiting in RabbitMQ in between.
+The start Service selects the gateway pods as soon as it is updated, so the
+start, webhook and callback routes can answer 404 until the first gateway pod
+with `APP_DOMAINS` is ready; switch outside busy hours.
+
+---
+
 ## Web
 
 Gateway and Start are independently selectable Laravel web services.

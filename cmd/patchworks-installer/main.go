@@ -89,6 +89,7 @@ type localConfig struct {
 	DashboardEnabled  *bool  `yaml:"dashboardEnabled"`
 	RoutingMode       string `yaml:"routingMode"`
 	WorkerMode        string `yaml:"workerMode"`
+	Profile           string `yaml:"profile"`
 	MonoInbound       *bool
 	MonoInboundRoutes *bool
 	IngressEnabled    *bool  `yaml:"ingressEnabled"`
@@ -114,6 +115,8 @@ type localConfig struct {
 }
 
 type localConfigFile struct {
+	// Profile is the chart's installation profile: standard or lightweight.
+	Profile        string                    `yaml:"profile,omitempty"`
 	Kubernetes     localConfigKubernetes     `yaml:"kubernetes,omitempty"`
 	Application    localConfigApplication    `yaml:"application,omitempty"`
 	Infrastructure localConfigInfrastructure `yaml:"infrastructure,omitempty"`
@@ -387,6 +390,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	overrideString(&config.RoutingMode, file.Application.Dashboard.RoutingMode)
 	overrideString(&config.CookieDomain, file.Application.CookieDomain)
 	overrideString(&config.WorkerMode, file.Workers.Type)
+	overrideString(&config.Profile, file.Profile)
 	overrideBool(&config.MonoInbound, file.Workers.Inbound.Enabled)
 	overrideBool(&config.MonoInboundRoutes, file.Workers.Inbound.RouteIngress)
 	overrideBool(&config.IngressEnabled, file.Ingress.Enabled)
@@ -410,6 +414,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 
 func (config localConfig) MarshalYAML() (any, error) {
 	return localConfigFile{
+		Profile: config.Profile,
 		Kubernetes: localConfigKubernetes{
 			Kubeconfig:    config.Kubeconfig,
 			Context:       config.Context,
@@ -787,6 +792,10 @@ func runInstaller(opts cliOptions) error {
 	config.Values["chartVersion"] = charts.Lock.Version
 	if config.Values["monoInbound"] == "true" {
 		config.Values["monoInboundUnsupported"] = monoInboundUnsupportedReason(charts.Charts["patchworks-app"])
+	}
+	if defaultProfile(config.Values["profile"]) == "lightweight" {
+		config.Values["profileUnsupported"], config.Values["lightweightWebApart"] = lightweightSupport(charts.Charts["patchworks-app"])
+		config.Values["profileChecked"] = "true"
 	}
 	if defaultWorkerMode(config.Values["workerMode"]) == "mono" {
 		reason := monoAllCompaniesUnsupportedReason(charts.Charts["patchworks-app"])
@@ -2468,6 +2477,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	dashboardEnabled := boolDefault(defaults.DashboardEnabled, true)
 	routingMode := stringDefault(defaults.RoutingMode, "host")
 	workerMode := defaultWorkerMode(defaults.WorkerMode)
+	profile := defaultProfile(defaults.Profile)
 	infrastructureMode := stringDefault(defaults.Infrastructure, "bundled")
 	if err := runFormWithQuitConfirm(huh.NewForm(
 		huh.NewGroup(
@@ -2508,6 +2518,14 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 					huh.NewOption("mono", "mono"),
 				).
 				Value(&workerMode),
+			huh.NewSelect[string]().
+				Title("Installation size").
+				Description("standard runs each Core service in its own pods; lightweight runs Core in one web pod and one worker pod, for small installations.").
+				Options(
+					huh.NewOption("standard", "standard"),
+					huh.NewOption("lightweight", "lightweight"),
+				).
+				Value(&profile),
 			huh.NewSelect[string]().
 				Title("Infrastructure").
 				Description("Use the bundled MySQL, Redis, RabbitMQ, ElasticSearch, S3, and Soketi stack, or connect to services you manage separately.").
@@ -2657,6 +2675,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"dashboardEnabled":  fmt.Sprintf("%t", dashboardEnabled),
 		"routingMode":       routingMode,
 		"workerMode":        workerMode,
+		"profile":           profile,
 		"monoInbound":       fmt.Sprintf("%t", workerMode == "mono" && monoInbound),
 		"monoInboundRoutes": fmt.Sprintf("%t", workerMode == "mono" && monoInbound && ingressEnabled && monoInboundRoutes),
 		"cookieDomain":      cookieDomain,
@@ -2966,6 +2985,9 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 		DashboardEnabled: boolPtr(parseBoolDefault(values["dashboardEnabled"], true)),
 		RoutingMode:      values["routingMode"],
 		WorkerMode:       defaultWorkerMode(values["workerMode"]),
+		// The user's choice, kept when the selected release has no
+		// lightweight profile, so a later run with a newer release applies it.
+		Profile: defaultProfile(values["profile"]),
 		// The user's answers, kept when the selected release cannot serve
 		// inbound triggers, so a later run with a newer release applies them.
 		MonoInbound:       monoSetting(values, "monoInbound"),
@@ -3229,6 +3251,7 @@ func installSummary(config installConfig) string {
 	lines = append(lines,
 		keyValue("Dashboard", fmt.Sprintf("%s (%s routing)", values["dashboardEnabled"], values["routingMode"])),
 		keyValue("Worker mode", defaultWorkerMode(values["workerMode"])),
+		keyValue("Installation size", profileSummary(values)),
 		keyValue("Cookie/session domain", values["cookieDomain"]),
 		keyValue("Image pull secret", defaultListValue(values["pullSecret"], "none")),
 		keyValue("Initial company/admin", values["seedInstall"]),
@@ -3452,6 +3475,14 @@ func writeValues(path string, values map[string]string) error {
 	}
 
 	fmt.Fprintf(&b, "web:\n  sessionDomain: %s\n\n", quote(cookieDomain))
+
+	if lightweightEnabled(values) {
+		fmt.Fprintf(&b, "profile: \"lightweight\"\n")
+		if values["lightweightWebApart"] != "" {
+			fmt.Fprintf(&b, "lightweight:\n  web:\n    combine: false\n")
+		}
+		fmt.Fprintf(&b, "\n")
+	}
 
 	fmt.Fprintf(&b, "workers:\n")
 	fmt.Fprintf(&b, "  type: %s\n", quote(defaultWorkerMode(values["workerMode"])))
@@ -3794,6 +3825,62 @@ func monoSetting(values map[string]string, key string) *bool {
 		return nil
 	}
 	return boolPtr(values[key] == "true")
+}
+
+// lastCoreWithoutAppDomains is the last Patchworks release whose Core image
+// serves one domain per process, so its gateway and start routes cannot share
+// the lightweight profile's web pod.
+const lastCoreWithoutAppDomains = "0.2.16"
+
+func defaultProfile(value string) string {
+	if strings.TrimSpace(value) == "lightweight" {
+		return "lightweight"
+	}
+	return "standard"
+}
+
+// lightweightSupport says why the selected app chart cannot install the
+// lightweight profile (unsupported), or why its web pods stay apart (webApart):
+// a Core image up to lastCoreWithoutAppDomains loads only one domain's routes
+// per process, so the worker pod applies but the web pod is not combined.
+func lightweightSupport(chart helmchart.Charter) (unsupported, webApart string) {
+	accessor, err := helmchart.NewAccessor(chart)
+	if err != nil {
+		return "the app chart could not be read", ""
+	}
+	values := accessor.Values()
+	if _, ok := values["lightweight"].(map[string]any); !ok {
+		return "this chart release has no lightweight profile", ""
+	}
+	image, _ := values["image"].(map[string]any)
+	tag, _ := image["tag"].(string)
+	// A tag that is not a version (a branch build) cannot be compared.
+	if version, err := semver.NewVersion(strings.TrimPrefix(tag, "v")); err == nil &&
+		!version.GreaterThan(semver.MustParse(lastCoreWithoutAppDomains)) {
+		return "", fmt.Sprintf("Core %s serves one domain per process", tag)
+	}
+	return "", ""
+}
+
+// lightweightEnabled is whether the values file selects the lightweight
+// profile: the user's choice and a selected release checked to support it.
+func lightweightEnabled(values map[string]string) bool {
+	return defaultProfile(values["profile"]) == "lightweight" && values["profileUnsupported"] == "" && values["profileChecked"] == "true"
+}
+
+func profileSummary(values map[string]string) string {
+	switch {
+	case defaultProfile(values["profile"]) != "lightweight":
+		return "standard"
+	case values["profileUnsupported"] != "":
+		return "standard: " + values["profileUnsupported"] + "; choose a newer release with --chart-version"
+	case !lightweightEnabled(values):
+		return "standard"
+	case values["lightweightWebApart"] != "":
+		return "lightweight: one Core worker pod; separate gateway and start pods, as " + values["lightweightWebApart"]
+	default:
+		return "lightweight: one Core web pod and one Core worker pod"
+	}
 }
 
 func defaultWorkerMode(value string) string {

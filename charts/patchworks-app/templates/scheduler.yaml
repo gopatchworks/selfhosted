@@ -1,4 +1,5 @@
-{{- if .Values.scheduler.enabled }}
+{{- /* profile=lightweight can run these schedules in lightweight-worker.yaml instead. */}}
+{{- if and .Values.scheduler.enabled (not (include "patchworks.lightweight.schedulesInWorker" .)) }}
 {{- $root := . }}
 {{- range $processor := .Values.processors }}
 {{- if not $processor }}{{- continue }}{{- end }}

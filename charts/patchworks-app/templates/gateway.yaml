@@ -1,6 +1,8 @@
 {{- if .Values.web.gateway.enabled }}
 {{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}
 {{- $svc := mergeOverwrite (deepCopy .Values.web) .Values.web.gateway -}}
+{{- /* profile=lightweight: these pods serve the start routes too (Core's APP_DOMAINS). */}}
+{{- $combined := include "patchworks.lightweight.combineWeb" . -}}
 ---
 # Deployment
 apiVersion: apps/v1
@@ -63,7 +65,7 @@ spec:
             {{- end }}
             - secretRef:
                 name: {{ include "patchworks.passportSecretName" . }}
-            {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom) }}
+            {{- with (concat .Values.app.extraEnvFrom $svc.extraEnvFrom (ternary (.Values.web.start.extraEnvFrom | default (list)) (list) (eq $combined "true"))) }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
           env:
@@ -71,6 +73,10 @@ spec:
             {{- include "patchworks.pusherRuntimeEnv" . | nindent 12 }}
             - name: APP_DOMAIN
               value: gateway
+            {{- if $combined }}
+            - name: APP_DOMAINS
+              value: start
+            {{- end }}
             - name: RABBITMQ_QUEUE
               value: {{ $svc.queue | quote }}
             {{- with .Values.app.extraEnv }}
@@ -78,6 +84,11 @@ spec:
             {{- end }}
             {{- with $svc.extraEnv }}
             {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- if $combined }}
+            {{- with .Values.web.start.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
             {{- end }}
           livenessProbe:
             httpGet:

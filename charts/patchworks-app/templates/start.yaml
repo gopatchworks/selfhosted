@@ -1,6 +1,9 @@
 {{- if .Values.web.start.enabled }}
 {{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}
 {{- $svc := mergeOverwrite (deepCopy .Values.web) .Values.web.start -}}
+{{- /* profile=lightweight: the gateway pods serve the start routes too. */}}
+{{- $combined := include "patchworks.lightweight.combineWeb" . -}}
+{{- if not $combined }}
 ---
 # Deployment
 apiVersion: apps/v1
@@ -115,6 +118,7 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}
 ---
 # Service
 apiVersion: v1
@@ -130,7 +134,7 @@ metadata:
 spec:
   type: {{ $svc.service.type }}
   selector:
-    {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 4 }}
+    {{- include "patchworks.selectorLabels" (dict "component" (ternary "gateway" "start" (eq $combined "true")) "Release" .Release) | nindent 4 }}
   ports:
     - name: http
       port: {{ $svc.service.port }}

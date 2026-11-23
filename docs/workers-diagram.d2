@@ -39,6 +39,23 @@ processors: "processors[] (always PHP Core)" {
     scaler -> dep: scales
     cron -> queue: APP_DOMAIN
   }
+
+  lightweight: "profile: lightweight (replaces every Per Processor Deployment and CronJob)" {
+    style.stroke-dash: 4
+    direction: right
+    cm: "{name}-processor-supervisord\nqueue pool + slow pool + schedule.sh" { shape: document }
+    dep: "Deployment\n{name}-processor" { shape: rectangle }
+    pool: "queue pool\nevery queue not in slowQueues\nlightweight.worker.processes" { shape: rectangle }
+    slow: "slow pool\nlightweight.worker.slowQueues\nlightweight.worker.slowProcesses" { shape: rectangle }
+    schedules: "schedule-{queue} loops\nschedule:run each minute, APP_DOMAIN={queue}" { shape: rectangle }
+    queue: "RabbitMQ queues\nall enabled processors[].queue" { shape: queue }
+    cm -> dep: mounts
+    dep -> pool
+    dep -> slow
+    dep -> schedules
+    pool -> queue: consumes
+    slow -> queue: consumes
+  }
 }
 
 # ── type: standalone ────────────────────────────────────────────────────────
