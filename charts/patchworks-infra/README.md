@@ -472,7 +472,7 @@ startup.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ingress.enabled` | `false` | Create public ingress resources |
-| `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs. Set to `https` when TLS is terminated outside this chart |
+| `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs, including the dashboard websocket to `pusher.ingress.host`. Set to `https` when TLS is terminated outside this chart |
 | `ingress.className` | `""` | `ingressClassName` for standard Ingress resources |
 | `ingress.annotations` | `{}` | Annotations applied to every generated Ingress or HTTPProxy resource |
 | `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |

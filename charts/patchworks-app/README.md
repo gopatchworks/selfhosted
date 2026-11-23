@@ -374,9 +374,9 @@ so dashboard broadcasting works with generated credentials.
 | `dashboard.authCookieDomain` | `""` | Browser `authCookieDomain`; defaults to `web.sessionDomain` |
 | `dashboard.inboundUrl` | `""` | Browser `inboundUrl` |
 | `dashboard.webhookHandlerUrl` | `https://webhook-handler.pwks.co` | Browser `webhookHandlerUrl` |
-| `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to the shared `pusher` host |
-| `dashboard.broadcasting.port` | `""` | Browser `broadcasting.port`; defaults to the shared `pusher` port |
-| `dashboard.broadcasting.scheme` | `""` | Browser `broadcasting.scheme`; defaults to the shared `pusher` scheme |
+| `dashboard.broadcasting.host` | `""` | Browser `broadcasting.host`; defaults to `pusher.ingress.host` when the Soketi ingress is enabled, otherwise the shared `pusher` host |
+| `dashboard.broadcasting.port` | `""` | Browser `broadcasting.port`; with the Soketi ingress enabled, defaults to `443` when `pusher.ingress.tlsSecretName` is set or `ingress.scheme=https`, otherwise `80`; without it, the shared `pusher` port |
+| `dashboard.broadcasting.scheme` | `""` | Browser `broadcasting.scheme`; with the Soketi ingress enabled, defaults to `https` when `pusher.ingress.tlsSecretName` is set or `ingress.scheme=https`, otherwise `http`; without it, the shared `pusher` scheme |
 | `dashboard.ga4Tag` | `none` | Browser `ga4Tag` |
 | `dashboard.zendeskUrl` | `none` | Browser `zendeskUrl` |
 | `dashboard.forceRegistrationRequest` | `false` | Browser `forceRegistrationRequests` |
@@ -904,7 +904,7 @@ after Core migrations.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `ingress.enabled` | `false` | Create public ingress resources |
-| `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs. Set to `https` when TLS is terminated outside this chart |
+| `ingress.scheme` | `http` | Public URL scheme used for dashboard/browser-facing generated URLs, including the dashboard websocket to `pusher.ingress.host`. Set to `https` when TLS is terminated outside this chart |
 | `ingress.className` | `""` | `ingressClassName` for standard Ingress resources |
 | `ingress.annotations` | `{}` | Annotations applied to every generated Ingress or HTTPProxy resource |
 | `ingress.tls.<service>.secretName` | `""` | TLS Secret for `gateway`, `start`, `webhook`, `callback`, `fabric`, or `dashboard` |
@@ -1443,7 +1443,11 @@ The app chart does not deploy Soketi resources. It consumes the same shared
 env vars into Core web pods, workers, and dashboard broadcasting config. When
 `pusher.ingress.enabled=true` and `pusher.ingress.host` is set, the dashboard
 defaults its websocket connection to that public host while backend services
-continue using the in-cluster Soketi service.
+continue using the in-cluster Soketi service. The dashboard connects on
+`443`/`https` when `pusher.ingress.tlsSecretName` is set or `ingress.scheme` is
+`https` (TLS terminated outside the chart, for example by an upstream proxy),
+and on `80`/`http` otherwise. `dashboard.broadcasting.port` and `scheme`
+override both.
 
 When `pusher.enabled=true`, the app chart assumes the infra chart has deployed
 the native `patchworks-soketi` Service. If credentials are omitted and
@@ -1473,7 +1477,7 @@ inline or via `pusher.existingSecret`.
 | `pusher.ingress.className` | `""` | Optional ingress class name for the Soketi ingress |
 | `pusher.ingress.annotations` | `{}` | Additional annotations for the Soketi ingress |
 | `pusher.ingress.host` | `""` | Hostname for the Soketi ingress. When set, the dashboard defaults `PUSHER_HOST` to this value |
-| `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress. Also flips dashboard defaults to `https:443` |
+| `pusher.ingress.tlsSecretName` | `""` | Optional TLS secret for the Soketi ingress. Also flips dashboard defaults to `https:443`; `ingress.scheme=https` does the same without a secret |
 | `pusher.ingress.timeout` | `3600` | Websocket proxy read/send timeout in seconds for nginx ingress |
 | `soketi.fullnameOverride` | `patchworks-soketi` | Stable resource name used when opting into the upstream Soketi subchart |
 | `soketi.subchart.enabled` | `false` | Shared with the infra chart; when true, app pods target the upstream Soketi subchart service name |
