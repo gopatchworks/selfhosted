@@ -69,10 +69,10 @@ on = render(mono(ALL))
 check(WORKERS.to_h { |w| [w, expected('true')] }, flags(on), 'defaults with allCompanies')
 
 # An explicit value wins over allCompanies either way; null and absent follow it.
-explicit = render(mono(ALL.merge('enable' => {'merge' => false, 'crossReference' => nil, 'catchAtRunEnd' => true})))
-check(WORKERS.to_h { |w| [w, expected('true', 'true', {'WORKER_ENABLE_MERGE' => ['false']})] }, flags(explicit),
-      'explicit false and true with allCompanies')
-explicit_off = render(mono('enable' => {'merge' => true, 'syncSubprocess' => 'true', 'dataProcessing' => 'false'}))
+explicit = render(mono(ALL.merge('enable' => {'merge' => false, 'dataProcessing' => 'false', 'crossReference' => nil, 'catchAtRunEnd' => true})))
+check(WORKERS.to_h { |w| [w, expected('true', 'true', {'WORKER_ENABLE_MERGE' => ['false'], 'WORKER_ENABLE_DATA_PROCESSING' => ['false']})] },
+      flags(explicit), 'explicit false and true with allCompanies, strings accepted')
+explicit_off = render(mono('enable' => {'merge' => true, 'syncSubprocess' => 'true'}))
 check(WORKERS.to_h { |w| [w, expected('false', 'false', {'WORKER_ENABLE_MERGE' => ['true'], 'WORKER_ENABLE_SYNC_SUBPROCESS' => ['true']})] },
       flags(explicit_off), 'explicit true without allCompanies, strings accepted')
 check(WORKERS.to_h { |w| [w, expected('true')] }, flags(render(mono('enable' => SHAPES.keys.to_h { |k| [k, true] }))),
