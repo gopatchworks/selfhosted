@@ -1,0 +1,179 @@
+{{- /*
+profile=lightweight: one Deployment consumes every enabled processor queue and,
+with lightweight.worker.schedules, runs each processor's schedule, in place of
+the processor Deployments (processors.yaml) and schedule CronJobs
+(scheduler.yaml).
+
+Queue workers run in two pools so jobs that can run for hours (slowQueues)
+cannot hold up the rest. Each pool's APP_DOMAIN is one of its own queues, so a
+job a pool runs dispatches its follow-up jobs back to that pool. Every process
+shares one cache prefix (no per-processor APP_NAME), so the unique-job and
+schedule locks a process takes are the ones another releases.
+*/ -}}
+{{- if include "patchworks.lightweight.worker" . }}
+{{- $root := . }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $lw := .Values.lightweight.worker }}
+{{- $slowList := $lw.slowQueues | default (list) }}
+{{- $fast := list }}
+{{- $slow := list }}
+{{- $extraEnv := list }}
+{{- $extraEnvFrom := list }}
+{{- $schedules := list }}
+{{- range $processor := .Values.processors }}
+{{- if include "patchworks.processorEnabled" (dict "root" $root "processor" $processor) }}
+{{- $queue := required "processors[].queue is required" $processor.queue }}
+{{- if not (or (has $queue $fast) (has $queue $slow)) }}
+{{- if has $queue $slowList }}{{- $slow = append $slow $queue }}{{- else }}{{- $fast = append $fast $queue }}{{- end }}
+{{- end }}
+{{- $extraEnv = concat $extraEnv ($processor.extraEnv | default (list)) }}
+{{- $extraEnvFrom = concat $extraEnvFrom ($processor.extraEnvFrom | default (list)) }}
+{{- $sched := mergeOverwrite (deepCopy $root.Values.scheduler) ($processor.scheduler | default (dict)) }}
+{{- if and (include "patchworks.lightweight.schedulesInWorker" $root) $sched.enabled (not $sched.suspend) (not (include "patchworks.processorSchedulerLeftOut" (dict "root" $root "processor" $processor))) }}
+{{- $schedules = append $schedules (dict "domain" $queue "deadline" (int $sched.activeDeadlineSeconds)) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- if not (or $fast $slow) }}
+{{- fail "profile=lightweight found no enabled processor queue for the worker: enable a processors[] entry, or set processorDeployments.enabled to false" }}
+{{- end }}
+{{- $pools := list }}
+{{- if $fast }}
+{{- $pools = append $pools (dict "name" "queue" "queues" $fast "domain" (ternary "gateway" (first $fast) (has "gateway" $fast)) "processes" (int $lw.processes)) }}
+{{- end }}
+{{- if $slow }}
+{{- $pools = append $pools (dict "name" "queue-slow" "queues" $slow "domain" (first $slow) "processes" (int $lw.slowProcesses)) }}
+{{- end }}
+{{- $artisan := "/usr/local/bin/php /var/www/html/artisan" }}
+{{- if eq (include "patchworks.usesFrankenphp" (dict "root" $root "svc" $root.Values.workers)) "true" }}
+{{- $artisan = "/usr/local/bin/frankenphp php-cli artisan" }}
+{{- end }}
+{{- $namespace := include "patchworks.workers.namespace" $root }}
+{{- $name := include "patchworks.resourceName" (printf "%s-processor" $fullname) }}
+{{- $confName := include "patchworks.resourceName" (printf "%s-processor-supervisord" $fullname) }}
+{{- $conf := include "patchworks.lightweight.supervisordConf" (dict "pools" $pools "schedules" $schedules "artisan" $artisan "connection" $root.Values.workers.queue.connection) }}
+{{- $script := include "patchworks.lightweight.scheduleScript" (dict "artisan" $artisan) }}
+{{- $resources := $lw.resources | default $root.Values.workers.resources }}
+{{- $nodeSelector := $lw.nodeSelector | default $root.Values.workers.nodeSelector }}
+{{- $tolerations := $lw.tolerations | default $root.Values.workers.tolerations }}
+{{- $affinity := $lw.affinity | default $root.Values.workers.affinity }}
+{{- $podAnnotations := $lw.podAnnotations | default $root.Values.workers.podAnnotations }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $confName }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: processor
+data:
+  supervisord.conf: |
+    {{- $conf | nindent 4 }}
+  {{- if $schedules }}
+  schedule.sh: |
+    {{- $script | nindent 4 }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "patchworks.labels" $root | nindent 4 }}
+    app.kubernetes.io/component: processor
+  {{- with (mergeOverwrite (deepCopy $root.Values.deploymentAnnotations) ($root.Values.workers.deploymentAnnotations | default (dict))) }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ $lw.replicaCount }}
+  revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "processor" "Release" $root.Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "processor" "Release" $root.Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "patchworks.appConfigData" $root | sha256sum }}
+        checksum/supervisord: {{ printf "%s\n%s" $conf (ternary $script "" (not (empty $schedules))) | sha256sum }}
+        {{- with $podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list $root.Values $root.Values.workers $root.Values.processorDeployments) | nindent 6 }}
+      serviceAccountName: {{ include "patchworks.serviceAccountName" $root }}
+      {{- with $root.Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "patchworks.waitForDeps" $root | nindent 8 }}
+      containers:
+        - name: processor
+          image: {{ include "patchworks.appImage" (dict "svc" $root.Values.workers "root" $root) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $root.Values.workers "root" $root) }}
+          command:
+            - supervisord
+            - -c
+            - /etc/supervisor/conf.d/supervisord.conf
+          envFrom:
+            - configMapRef:
+                name: {{ $fullname }}-config
+            {{- if include "patchworks.appSecretHasData" $root }}
+            - secretRef:
+                name: {{ $fullname }}-secret
+            {{- end }}
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" $root }}
+            {{- with (concat $root.Values.app.extraEnvFrom $root.Values.workers.extraEnvFrom $extraEnvFrom) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "patchworks.appSecretEnvRefs" $root | nindent 12 }}
+            {{- include "patchworks.pusherRuntimeEnv" $root | nindent 12 }}
+            # Each supervisord program sets its own APP_DOMAIN and RABBITMQ_QUEUE.
+            - name: QUEUE_CONNECTION
+              value: {{ $root.Values.workers.queue.connection | quote }}
+            {{- with $root.Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $root.Values.workers.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          volumeMounts:
+            - name: supervisord-conf
+              mountPath: /etc/supervisor/conf.d/supervisord.conf
+              subPath: supervisord.conf
+            {{- if $schedules }}
+            - name: supervisord-conf
+              mountPath: /etc/patchworks/schedule.sh
+              subPath: schedule.sh
+            {{- end }}
+          {{- with $resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: supervisord-conf
+          configMap:
+            name: {{ $confName }}
+      {{- with $nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

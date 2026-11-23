@@ -155,6 +155,57 @@ Takes (dict "root" $ "processor" $processor).
 {{- end }}
 
 {{/*
+"true" for profile=lightweight, else empty.
+*/}}
+{{- define "patchworks.lightweight" -}}
+{{- $profile := .Values.profile | default "standard" -}}
+{{- if not (has $profile (list "standard" "lightweight")) -}}
+{{- fail (printf "profile must be standard or lightweight, got %q" $profile) -}}
+{{- end -}}
+{{- if eq $profile "lightweight" -}}true{{- end -}}
+{{- end }}
+
+{{/*
+"true" when the gateway Deployment also serves the start routes and the start
+Service selects its pods, else empty. Both must be enabled and share a
+namespace, since a Service selects pods in its own namespace only.
+*/}}
+{{- define "patchworks.lightweight.combineWeb" -}}
+{{- if and (include "patchworks.lightweight" .) .Values.lightweight.web.combine .Values.web.gateway.enabled .Values.web.start.enabled -}}
+{{- if ne (include "patchworks.gateway.namespace" .) (include "patchworks.start.namespace" .) -}}
+{{- fail "lightweight.web.combine needs web.gateway and web.start in one namespace: unset their namespaces, or set lightweight.web.combine to false" -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+"true" when <fullname>-worker replaces the processor Deployments, else empty.
+*/}}
+{{- define "patchworks.lightweight.worker" -}}
+{{- if and (include "patchworks.lightweight" .) .Values.processorDeployments.enabled -}}
+{{- $root := . -}}
+{{- if dig "enabled" false (.Values.processorDeployments.autoscaling | default (dict)) -}}
+{{- fail "profile=lightweight runs every processor queue in one Deployment, which cannot autoscale per queue: set processorDeployments.autoscaling.enabled to false" -}}
+{{- end -}}
+{{- range .Values.processors -}}
+{{- if and . (dig "autoscaling" "enabled" false .) -}}
+{{- fail (printf "profile=lightweight runs every processor queue in one Deployment, which cannot autoscale per queue: set processors[%s].autoscaling.enabled to false" (.queue | default .name)) -}}
+{{- end -}}
+{{- end -}}
+true
+{{- end -}}
+{{- end }}
+
+{{/*
+"true" when <fullname>-worker runs the processors' schedules in place of their
+CronJobs, else empty.
+*/}}
+{{- define "patchworks.lightweight.schedulesInWorker" -}}
+{{- if and (include "patchworks.lightweight.worker" .) .Values.lightweight.worker.schedules .Values.scheduler.enabled -}}true{{- end -}}
+{{- end }}
+
+{{/*
 "true" when workers.mono.allCompanies leaves out a processor's schedule CronJob
 while its Deployment keeps running. Takes (dict "root" $ "processor" $processor).
 */}}
@@ -1088,6 +1139,69 @@ stdout_logfile=/dev/stdout
 stdout_logfile_maxbytes=0
 stderr_logfile=/dev/stderr
 stderr_logfile_maxbytes=0
+{{- end }}
+
+{{/*
+supervisord.conf for profile=lightweight's worker: one queue:work program per
+pool, consuming its queues in order, and one schedule loop per processor
+schedule. Each program sets its own APP_DOMAIN and RABBITMQ_QUEUE. Takes
+(dict "pools" (list (dict name queues domain processes)) "schedules" (list (dict
+domain deadline)) "artisan" $cmd "connection" $conn).
+*/}}
+{{- define "patchworks.lightweight.supervisordConf" -}}
+[supervisord]
+nodaemon=true
+loglevel=info
+logfile=/dev/null
+pidfile=/tmp/supervisord.pid
+{{- range .pools }}
+
+[program:{{ .name }}]
+command={{ $.artisan }} queue:work {{ $.connection }} --queue={{ join "," .queues }} --backoff=0 --max-jobs=0 --memory=256 --sleep=3 --timeout=21600 --tries=1 --rest=0
+environment=APP_DOMAIN="{{ .domain }}",RABBITMQ_QUEUE="{{ .domain }}"
+process_name=%(program_name)s_%(process_num)02d
+numprocs={{ .processes }}
+stopwaitsecs=21600
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+{{- end }}
+{{- range .schedules }}
+
+[program:schedule-{{ .domain }}]
+command=/bin/sh /etc/patchworks/schedule.sh {{ .deadline }}
+environment=APP_DOMAIN="{{ .domain }}",RABBITMQ_QUEUE="{{ .domain }}"
+stopwaitsecs={{ .deadline }}
+stopasgroup=true
+killasgroup=true
+autostart=true
+autorestart=true
+stdout_logfile=/dev/stdout
+stdout_logfile_maxbytes=0
+stderr_logfile=/dev/stderr
+stderr_logfile_maxbytes=0
+{{- end }}
+{{- end }}
+
+{{/*
+The schedule loop profile=lightweight's worker runs once per processor schedule.
+Takes (dict "artisan" $cmd).
+*/}}
+{{- define "patchworks.lightweight.scheduleScript" -}}
+#!/bin/sh
+# Usage: schedule.sh <seconds>. Runs `schedule:run` at the start of every
+# minute for the APP_DOMAIN supervisord gives this program, as that
+# processor's CronJob would, and stops a run after <seconds>. A run still
+# going at the next minute delays that minute's run, like the CronJob's
+# concurrencyPolicy: Forbid.
+deadline="$1"
+while :; do
+  sleep $((60 - $(date +%s) % 60))
+  timeout "$deadline" {{ .artisan }} schedule:run || echo "schedule:run for $APP_DOMAIN exited with $?"
+done
 {{- end }}
 
 {{/* ── PVC helper ──────────────────────────────────────────────────────────────── */}}

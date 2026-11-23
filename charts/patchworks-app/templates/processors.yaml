@@ -1,4 +1,5 @@
-{{- if .Values.processorDeployments.enabled }}
+{{- /* profile=lightweight runs every queue in lightweight-worker.yaml instead. */}}
+{{- if and .Values.processorDeployments.enabled (not (include "patchworks.lightweight.worker" .)) }}
 {{- $root := . }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{- range $processor := .Values.processors }}

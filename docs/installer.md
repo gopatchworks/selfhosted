@@ -217,6 +217,7 @@ The TUI asks for:
 - Namespace
 - Public domain and URL scheme
 - Worker mode: standalone, microservice, or mono
+- Installation size: standard, or lightweight for small installations
 - Bundled infrastructure or external services, including their connection and credential settings
 - License key
 - Ingress provider and class
@@ -251,6 +252,17 @@ processes those companies don't need (see
 A release whose chart predates the setting, or whose Core image is `v0.2.16` or
 older, leaves it off and says so in the install summary; turn Monocore on for
 each company from its feature settings instead.
+
+**Installation size** chooses the chart's `profile`. Lightweight runs Core in one
+web pod and one worker pod instead of separate gateway and start pods, a pod per
+processor queue and a schedule CronJob per processor (see
+[Installation profile](../charts/patchworks-app/README.md#installation-profile)).
+`--save-config` keeps the choice as `profile`. When the selected chart release
+has no lightweight profile, the installer writes the standard profile and says
+so in the install summary. With a Core image `v0.2.16` or older it still runs
+one worker pod but keeps separate gateway and start pods
+(`lightweight.web.combine: false`), since that Core serves one domain per
+process.
 
 When complete, it shows an install summary and writes the selected values to
 disk. Contour, if requested, is installed earlier during cluster setup.
