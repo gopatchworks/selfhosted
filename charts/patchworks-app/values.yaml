@@ -874,10 +874,36 @@ workers:
       # (SCHEDULER_ADMIT_ALL_TRIGGERS). Turn on only once Core excludes every
       # trigger from its own queue admission for those companies (Core's
       # MonocoreSchedulerOwnership::restrictPendingToCore): Core takes no row
-      # lock, so a row both engines admit runs twice.
+      # lock, so a row both engines admit runs twice. allCompanies.scheduler
+      # turns it on.
       admitAllTriggers: false
       rbac:
         create: true
+    # Run every company on Monocore. With workers.type=mono no Core flow
+    # workers are deployed, so a company without Core's monocore feature has
+    # its flows queued where nothing consumes them. Needs a Patchworks release
+    # later than v0.2.16 (Core's monocore:auto-enable).
+    allCompanies:
+      # Core turns the monocore feature on for every company it provisions
+      # (MONOCORE_AUTO_ENABLE_FOR_NEW_COMPANIES), and the Core seed job turns it
+      # on for companies with no stored value, the seeded tenant included.
+      # A company with a stored value keeps it: switch existing companies from
+      # the dashboard's feature settings.
+      enabled: false
+      # Also assign those companies' scheduling to Monocore (monocore-scheduler,
+      # MONOCORE_SCHEDULER_AUTO_ENABLE_FOR_NEW_COMPANIES), and admit every
+      # trigger (scheduler.admitAllTriggers). Needs the hub's scheduler
+      # (scheduler.mode other than disabled).
+      scheduler: true
+      # Core processors left out: their Deployment and schedule CronJob. No
+      # Core code queues work for short-processor, and its schedule only adds
+      # a health check the other schedules also run.
+      disableProcessors:
+        - short-processor
+      # Core schedule CronJobs left out while their processor keeps running.
+      # The gateway schedule only runs that same health check.
+      disableSchedulers:
+        - gateway
     # Serve Core's webhook, callback and start API endpoints from the hub's
     # public listener (port 8082) instead of Core's start deployment. Needs a
     # Monocore image with the public listener (gopatchworks/monocore#470,
