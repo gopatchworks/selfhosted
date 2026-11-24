@@ -820,6 +820,12 @@ rabbitmq:
     spec: {}
   managementService:
     type: ClusterIP
+  # Pod hostname. RabbitMQ names its node rabbit@<hostname> and keeps its data
+  # in /var/lib/rabbitmq/mnesia/rabbit@<hostname>, so it must not change.
+  # Empty uses <fullname>-rabbitmq. Before this setting the hostname was the
+  # pod name: to keep an existing broker's queues and messages across the
+  # upgrade, set it to the current RabbitMQ pod's name.
+  hostname: ""
   resources:
     requests:
       cpu: 100m

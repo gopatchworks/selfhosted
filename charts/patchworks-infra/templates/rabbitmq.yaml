@@ -46,6 +46,11 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  # On a rollout, stop the old broker before starting the new one: both would
+  # open the same volume and node data dir. The container's lock covers a
+  # deleted or evicted pod, whose replacement starts at once.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 6 }}
@@ -54,11 +59,34 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 8 }}
     spec:
+      # RabbitMQ names its node rabbit@<hostname> and keeps its data in
+      # /var/lib/rabbitmq/mnesia/rabbit@<hostname>. Left to the pod name, the
+      # hostname changed on every rollout and the new pod started an empty
+      # broker. RABBITMQ_NODENAME alone doesn't work: the broker and the probes
+      # must resolve its host part, and the pod resolves only its own hostname.
+      hostname: {{ $rmq.hostname | default (printf "%s-rabbitmq" $fullname) }}
       {{- include "patchworks.podDnsConfig" (list .Values .Values.rabbitmq) | nindent 6 }}
       containers:
         - name: rabbitmq
           image: {{ $rmq.image.repository }}:{{ $rmq.image.tag }}
           imagePullPolicy: {{ $rmq.image.pullPolicy }}
+          # The ReplicaSet replaces a deleted or evicted pod while it is still
+          # stopping, and on the same node both pods mount the volume. A lock
+          # on the volume, held by rabbitmq-server through the inherited fd
+          # and released when the old container exits, makes the new broker
+          # wait rather than open the same node data dir. Storage without
+          # flock starts at once, as before. The rest is the image's own
+          # entrypoint and command.
+          command:
+            - sh
+            - -c
+            - |
+              exec 9>>/var/lib/rabbitmq/.broker.lock
+              if ! flock -n 9; then
+                echo "Waiting for the previous RabbitMQ pod to stop."
+                flock 9 || echo "Could not lock /var/lib/rabbitmq/.broker.lock; starting anyway."
+              fi
+              exec docker-entrypoint.sh rabbitmq-server
           ports:
             - name: amqp
               containerPort: 5672
