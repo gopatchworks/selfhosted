@@ -581,9 +581,9 @@ func writeChartLock(path string, lock chartLock) error {
 	return os.Rename(file.Name(), path)
 }
 
-func selectedHelmCommandText(namespace, valuesFile string, installInfrastructure bool) string {
+func selectedHelmCommandText(namespace, valuesFile string, installInfrastructure bool, kubefaas manualKubeFaaS) string {
 	lockPath := cleanPath(valuesFile) + ".charts.lock.yaml"
-	return "patchworks-installer unpack-charts --chart-lock " + shellQuote(lockPath) + " --output ./charts\n" + helmCommandText(namespace, valuesFile, installInfrastructure)
+	return "patchworks-installer unpack-charts --chart-lock " + shellQuote(lockPath) + " --output ./charts\n" + helmCommandText(namespace, valuesFile, installInfrastructure, kubefaas)
 }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }

@@ -51,6 +51,8 @@ type clusterInfo struct {
 	HasContour        bool
 	HasCertManager    bool
 	QuaySecretPresent bool
+	// Nodes are the nodes' architectures and container runtimes, for KubeFaaS.
+	Nodes nodeFacts
 	// Connected is set once the cluster answered, so the inspection result
 	// describes the cluster rather than a failed connection.
 	Connected bool
@@ -187,7 +189,9 @@ type localConfigInfrastructure struct {
 	ElasticSearch localConfigComponent `yaml:"elasticsearch,omitempty"`
 	S3            localConfigComponent `yaml:"s3,omitempty"`
 	KubeFaaS      localConfigComponent `yaml:"kubefaas,omitempty"`
-	Pusher        localConfigComponent `yaml:"pusher,omitempty"`
+	// KubeFaaSRegistry is the infra chart's bundled image registry for KubeFaaS.
+	KubeFaaSRegistry localConfigComponent `yaml:"kubefaasRegistry,omitempty"`
+	Pusher           localConfigComponent `yaml:"pusher,omitempty"`
 }
 
 type localConfigComponent struct {
@@ -427,16 +431,17 @@ func (config localConfig) MarshalYAML() (any, error) {
 			ConfirmAccess: config.ConfirmKubeAccess,
 		},
 		Infrastructure: localConfigInfrastructure{
-			Mode:          config.Infrastructure,
-			MySQL:         config.InfraComponents.MySQL,
-			FabricMySQL:   config.InfraComponents.FabricMySQL,
-			FabricRedis:   config.InfraComponents.FabricRedis,
-			Redis:         config.InfraComponents.Redis,
-			RabbitMQ:      config.InfraComponents.RabbitMQ,
-			ElasticSearch: config.InfraComponents.ElasticSearch,
-			S3:            config.InfraComponents.S3,
-			KubeFaaS:      config.InfraComponents.KubeFaaS,
-			Pusher:        config.InfraComponents.Pusher,
+			Mode:             config.Infrastructure,
+			MySQL:            config.InfraComponents.MySQL,
+			FabricMySQL:      config.InfraComponents.FabricMySQL,
+			FabricRedis:      config.InfraComponents.FabricRedis,
+			Redis:            config.InfraComponents.Redis,
+			RabbitMQ:         config.InfraComponents.RabbitMQ,
+			ElasticSearch:    config.InfraComponents.ElasticSearch,
+			S3:               config.InfraComponents.S3,
+			KubeFaaS:         config.InfraComponents.KubeFaaS,
+			KubeFaaSRegistry: config.InfraComponents.KubeFaaSRegistry,
+			Pusher:           config.InfraComponents.Pusher,
 		},
 		Application: localConfigApplication{
 			Domain: config.Domain,
@@ -807,6 +812,7 @@ func runInstaller(opts cliOptions) error {
 		config.Values["monoAllCompaniesUnsupported"] = reason
 		config.Values["monoAllCompanies"] = fmt.Sprintf("%t", reason == "")
 	}
+	checkKubeFaaS(config.Values, charts.Charts["patchworks-infra"])
 	if config.Values["samples"] == "true" {
 		config.Values["samplesUnsupported"], config.Values["samplesShapeFlags"] = samplesSupport(charts.Charts["patchworks-app"], config.Values)
 		config.Values["samplesChecked"] = "true"
@@ -858,7 +864,7 @@ func runInstaller(opts cliOptions) error {
 		printDone("Saved settings to " + opts.ConfigPath)
 	}
 
-	commands := selectedHelmCommandText(config.Values["namespace"], config.Output, installInfrastructure)
+	commands := selectedHelmCommandText(config.Values["namespace"], config.Output, installInfrastructure, manualKubeFaaSFor(config.Values, installInfrastructure))
 	if !runInstall {
 		fmt.Print(manualInstallView(commands))
 		fmt.Print(accessDetailsView(config.Values, "", false))
@@ -873,6 +879,19 @@ func runInstaller(opts cliOptions) error {
 			Detail: fmt.Sprintf("Creating %s in namespace %s", config.Quay.SecretName, config.Values["namespace"]),
 		}, func(ctx context.Context) error {
 			return createQuayPullSecret(ctx, access, config.Values["namespace"], *config.Quay)
+		}); err != nil {
+			return err
+		}
+	}
+
+	if installInfrastructure && kubefaasEnabled(config.Values) && config.Values["pullSecret"] != "" {
+		kubefaasNamespace := stringDefault(config.Values["kubefaasNamespace"], defaultKubeFaaSNamespace)
+		if err := runProgress(progressStep{
+			Title:  "Preparing the KubeFaaS namespace",
+			Done:   fmt.Sprintf("Copied pull secret %s to %s", config.Values["pullSecret"], kubefaasNamespace),
+			Detail: fmt.Sprintf("Creating namespace %s for patchworks-infra and copying pull secret %s", kubefaasNamespace, config.Values["pullSecret"]),
+		}, func(ctx context.Context) error {
+			return prepareKubeFaaSNamespace(ctx, access, config.Values)
 		}); err != nil {
 			return err
 		}
@@ -1073,11 +1092,11 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string, installI
 		if err := runProgress(progressStep{
 			Title:    "Installing infrastructure",
 			Done:     "Installed infrastructure",
-			Detail:   "Applying release patchworks-infra and waiting for readiness",
+			Detail:   infraInstallDetail(values),
 			Monitor:  installPhaseMonitor(access, namespace, "infra"),
 			StopNote: helmStopNote("patchworks-infra"),
 		}, func(ctx context.Context) error {
-			return helmUpgradeOrInstall(ctx, cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, 15*time.Minute, installerLabels())
+			return helmUpgradeOrInstall(ctx, cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, infraInstallTimeout(values), installerLabels())
 		}); err != nil {
 			if !errors.Is(err, huh.ErrUserAborted) {
 				printInstallFailureDiagnostics(access, namespace)
@@ -1504,14 +1523,18 @@ func helmUninstall(cfg *action.Configuration, releaseName string, timeout time.D
 	return err
 }
 
-func helmCommandText(namespace, valuesFile string, installInfrastructure bool) string {
+func helmCommandText(namespace, valuesFile string, installInfrastructure bool, kubefaas manualKubeFaaS) string {
 	if !installInfrastructure {
 		return fmt.Sprintf(`helm upgrade --install patchworks-app ./charts/patchworks-app -n %s --create-namespace -f %s --timeout 15m --wait`,
 			shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 	}
-	return fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout 15m --wait
+	infraTimeout := "15m"
+	if kubefaas.Namespace != "" {
+		infraTimeout = fmt.Sprintf("%dm", int(kubefaasInfraTimeout.Minutes()))
+	}
+	return kubefaasPullSecretCommands(namespace, kubefaas) + fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout %s --wait
 helm upgrade --install patchworks-app ./charts/patchworks-app -n %s -f %s --timeout 15m --wait`,
-		shellQuote(namespace), shellQuote(cleanPath(valuesFile)), shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
+		shellQuote(namespace), shellQuote(cleanPath(valuesFile)), infraTimeout, shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 }
 
 func dashboardURL(values map[string]string) string {
@@ -1589,6 +1612,7 @@ func inspectCluster(kubeconfigPath, contextName string) inspectResult {
 	info.IngressClasses = ingressClasses(ctx, client)
 	info.HasContour = contains(info.IngressClasses, "contour") || apiResourceExists(client.Discovery(), "projectcontour.io", "v1", "httpproxies")
 	info.HasCertManager = crdExists(ctx, dynamicClient, "certificates.cert-manager.io")
+	info.Nodes = readNodeFacts(ctx, client)
 
 	if len(info.StorageClasses) == 0 {
 		info.Warnings = append(info.Warnings, "no StorageClass detected; chart-managed persistence may fail")
@@ -2489,6 +2513,8 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	workerMode := defaultWorkerMode(defaults.WorkerMode)
 	profile := defaultProfile(defaults.Profile)
 	infrastructureMode := stringDefault(defaults.Infrastructure, "bundled")
+	kubefaas := boolDefault(defaults.InfraComponents.KubeFaaS.Enabled, false)
+	kubefaasRegistry := boolDefault(defaults.InfraComponents.KubeFaaSRegistry.Enabled, true)
 	if err := runFormWithQuitConfirm(huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().
@@ -2545,6 +2571,22 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 				).
 				Value(&infrastructureMode),
 		),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("KubeFaaS").
+				Description("Run Script steps: a controller, a builder that turns each script into a container image, and Redis, in the kubefaas namespace. Adds roughly 1 to 2.5 GiB of memory, and the first install builds a base image for every script language.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&kubefaas),
+		).WithHideFunc(func() bool { return infrastructureMode != "bundled" }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Bundled image registry").
+				Description(kubefaasRegistryDescription(info.Nodes)).
+				Affirmative("Yes").
+				Negative("No").
+				Value(&kubefaasRegistry),
+		).WithHideFunc(func() bool { return infrastructureMode != "bundled" || !kubefaas }),
 	).WithTheme(installerTheme()).WithWidth(88)); err != nil {
 		return installConfig{}, err
 	}
@@ -2711,6 +2753,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	}
 	addExternalValues(values, external)
 	addInfrastructureComponentValues(values, defaults.InfraComponents)
+	addKubeFaaSValues(values, infrastructureMode, kubefaas, kubefaasRegistry, info.Nodes)
 
 	return installConfig{Values: values, Output: output, Quay: quay}, nil
 }
@@ -3114,15 +3157,16 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 
 func infrastructureComponentsFromValues(values map[string]string) localConfigInfrastructure {
 	return localConfigInfrastructure{
-		MySQL:         componentFromValue(values, "infraMysqlEnabled"),
-		FabricMySQL:   componentFromValue(values, "infraFabricMysqlEnabled"),
-		FabricRedis:   componentFromValue(values, "infraFabricRedisEnabled"),
-		Redis:         componentFromValue(values, "infraRedisEnabled"),
-		RabbitMQ:      componentFromValue(values, "infraRabbitmqEnabled"),
-		ElasticSearch: componentFromValue(values, "infraElasticsearchEnabled"),
-		S3:            componentFromValue(values, "infraS3Enabled"),
-		KubeFaaS:      componentFromValue(values, "infraKubefaasEnabled"),
-		Pusher:        componentFromValue(values, "infraPusherEnabled"),
+		MySQL:            componentFromValue(values, "infraMysqlEnabled"),
+		FabricMySQL:      componentFromValue(values, "infraFabricMysqlEnabled"),
+		FabricRedis:      componentFromValue(values, "infraFabricRedisEnabled"),
+		Redis:            componentFromValue(values, "infraRedisEnabled"),
+		RabbitMQ:         componentFromValue(values, "infraRabbitmqEnabled"),
+		ElasticSearch:    componentFromValue(values, "infraElasticsearchEnabled"),
+		S3:               componentFromValue(values, "infraS3Enabled"),
+		KubeFaaS:         componentFromValue(values, "infraKubefaasEnabled"),
+		KubeFaaSRegistry: componentFromValue(values, "kubefaasRegistry"),
+		Pusher:           componentFromValue(values, "infraPusherEnabled"),
 	}
 }
 
@@ -3227,6 +3271,7 @@ func addInfrastructureComponentValues(values map[string]string, infra localConfi
 	setComponentEnabledValue(values, "infraElasticsearchEnabled", infra.ElasticSearch.Enabled)
 	setComponentEnabledValue(values, "infraS3Enabled", infra.S3.Enabled)
 	setComponentEnabledValue(values, "infraKubefaasEnabled", infra.KubeFaaS.Enabled)
+	setComponentEnabledValue(values, "kubefaasRegistry", infra.KubeFaaSRegistry.Enabled)
 	setComponentEnabledValue(values, "infraPusherEnabled", infra.Pusher.Enabled)
 }
 
@@ -3279,6 +3324,9 @@ func installSummary(config installConfig) string {
 		keyValue("Image pull secret", defaultListValue(values["pullSecret"], "none")),
 		keyValue("Initial company/admin", values["seedInstall"]),
 	)
+	if hasValue(values, "infraKubefaasEnabled") {
+		lines = append(lines, keyValue("KubeFaaS", kubefaasSummary(values)))
+	}
 	if defaultWorkerMode(values["workerMode"]) == "mono" {
 		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
 		lines = append(lines, keyValue("Monocore for every company", monoAllCompaniesSummary(values)))
@@ -3670,7 +3718,7 @@ func writeBundledInfrastructureValues(b *bytes.Buffer, values map[string]string)
 	writeComponentEnabledValue(b, "rabbitmq", values, "infraRabbitmqEnabled")
 	writeComponentEnabledValue(b, "elasticsearch", values, "infraElasticsearchEnabled")
 	writeComponentEnabledValue(b, "s3", values, "infraS3Enabled")
-	writeComponentEnabledValue(b, "kubefaas", values, "infraKubefaasEnabled")
+	writeKubeFaaSValues(b, values)
 	writeComponentEnabledValue(b, "pusher", values, "infraPusherEnabled")
 }
 

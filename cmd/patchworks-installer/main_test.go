@@ -648,7 +648,7 @@ func TestFormatInstallRowsKeepsAllRowsAlphabetically(t *testing.T) {
 }
 
 func TestHelmCommandTextCanSkipInfrastructure(t *testing.T) {
-	commands := helmCommandText("patchworks", "patchworks.values.yaml", false)
+	commands := helmCommandText("patchworks", "patchworks.values.yaml", false, manualKubeFaaS{})
 
 	if strings.Contains(commands, "patchworks-infra") {
 		t.Fatalf("manual commands should not include infra when skipped:\n%s", commands)
@@ -659,7 +659,7 @@ func TestHelmCommandTextCanSkipInfrastructure(t *testing.T) {
 }
 
 func TestHelmCommandTextIncludesInfrastructure(t *testing.T) {
-	commands := helmCommandText("patchworks", "patchworks.values.yaml", true)
+	commands := helmCommandText("patchworks", "patchworks.values.yaml", true, manualKubeFaaS{})
 
 	if !strings.Contains(commands, "patchworks-infra") {
 		t.Fatalf("manual commands should include infra:\n%s", commands)

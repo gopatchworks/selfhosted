@@ -15,34 +15,25 @@ metadata:
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
 {{- $authUsernameKey := include "patchworks.kubefaas.authUsernameKey" . }}
 {{- $authPasswordKey := include "patchworks.kubefaas.authPasswordKey" . }}
-{{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) (not (and .Values.credentials.autoGenerate (or (not $kf.auth.username) (not $kf.auth.password)))) }}
+{{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
+{{- /* One login for both copies: inline, else the existing Secret's, else generated. */}}
+{{- $login := include "patchworks.kubefaas.authLogin" . | fromJson }}
+{{- range $secretNs := list $ns .Release.Namespace | uniq }}
+{{- if include "patchworks.secretRenderable" (dict "root" $ "ns" $secretNs "name" $authSecretName) }}
 ---
 apiVersion: v1
 kind: Secret
 metadata:
   name: {{ $authSecretName }}
-  namespace: {{ $ns }}
+  namespace: {{ $secretNs }}
   labels:
-    {{- include "patchworks.labels" . | nindent 4 }}
-    app.kubernetes.io/component: kubefaas-controller
-type: Opaque
-data:
-  username: {{ $kf.auth.username | b64enc }}
-  password: {{ $kf.auth.password | b64enc }}
-{{- if ne $ns .Release.Namespace }}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ $authSecretName }}
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "patchworks.labels" . | nindent 4 }}
+    {{- include "patchworks.labels" $ | nindent 4 }}
     app.kubernetes.io/component: kubefaas-auth
 type: Opaque
 data:
-  username: {{ $kf.auth.username | b64enc }}
-  password: {{ $kf.auth.password | b64enc }}
+  username: {{ $login.username | b64enc }}
+  password: {{ $login.password | b64enc }}
+{{- end }}
 {{- end }}
 {{- end }}
 ---
@@ -158,6 +149,9 @@ spec:
         app.kubefaas.io/instance: kubefaas
       annotations:
         checksum/config: {{ $kf | toJson | sha256sum }}
+        {{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
+        checksum/auth: {{ include "patchworks.kubefaas.authLogin" . | sha256sum }}
+        {{- end }}
     spec:
       {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas .Values.kubefaas.controller) | nindent 6 }}
       serviceAccountName: {{ $fullname }}-kubefaas-controller

@@ -188,6 +188,123 @@ password
 {{- if and .Values.kubefaas.enabled .Values.kubefaas.auth.enabled (not .Values.kubefaas.auth.existingSecret.name) .Values.credentials.autoGenerate (or (not .Values.kubefaas.auth.username) (not .Values.kubefaas.auth.password)) -}}true{{- end -}}
 {{- end }}
 
+{{/* ── Logins rendered into Secrets ───────────────────────────────────────────── */}}
+
+{{/*
+JSON {"username","password"} of a login computed once per render and cached on
+.Values._memo under "id", so every template that embeds it renders the same
+value: the inline values when both are set, else those of the first existing
+Secret in "lookups" (each a list of namespace and name), else generated.
+`helm template` and Argo CD have no lookup, so there a generated login changes
+on every render; set the inline values to pin it.
+Usage: include "patchworks.memoLogin" (dict "root" $ "id" "x" "username" "" "password" "" "defaultUsername" "" "lookups" (list (list "ns" "name")))
+*/}}
+{{- define "patchworks.memoLogin" -}}
+{{- $root := .root -}}
+{{- if not (hasKey $root.Values "_memo") -}}
+{{- $_ := set $root.Values "_memo" dict -}}
+{{- end -}}
+{{- $memo := $root.Values._memo -}}
+{{- if not (hasKey $memo .id) -}}
+{{- $username := .username -}}
+{{- $password := .password -}}
+{{- if not (and $username $password) -}}
+{{- range .lookups -}}
+{{- $data := (lookup "v1" "Secret" (index . 0) (index . 1)).data | default dict -}}
+{{- if and (not $password) (hasKey $data "password") -}}
+{{- $password = index $data "password" | b64dec -}}
+{{- if not $username -}}
+{{- $username = index $data "username" | default "" | b64dec -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $username = $username | default .defaultUsername | default (randAlphaNum 32) -}}
+{{- $password = $password | default (randAlphaNum 32) -}}
+{{- $_ := set $memo .id (dict "username" $username "password" $password) -}}
+{{- end -}}
+{{- index $memo .id | toJson -}}
+{{- end }}
+
+{{/*
+"true" when this release may render the Secret: it does not exist, or the
+release owns it, by the label and annotations Helm checks before adopting an
+object. A Secret something else created is left alone, and its value is used
+through patchworks.memoLogin's lookups.
+*/}}
+{{- define "patchworks.secretRenderable" -}}
+{{- $existing := lookup "v1" "Secret" .ns .name -}}
+{{- if not $existing -}}
+true
+{{- else -}}
+{{- $labels := $existing.metadata.labels | default dict -}}
+{{- $annotations := $existing.metadata.annotations | default dict -}}
+{{- if and (eq (index $labels "app.kubernetes.io/managed-by" | default "") "Helm") (eq (index $annotations "meta.helm.sh/release-name" | default "") .root.Release.Name) (eq (index $annotations "meta.helm.sh/release-namespace" | default "") .root.Release.Namespace) -}}true{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/* KubeFaaS auth login (JSON), for the Secret copies in the KubeFaaS and release namespaces. */}}
+{{- define "patchworks.kubefaas.authLogin" -}}
+{{- $name := include "patchworks.kubefaas.authSecretName" . -}}
+{{- include "patchworks.memoLogin" (dict "root" . "id" "kubefaasAuth" "username" .Values.kubefaas.auth.username "password" .Values.kubefaas.auth.password "defaultUsername" "" "lookups" (list (list (include "patchworks.kubefaas.namespace" .) $name) (list .Release.Namespace $name))) -}}
+{{- end }}
+
+{{/* Bundled registry login (JSON). */}}
+{{- define "patchworks.kubefaas.registry.login" -}}
+{{- $auth := .Values.kubefaas.registry.bundled.auth -}}
+{{- include "patchworks.memoLogin" (dict "root" . "id" "kubefaasRegistry" "username" $auth.username "password" $auth.password "defaultUsername" "kubefaas" "lookups" (list (list (include "patchworks.kubefaas.namespace" .) (include "patchworks.kubefaas.registry.authSecretName" .)))) -}}
+{{- end }}
+
+{{/* ── KubeFaaS bundled image registry (kubefaas-registry.yaml) ───────────────── */}}
+
+{{/* "true" when the chart runs the function image registry, else empty. */}}
+{{- define "patchworks.kubefaas.registry.bundled" -}}
+{{- if and .Values.kubefaas.enabled .Values.kubefaas.registry.bundled.enabled -}}true{{- end -}}
+{{- end }}
+
+{{/* Registry host as images name it: localhost:<nodePort>. */}}
+{{- define "patchworks.kubefaas.registry.host" -}}
+{{- printf "localhost:%v" .Values.kubefaas.registry.bundled.nodePort -}}
+{{- end }}
+
+{{/* Name of the registry Deployment, Service and PVC. */}}
+{{- define "patchworks.kubefaas.registry.name" -}}
+{{- printf "%s-kubefaas-image-registry" (include "patchworks.fullname" .) -}}
+{{- end }}
+
+{{- define "patchworks.kubefaas.registry.authSecretName" -}}
+{{- printf "%s-auth" (include "patchworks.kubefaas.registry.name" .) -}}
+{{- end }}
+
+{{/* Docker registry Secret function pods pull with, in each function namespace. */}}
+{{- define "patchworks.kubefaas.registry.pullSecretName" -}}
+{{- printf "%s-pull" (include "patchworks.kubefaas.registry.name" .) -}}
+{{- end }}
+
+{{/* Namespaces KubeFaaS runs functions in: the control-plane namespace and each execution slot. */}}
+{{- define "patchworks.kubefaas.functionNamespaces" -}}
+{{- $kf := .Values.kubefaas -}}
+{{- $namespaces := list (include "patchworks.kubefaas.namespace" .) -}}
+{{- range $i := until (int $kf.functions.namespaceCount) -}}
+{{- $namespaces = append $namespaces (printf "%s-%02d" $kf.functions.namespacePrefix (add1 $i)) -}}
+{{- end -}}
+{{- $namespaces | toJson -}}
+{{- end }}
+
+{{/*
+Fails the render when registries.yaml is supplied for the bundled registry,
+which renders its own.
+*/}}
+{{- define "patchworks.kubefaas.registry.validate" -}}
+{{- if include "patchworks.kubefaas.registry.bundled" . -}}
+{{- $registry := .Values.kubefaas.registry -}}
+{{- if or $registry.config $registry.existingSecret.name -}}
+{{- fail "kubefaas.registry.bundled.enabled generates registries.yaml: leave kubefaas.registry.config and kubefaas.registry.existingSecret.name empty, or turn the bundled registry off to use your own." -}}
+{{- end -}}
+
+{{- end -}}
+{{- end }}
+
 {{/* Registry secret name and key. */}}
 {{- define "patchworks.kubefaas.registrySecretName" -}}
 {{- if .Values.kubefaas.registry.existingSecret.name -}}
@@ -1059,6 +1176,7 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- if and (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
 {{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required unless pusher.existingSecret.name is set, or pusher.enabled=true with credentials.autoGenerate=true." -}}
 {{- end -}}
+{{- include "patchworks.kubefaas.registry.validate" . -}}
 {{- end -}}
 
 {{/*

@@ -149,7 +149,7 @@ func TestSavedChartConfigAndManualCommands(t *testing.T) {
 		t.Fatalf("lost chart settings: %s", data)
 	}
 	for _, infra := range []bool{true, false} {
-		commands := selectedHelmCommandText("patchworks", "my values' file.yaml", infra)
+		commands := selectedHelmCommandText("patchworks", "my values' file.yaml", infra, manualKubeFaaS{})
 		if !strings.Contains(commands, "unpack-charts --chart-lock") || !strings.Contains(commands, ".charts.lock.yaml") || strings.Contains(commands, "latest") || strings.Contains(commands, "oci://") {
 			t.Fatalf("manual commands must use the saved lock: %s", commands)
 		}

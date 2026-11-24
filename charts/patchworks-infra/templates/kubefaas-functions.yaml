@@ -3,6 +3,11 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.kubefaas.namespace" . }}
 {{- $kf := .Values.kubefaas }}
+{{- /* Function pods pull their images with these; the bundled registry adds its own. */}}
+{{- $pullSecrets := $root.Values.image.pullSecrets | default list }}
+{{- if include "patchworks.kubefaas.registry.bundled" . }}
+{{- $pullSecrets = append $pullSecrets (dict "name" (include "patchworks.kubefaas.registry.pullSecretName" .)) }}
+{{- end }}
 ---
 # Default function resource profile — consumed by the controller when scheduling functions.
 apiVersion: v1
@@ -28,7 +33,7 @@ metadata:
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
     app.kubernetes.io/component: kubefaas-function
-{{- with $root.Values.image.pullSecrets }}
+{{- with $pullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
 {{- end }}
@@ -52,7 +57,7 @@ metadata:
   labels:
     {{- include "patchworks.labels" $root | nindent 4 }}
     app.kubernetes.io/component: kubefaas-function
-{{- with $root.Values.image.pullSecrets }}
+{{- with $pullSecrets }}
 imagePullSecrets:
   {{- toYaml . | nindent 2 }}
 {{- end }}

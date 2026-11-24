@@ -52,6 +52,7 @@ jobs:
           helm template test charts/patchworks-infra \
             --set pusher.enabled=true \
             --set kubefaas.enabled=true \
+            --set kubefaas.registry.bundled.enabled=true \
             --set dashboard.enabled=true \
             > /dev/null
 
@@ -84,6 +85,9 @@ jobs:
 
       - name: Monocore optional shapes render tests
         run: ruby tests/mono_optional_shapes_test.rb
+
+      - name: KubeFaaS bundled registry render tests
+        run: ruby tests/kubefaas_registry_test.rb
 
       - name: Lightweight profile render tests
         run: ruby tests/lightweight_profile_test.rb
