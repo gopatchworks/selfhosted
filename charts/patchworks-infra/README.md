@@ -796,10 +796,22 @@ kubefaas:
 RabbitMQ names its node `rabbit@<hostname>` and keeps the node's queues,
 messages and definitions in `/var/lib/rabbitmq/mnesia/rabbit@<hostname>` on the
 PVC. The chart pins the pod hostname so that every new pod finds that
-directory. The Deployment uses the `Recreate` strategy, so the old broker stops
-before the new one opens the volume. The chart doesn't set
-`RABBITMQ_NODENAME`: the broker and its probes must resolve the node's host
-part, and a pod resolves only its own hostname.
+directory. The chart doesn't set `RABBITMQ_NODENAME`: the broker and its
+probes must resolve the node's host part, and a pod resolves only its own
+hostname.
+
+Only one broker may use that directory at a time:
+
+- **Rollouts.** The Deployment uses the `Recreate` strategy, so the old broker
+  stops before the new pod starts.
+- **Deleted or evicted pods.** The ReplicaSet starts the replacement while the
+  old pod is still stopping, and on the same node both mount the volume. The
+  container therefore runs the image's `docker-entrypoint.sh rabbitmq-server`
+  under a `flock` on `/var/lib/rabbitmq/.broker.lock`, and the new broker
+  waits for the old container to exit. On storage without `flock` it logs this
+  and starts at once.
+- **Custom images.** An image set in `rabbitmq.image` needs `sh`, `flock` and
+  that entrypoint, as the official `rabbitmq` images have.
 
 ### Upgrading to a fixed node name
 
@@ -809,7 +821,7 @@ upgrade to this chart changes the node name once more:
 
 - **Strategy.** Before the upgrade applies, the `pre-upgrade` hook Job
   `<fullname>-rabbitmq-recreate` patches the live Deployment to `Recreate`. It
-  uses `credentials.generator.image`.
+  uses `credentials.generator.image`, which can be any image with `kubectl`.
   - **Why it's needed:** under server-side apply, which Helm 4 and the
     installer use, the upgrade would otherwise fail with
     `spec.strategy.rollingUpdate: Forbidden`.
@@ -817,6 +829,12 @@ upgrade to this chart changes the node name once more:
   - **When it renders:** once the Deployment uses `Recreate`, the hook no
     longer renders. The exception is `helm template` and Argo CD, which have no
     `lookup`: there the hook always renders, runs and changes nothing.
+  - **Patching by hand instead:** run this before upgrading and Helm skips
+    the hook:
+
+    ```bash
+    kubectl -n <namespace> patch deployment <fullname>-rabbitmq --type=merge -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
+    ```
 - **Data, by default.** The new pod starts an empty broker as
   `rabbit@<fullname>-rabbitmq`. Upgrade the app release afterwards; the
   installer does both.

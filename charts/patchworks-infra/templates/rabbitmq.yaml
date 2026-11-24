@@ -46,8 +46,9 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
-  # Stop the old broker before starting the new one: both would open the same
-  # ReadWriteOnce volume and node data dir.
+  # On a rollout, stop the old broker before starting the new one: both would
+  # open the same volume and node data dir. The container's lock covers a
+  # deleted or evicted pod, whose replacement starts at once.
   strategy:
     type: Recreate
   selector:
@@ -69,6 +70,23 @@ spec:
         - name: rabbitmq
           image: {{ $rmq.image.repository }}:{{ $rmq.image.tag }}
           imagePullPolicy: {{ $rmq.image.pullPolicy }}
+          # The ReplicaSet replaces a deleted or evicted pod while it is still
+          # stopping, and on the same node both pods mount the volume. A lock
+          # on the volume, held by rabbitmq-server through the inherited fd
+          # and released when the old container exits, makes the new broker
+          # wait rather than open the same node data dir. Storage without
+          # flock starts at once, as before. The rest is the image's own
+          # entrypoint and command.
+          command:
+            - sh
+            - -c
+            - |
+              exec 9>>/var/lib/rabbitmq/.broker.lock
+              if ! flock -n 9; then
+                echo "Waiting for the previous RabbitMQ pod to stop."
+                flock 9 || echo "Could not lock /var/lib/rabbitmq/.broker.lock; starting anyway."
+              fi
+              exec docker-entrypoint.sh rabbitmq-server
           ports:
             - name: amqp
               containerPort: 5672

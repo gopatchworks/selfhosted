@@ -1399,6 +1399,7 @@ This default does not apply to Monocore workers.
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
+| `rabbitmq.hostname` | `""` | Pod hostname for bundled RabbitMQ, which names its node and data directory. Empty uses `<fullname>-rabbitmq`. See the infra chart README |
 | `rabbitmq.resources` | See `values.yaml` | CPU/memory resources for bundled RabbitMQ |
 | `rabbitmq.topology.enabled` | `true` | Create processor and PHP worker hub queues through AMQP `queue.declare` |
 | `rabbitmq.topology.command` | `[monocore]` | Command for the queue topology hook. Image comes from `workers.mono.image` |

@@ -344,7 +344,10 @@ Follows the standard infrastructure pattern. Key details:
 - Readiness/liveness probes use `rabbitmq-diagnostics -q ping` (not TCP socket) because the broker takes time to initialise its vhost even after the port opens.
 - `workers.mono` and app pods wait for RabbitMQ via a `busybox` initContainer running `nc -zv`.
 - The image names its node `rabbit@<hostname>` and keeps its data in `/var/lib/rabbitmq/mnesia/rabbit@<hostname>`. The Deployment therefore pins `spec.template.spec.hostname`: `rabbitmq.hostname`, default `<fullname>-rabbitmq`. With the pod name as hostname, every new pod started an empty broker. Don't switch to `RABBITMQ_NODENAME`: its host part must resolve inside the pod, and the pod resolves only its own hostname. The broker fails to start, and so do the probes.
-- The Deployment uses `Recreate`, so two brokers never open the volume and node directory at once. `tests/rabbitmq_node_name_test.rb` checks the hostname and the strategy.
+- Only one broker may open that directory at a time.
+  - **Rollouts:** the Deployment uses `Recreate`.
+  - **Deleted or evicted pods:** `Recreate` doesn't cover these. The ReplicaSet starts the replacement while the old pod is still stopping, and on one node both mount the volume; on kind it happened on every delete. The container therefore runs `sh -c` with a `flock` on `/var/lib/rabbitmq/.broker.lock`, then `exec docker-entrypoint.sh rabbitmq-server`. The broker inherits the lock fd, so the lock is held until the old container exits. Keep the entrypoint and command in step with the official image.
+  - **Tests:** `tests/rabbitmq_node_name_test.rb` checks the hostname, the strategy and the lock.
 - Moving a live Deployment to `Recreate` needs a transition under server-side apply, which is Helm 4's default and the installer's. Kubernetes defaulted that Deployment's `rollingUpdate`, and no field manager owns it, so the apply keeps it and fails with `spec.strategy.rollingUpdate: Forbidden`. `rollingUpdate: null` in the template doesn't help. `rabbitmq-recreate.yaml` is a `pre-upgrade` hook that merge-patches the type and drops the block. `lookup` skips it once the Deployment uses `Recreate`. Do the same for any other Deployment that moves to `Recreate`.
 
 ---

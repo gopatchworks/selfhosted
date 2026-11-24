@@ -1214,6 +1214,9 @@ rabbitmq:
     spec: {}
   managementService:
     type: ClusterIP
+  # Bundled RabbitMQ's pod hostname, which names its node and data directory;
+  # used by patchworks-infra. Empty uses <fullname>-rabbitmq.
+  hostname: ""
   resources:
     requests:
       cpu: 100m

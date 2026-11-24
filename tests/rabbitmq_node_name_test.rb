@@ -54,6 +54,18 @@ assert(hostname(deployment) == 'patchworks-rabbitmq', "hostname: got #{hostname(
 env = deployment.dig('spec', 'template', 'spec', 'containers', 0, 'env').map { |e| e['name'] }
 assert(!env.include?('RABBITMQ_NODENAME'), "RABBITMQ_NODENAME is set: #{env.inspect}")
 
+# Recreate covers rollouts only: a deleted or evicted pod's replacement starts
+# at once. The container takes a lock on the volume before it runs the image's
+# entrypoint, so on the same node the new broker waits for the old one.
+container = deployment.dig('spec', 'template', 'spec', 'containers', 0)
+mount = container['volumeMounts'].find { |m| m['name'] == 'data' }
+assert(mount['mountPath'] == '/var/lib/rabbitmq', "data mount: #{mount.inspect}")
+assert(container['command'][0, 2] == %w[sh -c] && container['args'].nil?, "command: #{container['command'].inspect}")
+lines = container['command'][2].lines.map(&:strip)
+assert(lines.first == 'exec 9>>/var/lib/rabbitmq/.broker.lock', "lock: #{lines.first.inspect}")
+assert(lines.include?('flock 9 || echo "Could not lock /var/lib/rabbitmq/.broker.lock; starting anyway."'), "flock: #{lines.inspect}")
+assert(lines.last == 'exec docker-entrypoint.sh rabbitmq-server', "entrypoint: #{lines.last.inspect}")
+
 # A change to the pod template rolls the pod but keeps the hostname.
 other = rabbitmq(render('rabbitmq' => {'resources' => {'requests' => {'memory' => '256Mi'}}}))
 assert(other.dig('spec', 'template', 'spec', 'containers', 0, 'resources') !=
