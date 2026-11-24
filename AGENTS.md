@@ -343,6 +343,9 @@ Follows the standard infrastructure pattern. Key details:
 - `RABBITMQ_DEFAULT_VHOST` is only set when the configured vhost is not `/` — RabbitMQ's default is already `/`.
 - Readiness/liveness probes use `rabbitmq-diagnostics -q ping` (not TCP socket) because the broker takes time to initialise its vhost even after the port opens.
 - `workers.mono` and app pods wait for RabbitMQ via a `busybox` initContainer running `nc -zv`.
+- The image names its node `rabbit@<hostname>` and keeps its data in `/var/lib/rabbitmq/mnesia/rabbit@<hostname>`. The Deployment therefore pins `spec.template.spec.hostname`: `rabbitmq.hostname`, default `<fullname>-rabbitmq`. With the pod name as hostname, every new pod started an empty broker. Don't switch to `RABBITMQ_NODENAME`: its host part must resolve inside the pod, and the pod resolves only its own hostname. The broker fails to start, and so do the probes.
+- The Deployment uses `Recreate`, so two brokers never open the volume and node directory at once. `tests/rabbitmq_node_name_test.rb` checks the hostname and the strategy.
+- Moving a live Deployment to `Recreate` needs a transition under server-side apply, which is Helm 4's default and the installer's. Kubernetes defaulted that Deployment's `rollingUpdate`, and no field manager owns it, so the apply keeps it and fails with `spec.strategy.rollingUpdate: Forbidden`. `rollingUpdate: null` in the template doesn't help. `rabbitmq-recreate.yaml` is a `pre-upgrade` hook that merge-patches the type and drops the block. `lookup` skips it once the Deployment uses `Recreate`. Do the same for any other Deployment that moves to `Recreate`.
 
 ---
 

@@ -60,7 +60,7 @@ values API so a shared values file can be passed to both releases.
 | Key | Default | Description |
 |-----|---------|-------------|
 | `credentials.autoGenerate` | `true` | Generate missing in-cluster infra credentials into Kubernetes Secrets |
-| `credentials.generator.image.repository` | `alpine/kubectl` | Image used by the credential generator hook Job |
+| `credentials.generator.image.repository` | `alpine/kubectl` | Image used by the credential generator hook Job and the [RabbitMQ Recreate hook](#upgrading-to-a-fixed-node-name) |
 | `credentials.generator.image.tag` | `1.36.1` | Credential generator image tag |
 | `credentials.generator.image.pullPolicy` | `IfNotPresent` | Credential generator image pull policy |
 
@@ -133,7 +133,7 @@ chains run from less to more specific, after the top-level setting.
 | Scheduler CronJobs | `workers` → `scheduler` → `processors[]` → `processors[].scheduler` |
 | Core / Fabric migrations | `migrations`; Fabric also inherits `fabric` before `migrations`, then `fabric.migrations` |
 | Seed Jobs | `seeds` → `seeds.fabric`, `seeds.tenant` or `seeds.core`; Fabric seed Jobs also inherit `fabric` before `seeds` |
-| MySQL, Redis, RabbitMQ, Elasticsearch, MinIO | `mysql`, `redis`, `rabbitmq`, `elasticsearch`, `s3` respectively; setup Jobs inherit their component |
+| MySQL, Redis, RabbitMQ, Elasticsearch, MinIO | `mysql`, `redis`, `rabbitmq`, `elasticsearch`, `s3` respectively; setup Jobs and the RabbitMQ Recreate hook inherit their component |
 | Fabric MySQL / Redis | `fabric` → `fabric.mysql` / `fabric.redis` |
 | KubeFaaS controller / builder / Redis | `kubefaas` → `kubefaas.controller` / `kubefaas.builder` / `kubefaas.redis` |
 | Native Soketi | `pusher` → `soketi` |
@@ -784,6 +784,7 @@ kubefaas:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
+| `rabbitmq.hostname` | `""` | Pod hostname, which names the node (`rabbit@<hostname>`) and its data directory. Empty uses `<fullname>-rabbitmq`. See [Upgrading to a fixed node name](#upgrading-to-a-fixed-node-name) |
 | `rabbitmq.resources` | See `values.yaml` | CPU/memory resources for bundled RabbitMQ. Under `profile: lightweight`, `lightweight.rabbitmq.resources` goes over it |
 | `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor and PHP worker hub queue creation |
 | `rabbitmq.topology.command` | `[monocore]` | Shared app-chart value for the queue topology hook command. Image comes from `workers.mono.image` |
@@ -791,6 +792,59 @@ kubefaas:
 | `rabbitmq.topology.queueType` | `quorum` | Shared app-chart value for generated queue type |
 | `rabbitmq.topology.backoffLimit` | `3` | Shared app-chart value for the topology Job retry limit |
 | `rabbitmq.topology.activeDeadlineSeconds` | `300` | Shared app-chart value for the topology Job maximum runtime |
+
+RabbitMQ names its node `rabbit@<hostname>` and keeps the node's queues,
+messages and definitions in `/var/lib/rabbitmq/mnesia/rabbit@<hostname>` on the
+PVC. The chart pins the pod hostname so that every new pod finds that
+directory. The Deployment uses the `Recreate` strategy, so the old broker stops
+before the new one opens the volume. The chart doesn't set
+`RABBITMQ_NODENAME`: the broker and its probes must resolve the node's host
+part, and a pod resolves only its own hostname.
+
+### Upgrading to a fixed node name
+
+Earlier charts used the pod name as the hostname. Every rollout, eviction or
+reschedule therefore started an empty broker under a new node name. The first
+upgrade to this chart changes the node name once more:
+
+- **Strategy.** Before the upgrade applies, the `pre-upgrade` hook Job
+  `<fullname>-rabbitmq-recreate` patches the live Deployment to `Recreate`. It
+  uses `credentials.generator.image`.
+  - **Why it's needed:** under server-side apply, which Helm 4 and the
+    installer use, the upgrade would otherwise fail with
+    `spec.strategy.rollingUpdate: Forbidden`.
+  - **No restart:** the patch doesn't restart RabbitMQ.
+  - **When it renders:** once the Deployment uses `Recreate`, the hook no
+    longer renders. The exception is `helm template` and Argo CD, which have no
+    `lookup`: there the hook always renders, runs and changes nothing.
+- **Data, by default.** The new pod starts an empty broker as
+  `rabbit@<fullname>-rabbitmq`. Upgrade the app release afterwards; the
+  installer does both.
+  - **What comes back:** the app release's `rabbitmq-topology` hook recreates
+    the processor queues and the hub worker queues. Monocore workers assert
+    their own topology when they start.
+  - **What doesn't come back:**
+    - messages queued at the time of the upgrade;
+    - company queues and bindings created by hand for standalone and
+      microservice workers;
+    - users, policies and vhosts added by hand.
+- **Data, kept.** To keep the broker as it is, set `rabbitmq.hostname` to the
+  current RabbitMQ pod's name before upgrading. Keep it set on every later
+  upgrade: removing it moves the node to `rabbit@<fullname>-rabbitmq`, which
+  starts empty. To find the pod's name:
+
+  ```bash
+  kubectl -n <namespace> get pods -l app.kubernetes.io/name=rabbitmq,app.kubernetes.io/instance=patchworks-infra -o name
+  ```
+
+- **Old directories.** Each earlier pod left a `rabbit@<pod name>` directory
+  under `/var/lib/rabbitmq/mnesia`, with `-feature_flags` and `-plugins-expand`
+  siblings. Nothing reads them, so you can delete them to free space on the
+  volume. To list them:
+
+  ```bash
+  kubectl -n <namespace> exec deploy/<fullname>-rabbitmq -- ls /var/lib/rabbitmq/mnesia
+  ```
 
 ---
 

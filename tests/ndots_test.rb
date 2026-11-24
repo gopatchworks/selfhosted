@@ -134,7 +134,7 @@ pods = render('infra', infra_options.merge(
   'credentials' => {'ndots' => 3, 'generator' => {'ndots' => 0}}
 ))
 {
-  'mysql' => 0, 'mysql-setup' => 0, 'redis' => 1, 'rabbitmq' => 2,
+  'mysql' => 0, 'mysql-setup' => 0, 'redis' => 1, 'rabbitmq' => 2, 'rabbitmq-recreate' => 2,
   'elasticsearch' => 3, 's3' => 4, 's3-setup' => 4,
   'fabric-mysql' => 0, 'fabric-redis' => 2,
   'kubefaas-controller' => 0, 'kubefaas-builder' => 3, 'kubefaas-redis' => 3,

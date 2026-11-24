@@ -46,6 +46,10 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  # Stop the old broker before starting the new one: both would open the same
+  # ReadWriteOnce volume and node data dir.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 6 }}
@@ -54,6 +58,12 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq" "Release" .Release) | nindent 8 }}
     spec:
+      # RabbitMQ names its node rabbit@<hostname> and keeps its data in
+      # /var/lib/rabbitmq/mnesia/rabbit@<hostname>. Left to the pod name, the
+      # hostname changed on every rollout and the new pod started an empty
+      # broker. RABBITMQ_NODENAME alone doesn't work: the broker and the probes
+      # must resolve its host part, and the pod resolves only its own hostname.
+      hostname: {{ $rmq.hostname | default (printf "%s-rabbitmq" $fullname) }}
       {{- include "patchworks.podDnsConfig" (list .Values .Values.rabbitmq) | nindent 6 }}
       containers:
         - name: rabbitmq

@@ -1903,6 +1903,7 @@ func phaseJobs(jobs []batchv1.Job, chart string) []batchv1.Job {
 func infraPhaseNames() map[string]string {
 	return map[string]string{
 		"credential-generator": "Generating credentials",
+		"rabbitmq-recreate":    "Switching RabbitMQ to the Recreate strategy",
 		"mysql-setup":          "Setting up Fabric database",
 		"s3-setup":             "Setting up object storage",
 	}

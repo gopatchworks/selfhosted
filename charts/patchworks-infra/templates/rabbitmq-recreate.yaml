@@ -1,0 +1,128 @@
+{{- /*
+Moves a RabbitMQ Deployment from an older chart to the Recreate strategy before
+the upgrade applies it. Kubernetes defaulted that Deployment's strategy to
+RollingUpdate with a rollingUpdate block no field manager owns, so a
+server-side apply (Helm 4's default, and the installer's) that sets
+type: Recreate keeps the block and fails with "spec.strategy.rollingUpdate:
+Forbidden". A merge patch sets the type and drops the block together; it
+doesn't change the pod template, so nothing restarts. Once the live Deployment
+uses Recreate, lookup skips the hook. `helm template` and Argo CD have no
+lookup, so there it always renders and does nothing.
+*/ -}}
+{{- if .Values.rabbitmq.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.rabbitmq.namespace" . }}
+{{- $deployment := printf "%s-rabbitmq" $fullname }}
+{{- $live := lookup "apps/v1" "Deployment" $ns $deployment | default dict }}
+{{- if ne (dig "spec" "strategy" "type" "" $live) "Recreate" }}
+{{- $name := printf "%s-rabbitmq-recreate" $fullname }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq-recreate
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "argocd.argoproj.io/hook": PreSync
+    "argocd.argoproj.io/hook-delete-policy": HookSucceeded
+    "argocd.argoproj.io/sync-wave": "-10"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq-recreate
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "argocd.argoproj.io/hook": PreSync
+    "argocd.argoproj.io/hook-delete-policy": HookSucceeded
+    "argocd.argoproj.io/sync-wave": "-10"
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: [{{ $deployment | quote }}]
+    verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq-recreate
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "argocd.argoproj.io/hook": PreSync
+    "argocd.argoproj.io/hook-delete-policy": HookSucceeded
+    "argocd.argoproj.io/sync-wave": "-10"
+subjects:
+  - kind: ServiceAccount
+    name: {{ $name }}
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $name }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rabbitmq-recreate
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+    "argocd.argoproj.io/hook": PreSync
+    "argocd.argoproj.io/hook-delete-policy": HookSucceeded
+    "argocd.argoproj.io/sync-wave": "-5"
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "rabbitmq-recreate" "Release" .Release) | nindent 8 }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.rabbitmq) | nindent 6 }}
+      restartPolicy: Never
+      serviceAccountName: {{ $name }}
+      containers:
+        - name: kubectl
+          image: "{{ .Values.credentials.generator.image.repository }}:{{ .Values.credentials.generator.image.tag }}"
+          imagePullPolicy: {{ .Values.credentials.generator.image.pullPolicy }}
+          command:
+            - sh
+            - -c
+            - |
+              set -eu
+              ns={{ $ns | quote }}
+              deployment={{ $deployment | quote }}
+              strategy="$(kubectl -n "$ns" get deployment "$deployment" --ignore-not-found -o jsonpath='{.spec.strategy.type}')"
+              case "$strategy" in
+                "") echo "Deployment ${ns}/${deployment} does not exist yet." ;;
+                Recreate) echo "Deployment ${ns}/${deployment} already uses Recreate." ;;
+                *)
+                  echo "Switching Deployment ${ns}/${deployment} from ${strategy} to Recreate."
+                  kubectl -n "$ns" patch deployment "$deployment" --type=merge \
+                    -p '{"spec":{"strategy":{"type":"Recreate","rollingUpdate":null}}}'
+                  ;;
+              esac
+{{- end }}
+{{- end }}
