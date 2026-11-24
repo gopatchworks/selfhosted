@@ -226,6 +226,7 @@ The TUI asks for:
 - With mono workers, whether the Monocore hub serves Core's webhooks, callbacks
   and start API, and, with ingress on, whether the ingress routes their paths
   to it (see [Monocore inbound triggers](../charts/patchworks-app/README.md#monocore-inbound-triggers))
+- With mono workers, whether to install the sample flows (**Samples**)
 - Image pull secret mode: existing secret, create from Quay credentials, or none
 - Initial company and admin details, including an optional admin password
 - Output values file path
@@ -252,6 +253,18 @@ processes those companies don't need (see
 A release whose chart predates the setting, or whose Core image is `v0.2.16` or
 older, leaves it off and says so in the install summary; turn Monocore on for
 each company from its feature settings instead.
+
+**Samples**, offered with mono workers, writes `samples.enabled: true`: a hook
+Job creates sample flows in a Samples folder of the initial company, one per
+shape and one that uses every shape, each ending in an Assert on its exact output
+(see [Samples](../charts/patchworks-app/README.md#samples)). The installer also
+turns on Monocore's optional shapes the samples use: `workers.mono.enable.*` when
+the selected chart has those keys, otherwise the `WORKER_ENABLE_*` variables in
+`workers.mono.extraEnv`. `--save-config` keeps the choice as `samples`. The
+installer leaves samples off, and says why in the install summary, when the
+selected release has no samples, cannot run every company on Monocore, or the run
+creates no initial company/admin. The progress screen shows the Job as
+"Creating sample flows".
 
 **Installation size** chooses the chart's `profile`. Lightweight runs Core in one
 web pod and one worker pod instead of separate gateway and start pods, a pod per

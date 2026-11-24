@@ -1,0 +1,1556 @@
+{
+ "Every shape": {
+  "nodes": [
+   {
+    "id": "1244",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1245",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1246",
+    "type": "flow-variable-set",
+    "data": {
+     "microservice": "variable-set"
+    }
+   },
+   {
+    "id": "1247",
+    "type": "flow-split",
+    "data": {
+     "microservice": "split"
+    }
+   },
+   {
+    "id": "1248",
+    "type": "flow-route",
+    "data": {
+     "microservice": "route",
+     "routes": [
+      {
+       "handle": "route-300",
+       "order": null
+      },
+      {
+       "handle": "route-301",
+       "order": null
+      }
+     ]
+    }
+   },
+   {
+    "id": "1249",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1250",
+    "type": "flow-branch",
+    "data": {
+     "microservice": "branch",
+     "routes": [
+      {
+       "handle": "route-304",
+       "order": 1
+      },
+      {
+       "handle": "route-305",
+       "order": 2
+      },
+      {
+       "handle": "route-306",
+       "order": 3
+      },
+      {
+       "handle": "route-307",
+       "order": 4
+      },
+      {
+       "handle": "route-308",
+       "order": 5
+      },
+      {
+       "handle": "route-309",
+       "order": 6
+      },
+      {
+       "handle": "route-310",
+       "order": 7
+      },
+      {
+       "handle": "route-311",
+       "order": 8
+      },
+      {
+       "handle": "route-312",
+       "order": 9
+      },
+      {
+       "handle": "route-313",
+       "order": 10
+      },
+      {
+       "handle": "route-314",
+       "order": 11
+      },
+      {
+       "handle": "route-315",
+       "order": 12
+      },
+      {
+       "handle": "route-316",
+       "order": 13
+      }
+     ]
+    }
+   },
+   {
+    "id": "1251",
+    "type": "flow-filter",
+    "data": {
+     "microservice": "filter"
+    }
+   },
+   {
+    "id": "1252",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1253",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1254",
+    "type": "flow-batch",
+    "data": {
+     "microservice": "batch"
+    }
+   },
+   {
+    "id": "1255",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1256",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1257",
+    "type": "flow-split",
+    "data": {
+     "microservice": "split"
+    }
+   },
+   {
+    "id": "1258",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1259",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1260",
+    "type": "flow-map",
+    "data": {
+     "microservice": "map"
+    }
+   },
+   {
+    "id": "1261",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1262",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1263",
+    "type": "flow-data-transform",
+    "data": {
+     "microservice": "data-transform"
+    }
+   },
+   {
+    "id": "1264",
+    "type": "flow-data-transform",
+    "data": {
+     "microservice": "data-transform"
+    }
+   },
+   {
+    "id": "1265",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1266",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1267",
+    "type": "flow-cache-set",
+    "data": {
+     "microservice": "cache-set"
+    }
+   },
+   {
+    "id": "1268",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1269",
+    "type": "flow-cache-get",
+    "data": {
+     "microservice": "cache-get"
+    }
+   },
+   {
+    "id": "1270",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1271",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1272",
+    "type": "flow-dedupe",
+    "data": {
+     "microservice": "dedupe"
+    }
+   },
+   {
+    "id": "1273",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1274",
+    "type": "flow-dedupe",
+    "data": {
+     "microservice": "dedupe"
+    }
+   },
+   {
+    "id": "1275",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1276",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1277",
+    "type": "flow-track",
+    "data": {
+     "microservice": "track"
+    }
+   },
+   {
+    "id": "1278",
+    "type": "flow-notify",
+    "data": {
+     "microservice": "notify"
+    }
+   },
+   {
+    "id": "1279",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1280",
+    "type": "flow-cross-reference",
+    "data": {
+     "microservice": "cross-reference"
+    }
+   },
+   {
+    "id": "1281",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1282",
+    "type": "flow-connector",
+    "data": {
+     "microservice": "connector"
+    }
+   },
+   {
+    "id": "1283",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1284",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1285",
+    "type": "flow-run-flow",
+    "data": {
+     "microservice": "run-flow"
+    }
+   },
+   {
+    "id": "1286",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1287",
+    "type": "flow-branch",
+    "data": {
+     "microservice": "branch",
+     "routes": [
+      {
+       "handle": "route-319",
+       "order": 1
+      },
+      {
+       "handle": "route-320",
+       "order": 2
+      }
+     ]
+    }
+   },
+   {
+    "id": "1288",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1289",
+    "type": "flow-merge",
+    "data": {
+     "microservice": "merge"
+    }
+   },
+   {
+    "id": "1290",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1291",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1292",
+    "type": "flow-try-catch",
+    "data": {
+     "microservice": "try-catch",
+     "routes": [
+      {
+       "handle": "route-323",
+       "order": null
+      },
+      {
+       "handle": "route-324",
+       "order": null
+      }
+     ]
+    }
+   },
+   {
+    "id": "1293",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1294",
+    "type": "flow-notify",
+    "data": {
+     "microservice": "notify"
+    }
+   },
+   {
+    "id": "1295",
+    "type": "flow-callback",
+    "data": {
+     "microservice": "callback"
+    }
+   },
+   {
+    "id": "1296",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1297",
+    "type": "flow-script",
+    "data": {
+     "microservice": "script"
+    }
+   },
+   {
+    "id": "1298",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1248",
+    "target": "1249",
+    "sourceHandle": "route-300"
+   },
+   {
+    "source": "1248",
+    "target": "1250",
+    "sourceHandle": "route-301"
+   },
+   {
+    "source": "1250",
+    "target": "1251",
+    "sourceHandle": "route-304"
+   },
+   {
+    "source": "1250",
+    "target": "1253",
+    "sourceHandle": "route-305"
+   },
+   {
+    "source": "1250",
+    "target": "1256",
+    "sourceHandle": "route-306"
+   },
+   {
+    "source": "1250",
+    "target": "1262",
+    "sourceHandle": "route-307"
+   },
+   {
+    "source": "1250",
+    "target": "1266",
+    "sourceHandle": "route-308"
+   },
+   {
+    "source": "1250",
+    "target": "1271",
+    "sourceHandle": "route-309"
+   },
+   {
+    "source": "1250",
+    "target": "1276",
+    "sourceHandle": "route-310"
+   },
+   {
+    "source": "1250",
+    "target": "1282",
+    "sourceHandle": "route-311"
+   },
+   {
+    "source": "1250",
+    "target": "1284",
+    "sourceHandle": "route-312"
+   },
+   {
+    "source": "1250",
+    "target": "1287",
+    "sourceHandle": "route-313"
+   },
+   {
+    "source": "1250",
+    "target": "1292",
+    "sourceHandle": "route-314"
+   },
+   {
+    "source": "1250",
+    "target": "1295",
+    "sourceHandle": "route-315"
+   },
+   {
+    "source": "1250",
+    "target": "1297",
+    "sourceHandle": "route-316"
+   },
+   {
+    "source": "1287",
+    "target": "1288",
+    "sourceHandle": "route-319"
+   },
+   {
+    "source": "1287",
+    "target": "1291",
+    "sourceHandle": "route-320"
+   },
+   {
+    "source": "1292",
+    "target": "1293",
+    "sourceHandle": "route-323"
+   },
+   {
+    "source": "1292",
+    "target": "1294",
+    "sourceHandle": "route-324"
+   },
+   {
+    "source": "1244",
+    "target": "1245",
+    "sourceHandle": null
+   },
+   {
+    "source": "1245",
+    "target": "1246",
+    "sourceHandle": null
+   },
+   {
+    "source": "1246",
+    "target": "1247",
+    "sourceHandle": null
+   },
+   {
+    "source": "1247",
+    "target": "1248",
+    "sourceHandle": null
+   },
+   {
+    "source": "1251",
+    "target": "1252",
+    "sourceHandle": null
+   },
+   {
+    "source": "1253",
+    "target": "1254",
+    "sourceHandle": null
+   },
+   {
+    "source": "1254",
+    "target": "1255",
+    "sourceHandle": null
+   },
+   {
+    "source": "1256",
+    "target": "1257",
+    "sourceHandle": null
+   },
+   {
+    "source": "1257",
+    "target": "1258",
+    "sourceHandle": null
+   },
+   {
+    "source": "1258",
+    "target": "1259",
+    "sourceHandle": null
+   },
+   {
+    "source": "1259",
+    "target": "1260",
+    "sourceHandle": null
+   },
+   {
+    "source": "1260",
+    "target": "1261",
+    "sourceHandle": null
+   },
+   {
+    "source": "1262",
+    "target": "1263",
+    "sourceHandle": null
+   },
+   {
+    "source": "1263",
+    "target": "1264",
+    "sourceHandle": null
+   },
+   {
+    "source": "1264",
+    "target": "1265",
+    "sourceHandle": null
+   },
+   {
+    "source": "1266",
+    "target": "1267",
+    "sourceHandle": null
+   },
+   {
+    "source": "1267",
+    "target": "1268",
+    "sourceHandle": null
+   },
+   {
+    "source": "1268",
+    "target": "1269",
+    "sourceHandle": null
+   },
+   {
+    "source": "1269",
+    "target": "1270",
+    "sourceHandle": null
+   },
+   {
+    "source": "1271",
+    "target": "1272",
+    "sourceHandle": null
+   },
+   {
+    "source": "1272",
+    "target": "1273",
+    "sourceHandle": null
+   },
+   {
+    "source": "1273",
+    "target": "1274",
+    "sourceHandle": null
+   },
+   {
+    "source": "1274",
+    "target": "1275",
+    "sourceHandle": null
+   },
+   {
+    "source": "1276",
+    "target": "1277",
+    "sourceHandle": null
+   },
+   {
+    "source": "1277",
+    "target": "1278",
+    "sourceHandle": null
+   },
+   {
+    "source": "1278",
+    "target": "1279",
+    "sourceHandle": null
+   },
+   {
+    "source": "1279",
+    "target": "1280",
+    "sourceHandle": null
+   },
+   {
+    "source": "1280",
+    "target": "1281",
+    "sourceHandle": null
+   },
+   {
+    "source": "1282",
+    "target": "1283",
+    "sourceHandle": null
+   },
+   {
+    "source": "1284",
+    "target": "1285",
+    "sourceHandle": null
+   },
+   {
+    "source": "1285",
+    "target": "1286",
+    "sourceHandle": null
+   },
+   {
+    "source": "1288",
+    "target": "1289",
+    "sourceHandle": null
+   },
+   {
+    "source": "1289",
+    "target": "1290",
+    "sourceHandle": null
+   },
+   {
+    "source": "1295",
+    "target": "1296",
+    "sourceHandle": null
+   },
+   {
+    "source": "1297",
+    "target": "1298",
+    "sourceHandle": null
+   },
+   {
+    "source": "1291",
+    "target": "1289",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1244": {
+    "x": -165,
+    "y": -45
+   },
+   "1245": {
+    "x": -165,
+    "y": 135
+   },
+   "1246": {
+    "x": -165,
+    "y": 315
+   },
+   "1247": {
+    "x": -165,
+    "y": 495
+   },
+   "1248": {
+    "x": -165,
+    "y": 675
+   },
+   "1249": {
+    "x": -2940,
+    "y": 855
+   },
+   "1250": {
+    "x": 30,
+    "y": 855
+   },
+   "1251": {
+    "x": -2565,
+    "y": 1110
+   },
+   "1252": {
+    "x": -2565,
+    "y": 1365
+   },
+   "1253": {
+    "x": -2190,
+    "y": 1125
+   },
+   "1254": {
+    "x": -2190,
+    "y": 1365
+   },
+   "1255": {
+    "x": -2190,
+    "y": 1545
+   },
+   "1256": {
+    "x": -1830,
+    "y": 1155
+   },
+   "1257": {
+    "x": -1830,
+    "y": 1365
+   },
+   "1258": {
+    "x": -1830,
+    "y": 1545
+   },
+   "1259": {
+    "x": -1830,
+    "y": 1725
+   },
+   "1260": {
+    "x": -1830,
+    "y": 1905
+   },
+   "1261": {
+    "x": -1830,
+    "y": 2085
+   },
+   "1262": {
+    "x": -1455,
+    "y": 1185
+   },
+   "1263": {
+    "x": -1455,
+    "y": 1365
+   },
+   "1264": {
+    "x": -1455,
+    "y": 1545
+   },
+   "1265": {
+    "x": -1455,
+    "y": 1725
+   },
+   "1266": {
+    "x": -1080,
+    "y": 1200
+   },
+   "1267": {
+    "x": -1080,
+    "y": 1365
+   },
+   "1268": {
+    "x": -1080,
+    "y": 1545
+   },
+   "1269": {
+    "x": -1080,
+    "y": 1725
+   },
+   "1270": {
+    "x": -1080,
+    "y": 1905
+   },
+   "1271": {
+    "x": -720,
+    "y": 1230
+   },
+   "1272": {
+    "x": -720,
+    "y": 1365
+   },
+   "1273": {
+    "x": -720,
+    "y": 1545
+   },
+   "1274": {
+    "x": -720,
+    "y": 1725
+   },
+   "1275": {
+    "x": -720,
+    "y": 1905
+   },
+   "1276": {
+    "x": -345,
+    "y": 1260
+   },
+   "1277": {
+    "x": -345,
+    "y": 1365
+   },
+   "1278": {
+    "x": -345,
+    "y": 1545
+   },
+   "1279": {
+    "x": -345,
+    "y": 1725
+   },
+   "1280": {
+    "x": -345,
+    "y": 1905
+   },
+   "1281": {
+    "x": -345,
+    "y": 2085
+   },
+   "1282": {
+    "x": 30,
+    "y": 1230
+   },
+   "1283": {
+    "x": 30,
+    "y": 1365
+   },
+   "1284": {
+    "x": 390,
+    "y": 1200
+   },
+   "1285": {
+    "x": 390,
+    "y": 1365
+   },
+   "1286": {
+    "x": 390,
+    "y": 1545
+   },
+   "1287": {
+    "x": 945,
+    "y": 1185
+   },
+   "1288": {
+    "x": 765,
+    "y": 1365
+   },
+   "1289": {
+    "x": 1140,
+    "y": 1545
+   },
+   "1290": {
+    "x": 1140,
+    "y": 1725
+   },
+   "1291": {
+    "x": 1140,
+    "y": 1365
+   },
+   "1292": {
+    "x": 1695,
+    "y": 1155
+   },
+   "1293": {
+    "x": 1500,
+    "y": 1365
+   },
+   "1294": {
+    "x": 1875,
+    "y": 1365
+   },
+   "1295": {
+    "x": 2250,
+    "y": 1125
+   },
+   "1296": {
+    "x": 2250,
+    "y": 1365
+   },
+   "1297": {
+    "x": 2610,
+    "y": 1110
+   },
+   "1298": {
+    "x": 2610,
+    "y": 1365
+   }
+  }
+ },
+ "Route": {
+  "nodes": [
+   {
+    "id": "1016",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1017",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1018",
+    "type": "flow-route",
+    "data": {
+     "microservice": "route",
+     "routes": [
+      {
+       "handle": "route-253",
+       "order": null
+      },
+      {
+       "handle": "route-254",
+       "order": null
+      }
+     ]
+    }
+   },
+   {
+    "id": "1019",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1020",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1018",
+    "target": "1019",
+    "sourceHandle": "route-253"
+   },
+   {
+    "source": "1018",
+    "target": "1020",
+    "sourceHandle": "route-254"
+   },
+   {
+    "source": "1016",
+    "target": "1017",
+    "sourceHandle": null
+   },
+   {
+    "source": "1017",
+    "target": "1018",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1016": {
+    "x": -165,
+    "y": -45
+   },
+   "1017": {
+    "x": -165,
+    "y": 135
+   },
+   "1018": {
+    "x": -165,
+    "y": 315
+   },
+   "1019": {
+    "x": -345,
+    "y": 495
+   },
+   "1020": {
+    "x": 30,
+    "y": 495
+   }
+  }
+ },
+ "Branch + Merge": {
+  "nodes": [
+   {
+    "id": "1054",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1055",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1056",
+    "type": "flow-branch",
+    "data": {
+     "microservice": "branch",
+     "routes": [
+      {
+       "handle": "route-259",
+       "order": 1
+      },
+      {
+       "handle": "route-260",
+       "order": 2
+      }
+     ]
+    }
+   },
+   {
+    "id": "1057",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1058",
+    "type": "flow-merge",
+    "data": {
+     "microservice": "merge"
+    }
+   },
+   {
+    "id": "1059",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1060",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1056",
+    "target": "1057",
+    "sourceHandle": "route-259"
+   },
+   {
+    "source": "1056",
+    "target": "1060",
+    "sourceHandle": "route-260"
+   },
+   {
+    "source": "1054",
+    "target": "1055",
+    "sourceHandle": null
+   },
+   {
+    "source": "1055",
+    "target": "1056",
+    "sourceHandle": null
+   },
+   {
+    "source": "1057",
+    "target": "1058",
+    "sourceHandle": null
+   },
+   {
+    "source": "1058",
+    "target": "1059",
+    "sourceHandle": null
+   },
+   {
+    "source": "1060",
+    "target": "1058",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1054": {
+    "x": -165,
+    "y": -45
+   },
+   "1055": {
+    "x": -165,
+    "y": 135
+   },
+   "1056": {
+    "x": -165,
+    "y": 315
+   },
+   "1057": {
+    "x": -345,
+    "y": 495
+   },
+   "1058": {
+    "x": 30,
+    "y": 675
+   },
+   "1059": {
+    "x": 30,
+    "y": 855
+   },
+   "1060": {
+    "x": 30,
+    "y": 495
+   }
+  }
+ },
+ "Set Variables": {
+  "nodes": [
+   {
+    "id": "1122",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1123",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1124",
+    "type": "flow-variable-set",
+    "data": {
+     "microservice": "variable-set"
+    }
+   },
+   {
+    "id": "1125",
+    "type": "flow-split",
+    "data": {
+     "microservice": "split"
+    }
+   },
+   {
+    "id": "1126",
+    "type": "flow-route",
+    "data": {
+     "microservice": "route",
+     "routes": [
+      {
+       "handle": "route-277",
+       "order": null
+      },
+      {
+       "handle": "route-278",
+       "order": null
+      }
+     ]
+    }
+   },
+   {
+    "id": "1127",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1128",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1126",
+    "target": "1127",
+    "sourceHandle": "route-277"
+   },
+   {
+    "source": "1126",
+    "target": "1128",
+    "sourceHandle": "route-278"
+   },
+   {
+    "source": "1122",
+    "target": "1123",
+    "sourceHandle": null
+   },
+   {
+    "source": "1123",
+    "target": "1124",
+    "sourceHandle": null
+   },
+   {
+    "source": "1124",
+    "target": "1125",
+    "sourceHandle": null
+   },
+   {
+    "source": "1125",
+    "target": "1126",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1122": {
+    "x": -165,
+    "y": -45
+   },
+   "1123": {
+    "x": -165,
+    "y": 135
+   },
+   "1124": {
+    "x": -165,
+    "y": 315
+   },
+   "1125": {
+    "x": -165,
+    "y": 495
+   },
+   "1126": {
+    "x": -165,
+    "y": 675
+   },
+   "1127": {
+    "x": -345,
+    "y": 855
+   },
+   "1128": {
+    "x": 30,
+    "y": 855
+   }
+  }
+ },
+ "Try/Catch": {
+  "nodes": [
+   {
+    "id": "1066",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1067",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1068",
+    "type": "flow-try-catch",
+    "data": {
+     "microservice": "try-catch",
+     "routes": [
+      {
+       "handle": "route-265",
+       "order": null
+      },
+      {
+       "handle": "route-266",
+       "order": null
+      }
+     ]
+    }
+   },
+   {
+    "id": "1069",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   },
+   {
+    "id": "1070",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1068",
+    "target": "1069",
+    "sourceHandle": "route-265"
+   },
+   {
+    "source": "1068",
+    "target": "1070",
+    "sourceHandle": "route-266"
+   },
+   {
+    "source": "1066",
+    "target": "1067",
+    "sourceHandle": null
+   },
+   {
+    "source": "1067",
+    "target": "1068",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1066": {
+    "x": -165,
+    "y": -45
+   },
+   "1067": {
+    "x": -165,
+    "y": 135
+   },
+   "1068": {
+    "x": -165,
+    "y": 315
+   },
+   "1069": {
+    "x": -345,
+    "y": 495
+   },
+   "1070": {
+    "x": 30,
+    "y": 495
+   }
+  }
+ },
+ "De-Dupe": {
+  "nodes": [
+   {
+    "id": "1091",
+    "type": "flow-trigger",
+    "data": {
+     "microservice": "trigger"
+    }
+   },
+   {
+    "id": "1092",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1093",
+    "type": "flow-branch",
+    "data": {
+     "microservice": "branch",
+     "routes": [
+      {
+       "handle": "route-271",
+       "order": 1
+      },
+      {
+       "handle": "route-272",
+       "order": 2
+      }
+     ]
+    }
+   },
+   {
+    "id": "1094",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1095",
+    "type": "flow-dedupe",
+    "data": {
+     "microservice": "dedupe"
+    }
+   },
+   {
+    "id": "1096",
+    "type": "flow-manual-payload",
+    "data": {
+     "microservice": "manual-payload"
+    }
+   },
+   {
+    "id": "1097",
+    "type": "flow-dedupe",
+    "data": {
+     "microservice": "dedupe"
+    }
+   },
+   {
+    "id": "1098",
+    "type": "flow-assert-payload",
+    "data": {
+     "microservice": "assert-payload"
+    }
+   }
+  ],
+  "edges": [
+   {
+    "source": "1093",
+    "target": "1094",
+    "sourceHandle": "route-271"
+   },
+   {
+    "source": "1093",
+    "target": "1096",
+    "sourceHandle": "route-272"
+   },
+   {
+    "source": "1091",
+    "target": "1092",
+    "sourceHandle": null
+   },
+   {
+    "source": "1092",
+    "target": "1093",
+    "sourceHandle": null
+   },
+   {
+    "source": "1094",
+    "target": "1095",
+    "sourceHandle": null
+   },
+   {
+    "source": "1096",
+    "target": "1097",
+    "sourceHandle": null
+   },
+   {
+    "source": "1097",
+    "target": "1098",
+    "sourceHandle": null
+   }
+  ],
+  "expected": {
+   "1091": {
+    "x": -165,
+    "y": -45
+   },
+   "1092": {
+    "x": -165,
+    "y": 135
+   },
+   "1093": {
+    "x": -165,
+    "y": 315
+   },
+   "1094": {
+    "x": -345,
+    "y": 495
+   },
+   "1095": {
+    "x": -345,
+    "y": 675
+   },
+   "1096": {
+    "x": 30,
+    "y": 495
+   },
+   "1097": {
+    "x": 30,
+    "y": 675
+   },
+   "1098": {
+    "x": 30,
+    "y": 855
+   }
+  }
+ }
+}

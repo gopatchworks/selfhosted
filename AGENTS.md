@@ -337,6 +337,27 @@ Follows the standard infrastructure pattern. Key details:
 
 ---
 
+## Samples
+
+`samples.enabled` runs `templates/samples.yaml`: a post-install/post-upgrade hook Job that runs `files/samples/install.php` in the Core image to create sample flows in the seeded company. The PHP lives in `files/samples/` and is mounted from a ConfigMap with `.Files.Get`:
+
+| File | What it contains |
+|---|---|
+| `install.php` | Boots Core's Laravel app (no tinker) and runs the samples |
+| `lib.php` | `Samples`: create-if-missing flows built with Core's `app/Ai/Tools` classes, route naming, layout, deploy with Core's connector allowance check |
+| `layout.php` | Port of the dashboard's `lib/flowGraphLayout.ts` (`applyDfsLayout`, 15px snap) |
+| `flows.php` | The sample flows and their supporting records |
+
+Rules for changing samples:
+
+- Never pass the PHP through `tpl`: flows contain Patchworks `{{flow.variables.*}}` placeholders.
+- Never destructive: a sample that exists is left alone. Only the half-built flow of a failed build is deleted.
+- Look records up by key or name (transformation functions, system and authentication types, entity types), never by id.
+- Route and Branch steps come with two routes: rename them with `Samples::routes()` instead of adding more.
+- Every sample ends in an Assert on its exact output. Check new ones on a cluster, run twice, before shipping.
+- Keep `layout.php` in step with the dashboard's `flowGraphLayout.ts`; `tests/samples_test.rb` compares it with positions the TypeScript gave (`tests/fixtures/samples_layout.json`).
+- Samples need mono workers with `allCompanies` and Monocore's optional shapes (`patchworks.samples.validate`).
+
 ## Reference implementations
 
 Look at **Haberdashery** (internal) for:
