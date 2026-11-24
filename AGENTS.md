@@ -341,6 +341,10 @@ The builder's S3 login (image cache) follows the same rule. `patchworks.kubefaas
 
 `kubefaas.registry.bundled.enabled` runs `registry:2` in the KubeFaaS namespace for installations without a registry. Images are named `localhost:<nodePort>/...`: nodes pull through the NodePort on localhost (containerd uses plain HTTP for localhost; kube-proxy in iptables mode routes it), and the builder pushes through its `registry-proxy` socat sidecar on `127.0.0.1:<nodePort>` (Docker treats localhost as insecure). No node or daemon configuration is needed. One login (`patchworks.kubefaas.registry.login`) goes into the registry's htpasswd, `registries.yaml` and a dockerconfigjson pull Secret in every function namespace (`patchworks.kubefaas.functionNamespaces`); `tests/kubefaas_registry_test.rb` checks they match. `kubefaas.builder.platform` sets `BASE_IMAGE_PLATFORM`; the builder defaults to `linux/amd64`, so arm64 clusters need `linux/arm64`. The registry login has no `existingSecret`, a deliberate exception to the existingSecret pattern: `registries.yaml` and the pull Secrets embed the password, so the chart needs the value itself. The installer offers both with bundled infrastructure (`cmd/patchworks-installer/kubefaas.go`) and copies the image pull Secret into the KubeFaaS namespace, which it creates labelled for `patchworks-infra` to adopt.
 
+### dind MTU
+
+Image builds run on dind's Docker bridge, so its MTU must fit the pod network. dind starts with `--mtu`: `kubefaas.builder.dind.mtu` when set, else the pod's `eth0` MTU, read at startup. Docker's default 1500 stalled build downloads (GitHub) under k3s flannel's 1450. Keep the entrypoint call taking only options, so it still adds its host and TLS flags. `tests/kubefaas_dind_mtu_test.rb` checks this.
+
 ---
 
 ## RabbitMQ

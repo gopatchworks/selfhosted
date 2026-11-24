@@ -1083,6 +1083,7 @@ The chart renders both copies itself from one login, not the credential generato
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `kubefaas.builder.platform` | `""` | Docker platform base and function images are built for (`BASE_IMAGE_PLATFORM`). Empty keeps the builder's default, `linux/amd64`; set `linux/arm64` for arm64 nodes |
 | `kubefaas.builder.cacheBucket` | `kubefaas-cache` | S3 bucket the builder caches compiled function images in. Empty turns the cache off. See the S3 login below |
+| `kubefaas.builder.dind.mtu` | `0` | MTU of dind's Docker bridge, which image builds run on. `0` matches the pod's network interface, read when dind starts. Docker's own 1500 is too large on overlay networks such as k3s's flannel (1450): replies from some hosts are dropped and builds stall on their downloads |
 | `kubefaas.registry.name` | `default` | Name of the `registries.yaml` entry function images are pushed to |
 | `kubefaas.registry.config` | `""` | Raw `registries.yaml` for your own registry |
 | `kubefaas.registry.existingSecret.name` | `""` | Read `registries.yaml` from this Secret instead |

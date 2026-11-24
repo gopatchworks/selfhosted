@@ -438,7 +438,17 @@ spec:
         {{- end }}
         - name: dind
           image: docker:27.0.1-dind
-          command: [dockerd-entrypoint.sh]
+          # Builds run on dind's bridge, whose MTU must fit the pod's network:
+          # kubefaas.builder.dind.mtu, else eth0's, else Docker's default. The
+          # entrypoint keeps its TLS and host flags when given only options.
+          command: [sh, -c]
+          args:
+            {{- $mtu := int (dig "mtu" 0 $kf.builder.dind) }}
+            {{- if gt $mtu 0 }}
+            - exec dockerd-entrypoint.sh --mtu={{ $mtu }}
+            {{- else }}
+            - mtu="$(cat /sys/class/net/eth0/mtu 2>/dev/null)"; exec dockerd-entrypoint.sh ${mtu:+--mtu="$mtu"}
+            {{- end }}
           securityContext:
             privileged: true
           env:

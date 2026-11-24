@@ -139,3 +139,6 @@ jobs:
 
       - name: KubeFaaS builder probe render tests
         run: ruby tests/kubefaas_builder_readiness_test.rb
+
+      - name: KubeFaaS dind MTU render tests
+        run: ruby tests/kubefaas_dind_mtu_test.rb
