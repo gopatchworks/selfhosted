@@ -1661,6 +1661,45 @@ Usage: {{ include "patchworks.mono.inboundEnv" (dict "root" $root "skip" $extraE
 {{- end -}}
 
 {{/*
+Env of a Monocore worker turning on its optional shapes, as a YAML list (empty
+when every name is skipped). Monocore registers no step runner for these unless
+told to, and fails a run that reaches one. Each is workers.mono.enable.<key>,
+rendered "true" or "false" as Monocore's own chart renders
+monocore.worker.enable.*; a shape left null follows workers.mono.allCompanies,
+under which Monocore is the only runtime of every company's runs.
+catchAtRunEnd is no shape and never follows it. A name in $skip (the worker's
+own extraEnv) is left to it. Monocore's dataProcessing is left out, so it
+stays off: Core and the Dashboard are dropping Data Processing for Data
+Transformation.
+Usage: {{ include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEnvNames) }}
+*/}}
+{{- define "patchworks.mono.enableEnv" -}}
+{{- $root := .root -}}
+{{- $enable := $root.Values.workers.mono.enable | default (dict) -}}
+{{- $allCompanies := include "patchworks.mono.allCompanies" $root | eq "true" -}}
+{{- $env := list -}}
+{{- range list
+  (list "merge" "WORKER_ENABLE_MERGE" $allCompanies)
+  (list "dataTransform" "WORKER_ENABLE_DATA_TRANSFORM" $allCompanies)
+  (list "crossReference" "WORKER_ENABLE_CROSS_REFERENCE" $allCompanies)
+  (list "syncSubprocess" "WORKER_ENABLE_SYNC_SUBPROCESS" $allCompanies)
+  (list "catchAtRunEnd" "WORKER_ENABLE_CATCH_AT_RUN_END" false) -}}
+{{- $key := index . 0 -}}
+{{- /* index, not default or dig: default drops an explicit false, and absent and null both follow the default. */ -}}
+{{- $value := index $enable $key -}}
+{{- if kindIs "invalid" $value -}}
+{{- $value = index . 2 -}}
+{{- else if not (or (kindIs "bool" $value) (has $value (list "true" "false"))) -}}
+{{- fail (printf "workers.mono.enable.%s must be true, false or null, got %v" $key $value) -}}
+{{- end -}}
+{{- if not (has (index . 1) $.skip) -}}
+{{- $env = append $env (dict "name" (index . 1) "value" (toString $value)) -}}
+{{- end -}}
+{{- end -}}
+{{- with $env -}}{{- toYaml . -}}{{- end -}}
+{{- end -}}
+
+{{/*
 Render the RabbitMQ topology.yaml content (unindented).
 Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $queueName) | indent 4 }}
 */}}

@@ -742,6 +742,11 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.allCompanies.scheduler` | `true` | Also turn `monocore-scheduler` on for those companies and set `admitAllTriggers`. Needs the hub's scheduler: rendering fails with `workers.mono.scheduler.mode=disabled` or `workers.hub.enabled=false` unless this is `false` |
 | `workers.mono.allCompanies.disableProcessors` | `[short-processor]` | Processor queues whose Deployment and schedule CronJob are left out, and dropped from the RabbitMQ topology |
 | `workers.mono.allCompanies.disableSchedulers` | `[gateway]` | Processor queues whose schedule CronJob alone is left out |
+| `workers.mono.enable.merge` | `null` | `WORKER_ENABLE_MERGE` on the hub and every company: run the Merge shape. `null` follows `workers.mono.allCompanies.enabled`; `true` or `false` overrides it. See [Monocore's optional shapes](#monocores-optional-shapes) |
+| `workers.mono.enable.dataTransform` | `null` | `WORKER_ENABLE_DATA_TRANSFORM`: the Data Transformation shape, whose functions run natively in the worker. `null` follows `allCompanies.enabled`. The `v0.2.17` Dashboard has no node for this shape, so it can't add one and shows an existing one as broken; Monocore still runs the step |
+| `workers.mono.enable.crossReference` | `null` | `WORKER_ENABLE_CROSS_REFERENCE`: the Cross-Reference shape. `null` follows `allCompanies.enabled` |
+| `workers.mono.enable.syncSubprocess` | `null` | `WORKER_ENABLE_SYNC_SUBPROCESS`: waiting Run Flow and Flow Return, where a parent holds its worker slot while its children run. `null` follows `allCompanies.enabled` |
+| `workers.mono.enable.catchAtRunEnd` | `false` | `WORKER_ENABLE_CATCH_AT_RUN_END`: run a dropped payload's Try/Catch Catch branch once the run's other branches are done, as Core does. Not a shape, so `allCompanies` leaves it off. Turn it on only once every worker runs a release that reads the deferred Catch branch |
 | `workers.mono.inbound.enabled` | `false` | Serve Core's webhook, callback and start API endpoints from the hub's public listener (port 8082) and its `<fullname>-<nameSuffix>-inbound` Service. Needs a mono hub and a Monocore image later than `v0.2.12` |
 | `workers.mono.inbound.ingress.enabled` | `false` | Route the paths Monocore serves on the start, webhook and callback hosts to it. Off, routing is left to you. Turn it on in the second of the [two enabling upgrades](#monocore-inbound-triggers) |
 | `workers.mono.inbound.coreUrl` | `""` | Where Monocore forwards the requests of companies Core runs (`INBOUND_CORE_URL`). Empty derives Core's in-cluster start Service; required when `web.start.enabled=false`. Never an ingress host |
@@ -1896,6 +1901,10 @@ company with none as off, so they have to be stored for each company.
 - Companies with a stored value keep it. Switch an existing company from its
   feature settings, with `monocore` first; `monocore-scheduler` needs a
   coordinated handover of its pending cron work.
+- Every Monocore worker runs the optional shapes, since every company's runs
+  now reach it: Merge, Data Transformation, Cross-Reference and waiting Run
+  Flow with Flow Return. See
+  [Monocore's optional shapes](#monocores-optional-shapes).
 
 It also leaves out the Core processes Monocore companies don't need:
 
@@ -1912,6 +1921,51 @@ medium-processor and long-processor schedules, run platform work Monocore does
 not: flow-run logs of runs started from the dashboard, usage and alert checks,
 pruning, metrics, custom agents, heartbeat clean-up and the licence check.
 Change `disableProcessors` or `disableSchedulers` to keep or leave out others.
+
+### Monocore's optional shapes
+
+Monocore registers no step runner for some shapes unless it is told to, and
+fails a run that reaches one of their steps (`step "merge" has no registered
+runner`) instead of handing it to Core. `workers.mono.enable` sets the variables Monocore reads
+for them, the same ones its own chart sets from `monocore.worker.enable.*`, on
+the hub and every company:
+
+| Key | Variable | Shape |
+|---|---|---|
+| `merge` | `WORKER_ENABLE_MERGE` | Merge |
+| `dataTransform` | `WORKER_ENABLE_DATA_TRANSFORM` | Data Transformation |
+| `crossReference` | `WORKER_ENABLE_CROSS_REFERENCE` | Cross-Reference |
+| `syncSubprocess` | `WORKER_ENABLE_SYNC_SUBPROCESS` | Waiting Run Flow and Flow Return |
+| `catchAtRunEnd` | `WORKER_ENABLE_CATCH_AT_RUN_END` | None: when a run's deferred Try/Catch Catch branch runs |
+
+Each renders as `"true"` or `"false"`. A shape left `null`, the default,
+follows `workers.mono.allCompanies.enabled`: every company then runs on
+Monocore, which has to run these shapes. Without `allCompanies` they stay off,
+as Monocore's own defaults do, so set them `true` when you turn `monocore` on
+for companies by hand; set one `false` to keep it off with `allCompanies`.
+`catchAtRunEnd` stays `false` either way. Turn it on only once every worker
+runs a release that reads the deferred Catch branch.
+
+Core has every one of these shapes, but the `v0.2.17` Dashboard has no
+Data Transformation node: its canvas can't add that shape, and shows a step
+made another way, such as through Core's API, as broken. Monocore still runs
+the step when `dataTransform` is on, so it follows `allCompanies` like the
+others; turning it off would only make such a run fail.
+
+Monocore's own chart also has `dataProcessing` (`WORKER_ENABLE_DATA_PROCESSING`)
+for the Data Processing shape. This chart leaves it out, so it stays off: Core
+and the Dashboard are dropping that shape for Data Transformation, and only
+their `feature/data-and-merge-shapes` builds, such as `v0.2.17`'s, have it. An
+install whose flows still have a Data Processing step can set
+`WORKER_ENABLE_DATA_PROCESSING` to `"true"` in `workers.mono.extraEnv`.
+
+Each shape needs the Core code of its own release, so keep Core and Monocore on
+one release. The Monocore images of `v0.2.15` to `v0.2.17` read all of these. A
+`WORKER_ENABLE_*` entry in `workers.extraEnv` or `workers.mono.extraEnv`
+replaces the chart's on every worker, and one in a company's `extraEnv` on that
+company's worker alone, so each pod gets one entry for that name. The settings
+change only env, which rolls the worker pods, and leave the config checksum
+alone.
 
 ## Worker autoscaling
 

@@ -978,6 +978,35 @@ workers:
       # The gateway schedule only runs that same health check.
       disableSchedulers:
         - gateway
+    # Monocore's optional shapes (Monocore's monocore.worker.enable.*).
+    # Monocore registers no step runner for them unless they are enabled, and
+    # fails a run that reaches one. Each sets WORKER_ENABLE_* to "true" or
+    # "false" on the hub and every company. null follows allCompanies.enabled,
+    # under which Monocore is the only runtime of every company's runs. Set
+    # true to run one without allCompanies, or false to keep one off with it.
+    # A WORKER_ENABLE_* entry in workers.extraEnv, extraEnv or a company's
+    # extraEnv replaces the chart's. Keep Core and Monocore on one release:
+    # each shape needs the matching Core code. Monocore's Data Processing flag
+    # is left out, so it stays off: Core and the Dashboard are dropping that
+    # shape for Data Transformation. Set WORKER_ENABLE_DATA_PROCESSING in
+    # extraEnv for flows that still have one.
+    enable:
+      merge: null
+      # Data Transformation. Its functions run natively in the worker, so the
+      # image needs nothing extra. The v0.2.17 Dashboard has no node for it:
+      # it can't add the step and shows an existing one as broken, but
+      # Monocore still runs it.
+      dataTransform: null
+      crossReference: null
+      # Waiting Run Flow and Flow Return: a parent holds its worker slot while
+      # its children run, and receives their results on a reply queue of its
+      # own.
+      syncSubprocess: null
+      # Run a dropped payload's Try/Catch Catch branch once the run's other
+      # branches are done, as Core does. Not a shape, so allCompanies leaves
+      # it off: enable it only once every worker runs a release that reads
+      # the deferred Catch branch.
+      catchAtRunEnd: false
     # Serve Core's webhook, callback and start API endpoints from the hub's
     # public listener (port 8082) instead of Core's start deployment. Needs a
     # Monocore image with the public listener (gopatchworks/monocore#470,

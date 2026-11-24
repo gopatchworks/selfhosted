@@ -22,10 +22,11 @@
 {{- $_ := unset $checksumWorkers.mono.scheduler "serverShards" }}
 {{/* Renaming builds a new Deployment, so the slug need not roll the old one. */}}
 {{- $_ := unset $checksumWorkers.mono "nameSuffix" }}
-{{/* These change the hub's env, which rolls it, and no worker's config file. */}}
+{{/* These change worker env, which rolls the pods, and no worker's config file. */}}
 {{- $_ := unset $checksumWorkers.mono.scheduler "admitAllTriggers" }}
 {{- $_ := unset $checksumWorkers.mono "inbound" }}
 {{- $_ := unset $checksumWorkers.mono "allCompanies" }}
+{{- $_ := unset $checksumWorkers.mono "enable" }}
 {{- $fullname := include "patchworks.fullname" . }}
 {{/*
 The hub's component slug. Its Deployment, Service, ConfigMaps and companies are
@@ -610,6 +611,11 @@ spec:
             - name: PAYLOAD_META_MAX_BYTES
               value: {{ . | quote }}
             {{- end }}
+            {{- end }}
+            {{- with include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEnvNames) }}
+            # Monocore's optional shapes (workers.mono.enable): without its
+            # runner, a run reaching one of these steps fails.
+            {{- . | nindent 12 }}
             {{- end }}
             {{- if $inbound }}
             # The public listener serving Core's webhook, callback and start API
