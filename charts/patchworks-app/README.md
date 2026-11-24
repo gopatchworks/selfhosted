@@ -68,6 +68,7 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 - [Workers](#workers)
 - [Mapping documents](#mapping-documents)
 - [Migrations](#migrations)
+- [Samples](#samples)
 - [Ingress](#ingress)
 - [MySQL](#mysql)
 - [Landlord and tenant databases](#landlord-and-tenant-databases)
@@ -224,6 +225,7 @@ chains run from less to more specific, after the top-level setting.
 | Scheduler CronJobs | `workers` → `scheduler` → `processors[]` → `processors[].scheduler` |
 | Core / Fabric migrations | `migrations`; Fabric also inherits `fabric` before `migrations`, then `fabric.migrations` |
 | Seed Jobs | `seeds` → `seeds.fabric`, `seeds.tenant` or `seeds.core`; Fabric seed Jobs also inherit `fabric` before `seeds` |
+| Samples Job | `samples` |
 | MySQL, Redis, RabbitMQ, Elasticsearch, MinIO | `mysql`, `redis`, `rabbitmq`, `elasticsearch`, `s3` respectively; setup Jobs inherit their component |
 | Fabric MySQL / Redis | `fabric` → `fabric.mysql` / `fabric.redis` |
 | KubeFaaS controller / builder / Redis | `kubefaas` → `kubefaas.controller` / `kubefaas.builder` / `kubefaas.redis` |
@@ -475,6 +477,7 @@ commands use `/usr/local/bin/frankenphp php-cli artisan ...`.
 | `migrations.frankenphp.enabled` | unset | Override runtime mode for Core migrations |
 | `seeds.fabric.frankenphp.enabled` | unset | Override runtime mode for Fabric seed jobs |
 | `seeds.core.frankenphp.enabled` | unset | Override runtime mode for Core seed jobs |
+| `samples.frankenphp.enabled` | unset | Override runtime mode for the samples Job |
 
 ---
 
@@ -896,6 +899,62 @@ after Core migrations.
 | `seeds.tenant.adminPassword` | `""` | Initial admin user password. Generated when empty and Fabric seeds are enabled |
 | `seeds.tenant.existingSecret.name` | `""` | Secret name for the initial admin password |
 | `seeds.tenant.existingSecret.passwordKey` | `adminPassword` | Secret key for the initial admin password |
+
+---
+
+## Samples
+
+`samples.enabled` creates sample flows in a **Samples** folder of the seeded
+company: one per shape, and **Sample: Every shape**, which uses every shape in
+one flow. Each sample starts from a Manual Payload and ends in an Assert on its
+exact output, so a successful run shows the shape produced the right data.
+Samples are deployed with no schedule; start them from the dashboard.
+
+A `post-install,post-upgrade` hook Job (`<fullname>-samples`, Argo CD
+`PostSync`) runs `files/samples/install.php` with the Core image as the seeded
+admin. It builds each flow with Core's own flow-builder classes, lays it out as
+the dashboard's **Auto layout** does, and deploys it through Core's connector
+allowance check. The scripts are mounted from the `<fullname>-samples`
+ConfigMap verbatim, never through `tpl`, because the flows contain Patchworks
+`{{flow.variables.*}}` placeholders.
+
+The Job never changes a sample that already exists, so edits and run history
+survive upgrades. Delete a sample flow to have the next upgrade create it
+again. Deleting the folder does not: Core moves its flows out of it, and the
+next upgrade would create a second set. Supporting records are created once and reused by name:
+"Sample cache" (company scope), "Sample data pool", the "Sample SKU map" lookup,
+"Sample system" with "Sample connector" (no authentication, calling the Monocore
+hub's `/healthz` inside the cluster), and "Sample script".
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `samples.enabled` | `false` | Create the sample flows. Needs `workers.type: mono` with `workers.mono.allCompanies.enabled`, and Monocore's optional shapes on: Merge, Data Transformation, Cross-Reference and waiting Run Flow. On a chart with `workers.mono.enable`, a shape is on unless its key is `false`; otherwise set its `WORKER_ENABLE_*` to `"true"` in `workers.mono.extraEnv` or `workers.extraEnv`. The render fails without them |
+| `samples.folder` | `Samples` | Dashboard folder the samples are created in |
+| `samples.companyName` | `seeds.tenant.companyName` | Company the samples are created in |
+| `samples.userEmail` | `seeds.tenant.adminEmail` | User the samples are created as |
+| `samples.frankenphp.enabled` | unset | Override the runtime mode for the samples Job |
+| `samples.image.*` | global `image.*` | Core image override for the samples Job |
+| `samples.backoffLimit` | `0` | Job retry limit |
+| `samples.resources`, `nodeSelector`, `affinity`, `tolerations` | empty | Samples Job scheduling |
+
+What runs where a company's allowances limit it:
+
+- **Connector.** Deploying a connector needs connector allowance. When Core
+  refuses it, **Sample: Connector** is left as an undeployed draft, and
+  **Sample: Every shape** leaves out its Connector branch so it still deploys.
+  The Job does not fail.
+- **Run Process Flow** (without waiting) queues its child for the scheduler, so
+  the child runs only while the company has flow concurrency allowance.
+  **Sample: Callback** answers on its callback URL only while the company has
+  callback allowance.
+- **Script.** The Script steps stay skipped, passing their payload on, until
+  "Sample script" is deployed, which needs KubeFaaS.
+- **Try/Catch.** **Sample: Try/Catch** ends in partial success on purpose: an
+  Assert fails on the Try route. Assert runs outside Core's per-payload loop, so
+  the Catch route receives `{}` with the error in its meta, as in Core.
+
+The Job exits non-zero, failing the install or upgrade, only when a sample
+cannot be built; it removes that half-built flow so the next run tries again.
 
 ---
 

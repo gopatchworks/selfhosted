@@ -85,6 +85,9 @@ jobs:
       - name: Lightweight profile render tests
         run: ruby tests/lightweight_profile_test.rb
 
+      - name: Samples render, script lint and layout tests
+        run: ruby tests/samples_test.rb
+
       - name: RoadRunner shutdown render and process tests
         run: ruby tests/roadrunner_shutdown_test.rb
 

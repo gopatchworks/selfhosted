@@ -609,6 +609,36 @@ seeds:
       pullPolicy: ""
     resources: {}
 
+# ── Samples ────────────────────────────────────────────────────────────────────
+# Sample flows covering every shape, created in a "Samples" folder of the seeded
+# company by a post-install and post-upgrade hook Job (files/samples/*.php),
+# deployed with no schedule. Each sample ends in an Assert on its exact output;
+# "Sample: Every shape" runs every shape in one flow.
+# The Job never changes a sample that already exists: delete one to have the
+# next upgrade create it again.
+# Needs workers.type mono with workers.mono.allCompanies.enabled, and Monocore's
+# optional shapes on (Merge, Data Transformation, Cross-Reference and waiting
+# Run Flow / Flow Return): the render fails without them. The Script sample
+# stays skipped until its script is deployed, which needs KubeFaaS.
+samples:
+  ndots: null  # inherits the enclosing section / top-level ndots
+  enabled: false
+  folder: Samples
+  # Company and user the samples are created as. Default to
+  # seeds.tenant.companyName and seeds.tenant.adminEmail.
+  companyName: ""
+  userEmail: ""
+  frankenphp: {}
+  image:
+    registry: ""
+    tag: ""
+    pullPolicy: ""
+  backoffLimit: 0
+  resources: {}
+  nodeSelector: {}
+  affinity: {}
+  tolerations: []
+
 # ── Mapping Documents ─────────────────────────────────────────────────────────
 # Mapping document storage shared by PHP core and monocore. By default monocore
 # uses the main Elasticsearch connection; set these fields only when mapping

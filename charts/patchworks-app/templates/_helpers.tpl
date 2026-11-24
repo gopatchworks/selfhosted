@@ -1776,6 +1776,73 @@ Called by validation.yaml so disabled components do not hide active validation.
 {{- if and $consumers.pusher (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
 {{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required unless pusher.existingSecret.name is set, or pusher.enabled=true with credentials.autoGenerate=true." -}}
 {{- end -}}
+{{- include "patchworks.samples.validate" . -}}
+{{- end -}}
+
+{{/*
+Samples (templates/samples.yaml) run every shape on Monocore, so they need every
+company on Monocore and Monocore's optional shapes on. Fails the render
+otherwise, naming what is missing.
+*/}}
+{{- define "patchworks.samples.validate" -}}
+{{- $samples := .Values.samples | default (dict) -}}
+{{- if $samples.enabled -}}
+{{- if not (include "patchworks.mono.allCompanies" .) -}}
+{{- fail "samples.enabled needs workers.enabled, workers.type mono and workers.mono.allCompanies.enabled: the samples run every shape on Monocore." -}}
+{{- end -}}
+{{- $missing := list -}}
+{{- range $key, $env := (include "patchworks.mono.optionalShapes" . | fromJson) -}}
+{{- if not (include "patchworks.mono.shapeEnabled" (dict "root" $ "key" $key "env" $env)) -}}
+{{- $missing = append $missing (printf "workers.mono.enable.%s (%s)" $key $env) -}}
+{{- end -}}
+{{- end -}}
+{{- if $missing -}}
+{{- fail (printf "samples.enabled needs Monocore's optional shapes on; not enabled: %s" (join ", " $missing)) -}}
+{{- end -}}
+{{- if or (not (include "patchworks.samples.companyName" .)) (not (include "patchworks.samples.userEmail" .)) -}}
+{{- fail "samples.enabled needs the company and user to create the samples as: set seeds.tenant.companyName and seeds.tenant.adminEmail, or samples.companyName and samples.userEmail." -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/* Monocore's optional shapes the samples use, as {values key: env var}. */}}
+{{- define "patchworks.mono.optionalShapes" -}}
+{{- dict "merge" "WORKER_ENABLE_MERGE" "dataTransform" "WORKER_ENABLE_DATA_TRANSFORM" "crossReference" "WORKER_ENABLE_CROSS_REFERENCE" "syncSubprocess" "WORKER_ENABLE_SYNC_SUBPROCESS" | toJson -}}
+{{- end -}}
+
+{{/*
+"true" when a Monocore optional shape is on, for the samples check (which also
+requires workers.mono.allCompanies).
+- A chart with workers.mono.enable (gopatchworks/selfhosted#19): the shape is on
+  unless workers.mono.enable.<key> is false or "false". Null, the default,
+  follows workers.mono.allCompanies.enabled.
+- A chart without it: workers.extraEnv or workers.mono.extraEnv must set the
+  shape's WORKER_ENABLE_* variable to "true".
+Usage: include "patchworks.mono.shapeEnabled" (dict "root" . "key" "merge" "env" "WORKER_ENABLE_MERGE")
+*/}}
+{{- define "patchworks.mono.shapeEnabled" -}}
+{{- $root := .root -}}
+{{- $mono := $root.Values.workers.mono | default (dict) -}}
+{{- $on := false -}}
+{{- if hasKey $mono "enable" -}}
+{{- $value := index ($mono.enable | default (dict)) .key -}}
+{{- $on = or (kindIs "invalid" $value) (eq ($value | toString | lower) "true") -}}
+{{- else -}}
+{{- range concat ($root.Values.workers.extraEnv | default list) ($mono.extraEnv | default list) -}}
+{{- if and (eq (.name | toString) $.env) (eq (.value | toString | lower) "true") -}}
+{{- $on = true -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- if $on -}}true{{- end -}}
+{{- end -}}
+
+{{- define "patchworks.samples.companyName" -}}
+{{- .Values.samples.companyName | default .Values.seeds.tenant.companyName -}}
+{{- end -}}
+
+{{- define "patchworks.samples.userEmail" -}}
+{{- .Values.samples.userEmail | default .Values.seeds.tenant.adminEmail -}}
 {{- end -}}
 
 {{/*

@@ -90,6 +90,7 @@ type localConfig struct {
 	RoutingMode       string `yaml:"routingMode"`
 	WorkerMode        string `yaml:"workerMode"`
 	Profile           string `yaml:"profile"`
+	Samples           *bool  `yaml:"samples"`
 	MonoInbound       *bool
 	MonoInboundRoutes *bool
 	IngressEnabled    *bool  `yaml:"ingressEnabled"`
@@ -116,7 +117,9 @@ type localConfig struct {
 
 type localConfigFile struct {
 	// Profile is the chart's installation profile: standard or lightweight.
-	Profile        string                    `yaml:"profile,omitempty"`
+	Profile string `yaml:"profile,omitempty"`
+	// Samples installs the sample flows (mono installations only).
+	Samples        *bool                     `yaml:"samples,omitempty"`
 	Kubernetes     localConfigKubernetes     `yaml:"kubernetes,omitempty"`
 	Application    localConfigApplication    `yaml:"application,omitempty"`
 	Infrastructure localConfigInfrastructure `yaml:"infrastructure,omitempty"`
@@ -391,6 +394,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	overrideString(&config.CookieDomain, file.Application.CookieDomain)
 	overrideString(&config.WorkerMode, file.Workers.Type)
 	overrideString(&config.Profile, file.Profile)
+	overrideBool(&config.Samples, file.Samples)
 	overrideBool(&config.MonoInbound, file.Workers.Inbound.Enabled)
 	overrideBool(&config.MonoInboundRoutes, file.Workers.Inbound.RouteIngress)
 	overrideBool(&config.IngressEnabled, file.Ingress.Enabled)
@@ -415,6 +419,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 func (config localConfig) MarshalYAML() (any, error) {
 	return localConfigFile{
 		Profile: config.Profile,
+		Samples: config.Samples,
 		Kubernetes: localConfigKubernetes{
 			Kubeconfig:    config.Kubeconfig,
 			Context:       config.Context,
@@ -801,6 +806,10 @@ func runInstaller(opts cliOptions) error {
 		reason := monoAllCompaniesUnsupportedReason(charts.Charts["patchworks-app"])
 		config.Values["monoAllCompaniesUnsupported"] = reason
 		config.Values["monoAllCompanies"] = fmt.Sprintf("%t", reason == "")
+	}
+	if config.Values["samples"] == "true" {
+		config.Values["samplesUnsupported"], config.Values["samplesShapeFlags"] = samplesSupport(charts.Charts["patchworks-app"], config.Values)
+		config.Values["samplesChecked"] = "true"
 	}
 
 	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
@@ -1855,6 +1864,7 @@ func appPhaseNames() map[string]string {
 		"tenant-database":     "Creating Core tenant database",
 		"core-migrations":     "Running Core migrations",
 		"core-seeds":          "Running Core seeders",
+		"samples":             "Creating sample flows",
 	}
 }
 
@@ -2556,6 +2566,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 
 	ingressEnabled := boolDefault(defaults.IngressEnabled, true)
 	monoInbound := boolDefault(defaults.MonoInbound, false)
+	samples := boolDefault(defaults.Samples, false)
 	monoInboundRoutes := boolDefault(defaults.MonoInboundRoutes, false)
 	cookieDomain := stringDefault(defaults.CookieDomain, defaultCookieDomainForRouting(domain, routingMode))
 	licenseKey := defaults.LicenseKey
@@ -2605,6 +2616,14 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 				Negative("No").
 				Value(&monoInboundRoutes),
 		).WithHideFunc(func() bool { return workerMode != "mono" || !monoInbound || !ingressEnabled }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Samples").
+				Description("Install sample flows: one per shape and one that uses every shape, in a Samples folder of the initial company. Each ends in an Assert on its exact output, so running one checks the shape works. They are deployed with no schedule. Turns on Monocore's optional shapes, and needs the initial company/admin.").
+				Affirmative("Yes").
+				Negative("No").
+				Value(&samples),
+		).WithHideFunc(func() bool { return workerMode != "mono" }),
 		huh.NewGroup(
 			huh.NewInput().
 				Title("License key").
@@ -2678,6 +2697,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"profile":           profile,
 		"monoInbound":       fmt.Sprintf("%t", workerMode == "mono" && monoInbound),
 		"monoInboundRoutes": fmt.Sprintf("%t", workerMode == "mono" && monoInbound && ingressEnabled && monoInboundRoutes),
+		"samples":           fmt.Sprintf("%t", workerMode == "mono" && samples),
 		"cookieDomain":      cookieDomain,
 		"pullSecretMode":    pullSecretModeFromSelection(pullSecret, quay),
 		"pullSecret":        pullSecret,
@@ -2992,13 +3012,16 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 		// inbound triggers, so a later run with a newer release applies them.
 		MonoInbound:       monoSetting(values, "monoInbound"),
 		MonoInboundRoutes: monoSetting(values, "monoInboundRoutes"),
-		IngressEnabled:    boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
-		IngressProvider:   values["ingressProvider"],
-		IngressClass:      values["ingressClass"],
-		CookieDomain:      values["cookieDomain"],
-		PullSecretMode:    values["pullSecretMode"],
-		PullSecret:        values["pullSecret"],
-		InfraComponents:   infrastructureComponentsFromValues(values),
+		// The user's choice, kept when the selected release cannot install
+		// samples, so a later run with a newer release applies it.
+		Samples:         monoSetting(values, "samples"),
+		IngressEnabled:  boolPtr(parseBoolDefault(values["ingressEnabled"], true)),
+		IngressProvider: values["ingressProvider"],
+		IngressClass:    values["ingressClass"],
+		CookieDomain:    values["cookieDomain"],
+		PullSecretMode:  values["pullSecretMode"],
+		PullSecret:      values["pullSecret"],
+		InfraComponents: infrastructureComponentsFromValues(values),
 		External: localConfigExternal{
 			CredentialsMode: values["externalCredentialsMode"],
 			MySQL: localConfigExternalSQL{
@@ -3259,6 +3282,7 @@ func installSummary(config installConfig) string {
 	if defaultWorkerMode(values["workerMode"]) == "mono" {
 		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
 		lines = append(lines, keyValue("Monocore for every company", monoAllCompaniesSummary(values)))
+		lines = append(lines, keyValue("Samples", samplesSummary(values)))
 	}
 	if config.Quay != nil {
 		lines = append(lines, keyValue("Quay secret action", fmt.Sprintf("create/update %s", config.Quay.SecretName)))
@@ -3486,7 +3510,7 @@ func writeValues(path string, values map[string]string) error {
 
 	fmt.Fprintf(&b, "workers:\n")
 	fmt.Fprintf(&b, "  type: %s\n", quote(defaultWorkerMode(values["workerMode"])))
-	if monoInboundEnabled(values) || monoAllCompaniesEnabled(values) {
+	if monoInboundEnabled(values) || monoAllCompaniesEnabled(values) || samplesEnabled(values) {
 		fmt.Fprintf(&b, "  mono:\n")
 	}
 	if monoInboundEnabled(values) {
@@ -3499,7 +3523,13 @@ func writeValues(path string, values map[string]string) error {
 		fmt.Fprintf(&b, "    allCompanies:\n")
 		fmt.Fprintf(&b, "      enabled: true\n")
 	}
+	if samplesEnabled(values) {
+		writeSampleShapeFlags(&b, values["samplesShapeFlags"])
+	}
 	fmt.Fprintf(&b, "\n")
+	if samplesEnabled(values) {
+		fmt.Fprintf(&b, "samples:\n  enabled: true\n\n")
+	}
 
 	seedEnabled := values["seedInstall"]
 	fmt.Fprintf(&b, "seeds:\n")
@@ -3880,6 +3910,82 @@ func profileSummary(values map[string]string) string {
 		return "lightweight: one Core worker pod; separate gateway and start pods, as " + values["lightweightWebApart"]
 	default:
 		return "lightweight: one Core web pod and one Core worker pod"
+	}
+}
+
+// sampleShapes are Monocore's optional shapes the samples use, as the chart's
+// workers.mono.enable keys and the environment variables Monocore reads.
+var sampleShapes = []struct{ key, env string }{
+	{"merge", "WORKER_ENABLE_MERGE"},
+	{"dataTransform", "WORKER_ENABLE_DATA_TRANSFORM"},
+	{"crossReference", "WORKER_ENABLE_CROSS_REFERENCE"},
+	{"syncSubprocess", "WORKER_ENABLE_SYNC_SUBPROCESS"},
+}
+
+// samplesSupport says why the selected app chart and answers cannot install the
+// sample flows (unsupported), and how to turn Monocore's optional shapes on
+// (shapeFlags): "keys" when the chart has workers.mono.enable, else "extraEnv"
+// with the variables Monocore reads.
+func samplesSupport(chart helmchart.Charter, values map[string]string) (unsupported, shapeFlags string) {
+	if defaultWorkerMode(values["workerMode"]) != "mono" {
+		return "samples run on Monocore workers only", ""
+	}
+	accessor, err := helmchart.NewAccessor(chart)
+	if err != nil {
+		return "the app chart could not be read", ""
+	}
+	chartValues := accessor.Values()
+	if _, ok := chartValues["samples"].(map[string]any); !ok {
+		return "this chart release has no samples", ""
+	}
+	if values["monoAllCompanies"] != "true" {
+		return "they need every company on Monocore, which this release cannot run", ""
+	}
+	if !parseBoolDefault(values["seedInstall"], true) {
+		return "they are created in the initial company, which this run does not create", ""
+	}
+	workers, _ := chartValues["workers"].(map[string]any)
+	mono, _ := workers["mono"].(map[string]any)
+	if _, ok := mono["enable"].(map[string]any); ok {
+		return "", "keys"
+	}
+	return "", "extraEnv"
+}
+
+// samplesEnabled is whether the values file installs the sample flows: the
+// user's choice, on a mono installation, with a release checked to support it.
+func samplesEnabled(values map[string]string) bool {
+	return defaultWorkerMode(values["workerMode"]) == "mono" && values["samples"] == "true" &&
+		values["samplesChecked"] == "true" && values["samplesUnsupported"] == ""
+}
+
+// writeSampleShapeFlags turns on the Monocore shapes the samples use, under the
+// workers.mono block writeValues is writing.
+func writeSampleShapeFlags(b io.Writer, mode string) {
+	if mode == "keys" {
+		fmt.Fprintf(b, "    enable:\n")
+		for _, shape := range sampleShapes {
+			fmt.Fprintf(b, "      %s: true\n", shape.key)
+		}
+		return
+	}
+	fmt.Fprintf(b, "    # Monocore's optional shapes, which the samples use.\n")
+	fmt.Fprintf(b, "    extraEnv:\n")
+	for _, shape := range sampleShapes {
+		fmt.Fprintf(b, "      - name: %s\n        value: \"true\"\n", shape.env)
+	}
+}
+
+func samplesSummary(values map[string]string) string {
+	switch {
+	case values["samples"] != "true":
+		return "off"
+	case values["samplesUnsupported"] != "":
+		return "off: " + values["samplesUnsupported"]
+	case !samplesEnabled(values):
+		return "off"
+	default:
+		return "on: sample flows in the Samples folder, with Monocore's optional shapes on"
 	}
 }
 
