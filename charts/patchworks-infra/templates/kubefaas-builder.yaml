@@ -13,6 +13,25 @@
 {{- $registrySecretName := include "patchworks.kubefaas.registrySecretName" . }}
 {{- $registrySecretKey := include "patchworks.kubefaas.registrySecretKey" . }}
 
+{{- /* The image cache's S3 login, copied here from its Secret in another namespace (patchworks.kubefaas.s3Login). */}}
+{{- $s3Login := include "patchworks.kubefaas.s3Login" . | fromJson }}
+{{- $s3SecretName := printf "%s-kubefaas-s3" $fullname }}
+{{- if $s3Login.accessKey }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $s3SecretName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-builder
+type: Opaque
+data:
+  access-key: {{ $s3Login.accessKey | b64enc }}
+  secret-key: {{ $s3Login.secretKey | b64enc }}
+{{- end }}
+
 {{/* ── Docker TLS secret names — resolved per tls.mode. */}}
 {{- $tlsMode := $kf.builder.tls.mode | default "helm" }}
 {{- $serverTLSSecret := printf "%s-kubefaas-docker-server-tls" $fullname }}
@@ -266,6 +285,9 @@ spec:
         {{- if include "patchworks.kubefaas.registry.bundled" . }}
         checksum/registry-login: {{ include "patchworks.kubefaas.registry.login" . | sha256sum }}
         {{- end }}
+        {{- if $s3Login.accessKey }}
+        checksum/s3-login: {{ printf "%s:%s" $s3Login.accessKey $s3Login.secretKey | sha256sum }}
+        {{- end }}
     spec:
       {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas .Values.kubefaas.builder) | nindent 6 }}
       serviceAccountName: {{ $fullname }}-kubefaas-builder
@@ -366,7 +388,19 @@ spec:
                   name: {{ $authSecretName }}
                   key: {{ $authPasswordKey }}
             {{- end }}
-            {{- if $kf.builder.cacheBucket }}
+            {{- if $s3Login.accessKey }}
+            - name: AWS_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $s3SecretName }}
+                  key: access-key
+            - name: AWS_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $s3SecretName }}
+                  key: secret-key
+            {{- else if $kf.builder.cacheBucket }}
+            {{- /* Inline values, or the user's Secret by name, which must then exist in this namespace too. */}}
             {{- include "patchworks.env.s3AccessKey" $root | nindent 12 | replace "AWS_ACCESS_KEY_ID" "AWS_ACCESS_KEY" }}
             {{- include "patchworks.env.s3SecretKey" $root | nindent 12 | replace "AWS_SECRET_ACCESS_KEY" "AWS_SECRET_KEY" }}
             {{- end }}

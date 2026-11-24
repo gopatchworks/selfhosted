@@ -272,7 +272,7 @@ KUBEFAAS = {'kubefaas' => {
   'auth' => {'username' => 'fixture', 'password' => 'fixture'},
   'builder' => {'tls' => {'mode' => 'existingSecret', 'existingSecret' => {'serverTls' => 'server', 'clientTls' => 'client'}}},
   'registry' => {'bundled' => {'enabled' => true, 'auth' => {'username' => 'fixture', 'password' => 'fixture'}}}
-}}.freeze
+}, 's3' => {'auth' => {'rootPassword' => 'fixture'}}}.freeze
 KUBEFAAS_DEPLOYMENTS = %w[patchworks-kubefaas-controller patchworks-kubefaas-builder patchworks-kubefaas-redis patchworks-kubefaas-image-registry].freeze
 # {container => resources} of a Deployment, and its replicas.
 def containers(docs, name)
