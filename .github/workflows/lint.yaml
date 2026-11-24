@@ -130,3 +130,6 @@ jobs:
 
       - name: Fabric Nginx render tests
         run: ruby tests/fabric_nginx_test.rb
+
+      - name: Dashboard broadcasting render tests
+        run: ruby tests/dashboard_broadcasting_test.rb

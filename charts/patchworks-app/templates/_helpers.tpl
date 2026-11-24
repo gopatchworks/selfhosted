@@ -444,12 +444,21 @@ true
 {{- end -}}
 {{- end }}
 
+{{/*
+Public scheme of the Soketi ingress as the browser sees it: https when the chart
+terminates TLS (pusher.ingress.tlsSecretName), or when ingress.scheme says TLS is
+terminated outside this chart; otherwise http.
+*/}}
+{{- define "patchworks.pusher.ingressScheme" -}}
+{{- if or .Values.pusher.ingress.tlsSecretName (eq (.Values.ingress.scheme | default "http") "https") -}}https{{- else -}}http{{- end -}}
+{{- end }}
+
 {{/* Dashboard websocket port. Prefer explicit dashboard config, then Soketi ingress. */}}
 {{- define "patchworks.dashboardBroadcastingPort" -}}
 {{- if .Values.dashboard.broadcasting.port -}}
 {{- .Values.dashboard.broadcasting.port -}}
 {{- else if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host -}}
-{{- if .Values.pusher.ingress.tlsSecretName -}}443{{- else -}}80{{- end -}}
+{{- if eq (include "patchworks.pusher.ingressScheme" .) "https" -}}443{{- else -}}80{{- end -}}
 {{- else -}}
 {{- include "patchworks.pusher.port" . -}}
 {{- end -}}
@@ -460,7 +469,7 @@ true
 {{- if .Values.dashboard.broadcasting.scheme -}}
 {{- .Values.dashboard.broadcasting.scheme -}}
 {{- else if and .Values.pusher.enabled .Values.pusher.ingress.enabled .Values.pusher.ingress.host -}}
-{{- if .Values.pusher.ingress.tlsSecretName -}}https{{- else -}}http{{- end -}}
+{{- include "patchworks.pusher.ingressScheme" . -}}
 {{- else -}}
 {{- include "patchworks.pusher.scheme" . -}}
 {{- end -}}

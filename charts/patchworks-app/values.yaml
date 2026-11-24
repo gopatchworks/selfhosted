@@ -1368,6 +1368,10 @@ pusher:
     host: ""
     port: 443
     scheme: https
+  # Public Soketi ingress for browser websocket traffic. With a host set, the
+  # dashboard connects to it on 443/https when tlsSecretName is set or
+  # ingress.scheme is "https" (TLS terminated outside this chart), otherwise
+  # on 80/http. dashboard.broadcasting.* overrides these defaults.
   ingress:
     enabled: false
     provider: contour
@@ -1387,7 +1391,8 @@ ingress:
   #   nginx    — renders standard Ingress resources.
   #   other    — renders standard Ingress resources.
   provider: contour
-  # Public URL scheme used when rendering dashboard/browser-facing URLs.
+  # Public URL scheme used when rendering dashboard/browser-facing URLs,
+  # including the dashboard's websocket connection to pusher.ingress.host.
   # Set to "https" when TLS is terminated outside this chart.
   scheme: http
   className: ""
