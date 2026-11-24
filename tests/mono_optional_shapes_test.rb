@@ -13,7 +13,6 @@ FIXTURE_SECRETS = ['--set', 'credentials.autoGenerate=false', '--set', 'pusher.e
                    '--set', 'app.existingSecret.name=fixture-app', '--set', 'passport.existingSecret.name=fixture-passport'].freeze
 SHAPES = {
   'merge' => 'WORKER_ENABLE_MERGE',
-  'dataProcessing' => 'WORKER_ENABLE_DATA_PROCESSING',
   'dataTransform' => 'WORKER_ENABLE_DATA_TRANSFORM',
   'crossReference' => 'WORKER_ENABLE_CROSS_REFERENCE',
   'syncSubprocess' => 'WORKER_ENABLE_SYNC_SUBPROCESS'
@@ -69,8 +68,8 @@ on = render(mono(ALL))
 check(WORKERS.to_h { |w| [w, expected('true')] }, flags(on), 'defaults with allCompanies')
 
 # An explicit value wins over allCompanies either way; null and absent follow it.
-explicit = render(mono(ALL.merge('enable' => {'merge' => false, 'dataProcessing' => 'false', 'crossReference' => nil, 'catchAtRunEnd' => true})))
-check(WORKERS.to_h { |w| [w, expected('true', 'true', {'WORKER_ENABLE_MERGE' => ['false'], 'WORKER_ENABLE_DATA_PROCESSING' => ['false']})] },
+explicit = render(mono(ALL.merge('enable' => {'merge' => false, 'dataTransform' => 'false', 'crossReference' => nil, 'catchAtRunEnd' => true})))
+check(WORKERS.to_h { |w| [w, expected('true', 'true', {'WORKER_ENABLE_MERGE' => ['false'], 'WORKER_ENABLE_DATA_TRANSFORM' => ['false']})] },
       flags(explicit), 'explicit false and true with allCompanies, strings accepted')
 explicit_off = render(mono('enable' => {'merge' => true, 'syncSubprocess' => 'true'}))
 check(WORKERS.to_h { |w| [w, expected('false', 'false', {'WORKER_ENABLE_MERGE' => ['true'], 'WORKER_ENABLE_SYNC_SUBPROCESS' => ['true']})] },
@@ -99,6 +98,21 @@ check({'patchworks-workers-shop' => expected('true')},
       flags(render(mono(ALL.merge('scheduler' => {'mode' => 'disabled'}, 'allCompanies' => {'enabled' => true, 'scheduler' => false}),
                         'hub' => {'enabled' => false}))),
       'company-only release')
+
+# Data Processing is left out, since Core and the Dashboard are dropping it:
+# the chart renders no flag for it, even when asked, and a worker's extraEnv
+# entry still reaches it once.
+DATA_PROCESSING = 'WORKER_ENABLE_DATA_PROCESSING'
+def env_values(docs, name)
+  worker_deployments(docs).to_h do |d|
+    [d.dig('metadata', 'name'), d.dig('spec', 'template', 'spec', 'containers', 0, 'env').select { |e| e['name'] == name }.map { |e| e['value'] }]
+  end
+end
+check(WORKERS.to_h { |w| [w, []] }, env_values(render(mono(ALL.merge('enable' => {'dataProcessing' => true}))), DATA_PROCESSING),
+      'no Data Processing flag')
+check(WORKERS.to_h { |w| [w, ['true']] },
+      env_values(render(mono(ALL.merge('extraEnv' => [{'name' => DATA_PROCESSING, 'value' => 'true'}]))), DATA_PROCESSING),
+      'Data Processing through extraEnv')
 
 # The setting changes env alone, so it leaves the config checksum as it was.
 WORKERS.each { |w| check(checksum(off, w), checksum(explicit_off, w), "#{w} config checksum") }

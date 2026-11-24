@@ -1668,7 +1668,9 @@ rendered "true" or "false" as Monocore's own chart renders
 monocore.worker.enable.*; a shape left null follows workers.mono.allCompanies,
 under which Monocore is the only runtime of every company's runs.
 catchAtRunEnd is no shape and never follows it. A name in $skip (the worker's
-own extraEnv) is left to it.
+own extraEnv) is left to it. Monocore's dataProcessing is left out, so it
+stays off: Core and the Dashboard are dropping Data Processing for Data
+Transformation.
 Usage: {{ include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEnvNames) }}
 */}}
 {{- define "patchworks.mono.enableEnv" -}}
@@ -1678,7 +1680,6 @@ Usage: {{ include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEn
 {{- $env := list -}}
 {{- range list
   (list "merge" "WORKER_ENABLE_MERGE" $allCompanies)
-  (list "dataProcessing" "WORKER_ENABLE_DATA_PROCESSING" $allCompanies)
   (list "dataTransform" "WORKER_ENABLE_DATA_TRANSFORM" $allCompanies)
   (list "crossReference" "WORKER_ENABLE_CROSS_REFERENCE" $allCompanies)
   (list "syncSubprocess" "WORKER_ENABLE_SYNC_SUBPROCESS" $allCompanies)

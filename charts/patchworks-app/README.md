@@ -740,7 +740,6 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.allCompanies.disableProcessors` | `[short-processor]` | Processor queues whose Deployment and schedule CronJob are left out, and dropped from the RabbitMQ topology |
 | `workers.mono.allCompanies.disableSchedulers` | `[gateway]` | Processor queues whose schedule CronJob alone is left out |
 | `workers.mono.enable.merge` | `null` | `WORKER_ENABLE_MERGE` on the hub and every company: run the Merge shape. `null` follows `workers.mono.allCompanies.enabled`; `true` or `false` overrides it. See [Monocore's optional shapes](#monocores-optional-shapes) |
-| `workers.mono.enable.dataProcessing` | `null` | `WORKER_ENABLE_DATA_PROCESSING`: the Data Processing shape. `null` follows `allCompanies.enabled` |
 | `workers.mono.enable.dataTransform` | `null` | `WORKER_ENABLE_DATA_TRANSFORM`: the Data Transformation shape, whose functions run natively in the worker. `null` follows `allCompanies.enabled`. The `v0.2.17` Dashboard has no node for this shape, so it can't add one and shows an existing one as broken; Monocore still runs the step |
 | `workers.mono.enable.crossReference` | `null` | `WORKER_ENABLE_CROSS_REFERENCE`: the Cross-Reference shape. `null` follows `allCompanies.enabled` |
 | `workers.mono.enable.syncSubprocess` | `null` | `WORKER_ENABLE_SYNC_SUBPROCESS`: waiting Run Flow and Flow Return, where a parent holds its worker slot while its children run. `null` follows `allCompanies.enabled` |
@@ -1844,8 +1843,8 @@ company with none as off, so they have to be stored for each company.
   feature settings, with `monocore` first; `monocore-scheduler` needs a
   coordinated handover of its pending cron work.
 - Every Monocore worker runs the optional shapes, since every company's runs
-  now reach it: Merge, Data Processing, Data Transformation, Cross-Reference
-  and waiting Run Flow with Flow Return. See
+  now reach it: Merge, Data Transformation, Cross-Reference and waiting Run
+  Flow with Flow Return. See
   [Monocore's optional shapes](#monocores-optional-shapes).
 
 It also leaves out the Core processes Monocore companies don't need:
@@ -1875,7 +1874,6 @@ the hub and every company:
 | Key | Variable | Shape |
 |---|---|---|
 | `merge` | `WORKER_ENABLE_MERGE` | Merge |
-| `dataProcessing` | `WORKER_ENABLE_DATA_PROCESSING` | Data Processing |
 | `dataTransform` | `WORKER_ENABLE_DATA_TRANSFORM` | Data Transformation |
 | `crossReference` | `WORKER_ENABLE_CROSS_REFERENCE` | Cross-Reference |
 | `syncSubprocess` | `WORKER_ENABLE_SYNC_SUBPROCESS` | Waiting Run Flow and Flow Return |
@@ -1895,8 +1893,15 @@ made another way, such as through Core's API, as broken. Monocore still runs
 the step when `dataTransform` is on, so it follows `allCompanies` like the
 others; turning it off would only make such a run fail.
 
+Monocore's own chart also has `dataProcessing` (`WORKER_ENABLE_DATA_PROCESSING`)
+for the Data Processing shape. This chart leaves it out, so it stays off: Core
+and the Dashboard are dropping that shape for Data Transformation, and only
+their `feature/data-and-merge-shapes` builds, such as `v0.2.17`'s, have it. An
+install whose flows still have a Data Processing step can set
+`WORKER_ENABLE_DATA_PROCESSING` to `"true"` in `workers.mono.extraEnv`.
+
 Each shape needs the Core code of its own release, so keep Core and Monocore on
-one release. The Monocore images of `v0.2.15` to `v0.2.17` read all six. A
+one release. The Monocore images of `v0.2.15` to `v0.2.17` read all of these. A
 `WORKER_ENABLE_*` entry in `workers.extraEnv` or `workers.mono.extraEnv`
 replaces the chart's on every worker, and one in a company's `extraEnv` on that
 company's worker alone, so each pod gets one entry for that name. The settings

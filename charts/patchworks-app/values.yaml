@@ -951,15 +951,17 @@ workers:
     # Monocore's optional shapes (Monocore's monocore.worker.enable.*).
     # Monocore registers no step runner for them unless they are enabled, and
     # fails a run that reaches one. Each sets WORKER_ENABLE_* to "true" or
-    # "false" on the hub and every company. null follows allCompanies.enabled:
-    # Core then offers these shapes to every company, and Monocore is their
-    # only runtime. Set true to offer them without allCompanies, or false to
-    # keep one off with it. A WORKER_ENABLE_* entry in workers.extraEnv,
-    # extraEnv or a company's extraEnv replaces the chart's. Keep Core and
-    # Monocore on one release: each shape needs the matching Core code.
+    # "false" on the hub and every company. null follows allCompanies.enabled,
+    # under which Monocore is the only runtime of every company's runs. Set
+    # true to run one without allCompanies, or false to keep one off with it.
+    # A WORKER_ENABLE_* entry in workers.extraEnv, extraEnv or a company's
+    # extraEnv replaces the chart's. Keep Core and Monocore on one release:
+    # each shape needs the matching Core code. Monocore's Data Processing flag
+    # is left out, so it stays off: Core and the Dashboard are dropping that
+    # shape for Data Transformation. Set WORKER_ENABLE_DATA_PROCESSING in
+    # extraEnv for flows that still have one.
     enable:
       merge: null
-      dataProcessing: null
       # Data Transformation. Its functions run natively in the worker, so the
       # image needs nothing extra. The v0.2.17 Dashboard has no node for it:
       # it can't add the step and shows an existing one as broken, but
