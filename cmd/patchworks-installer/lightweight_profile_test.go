@@ -121,18 +121,75 @@ func TestLightweightProfileRequestsLessMemory(t *testing.T) {
 			if tc.limit == 0 {
 				return
 			}
-			var total resource.Quantity
-			for name, deployment := range deployments {
-				if request := memoryRequest(deployment); request != "" {
-					quantity, err := resource.ParseQuantity(request)
-					if err != nil {
-						t.Fatalf("%s memory request %q: %v", name, request, err)
-					}
-					total.Add(quantity)
+			if total := requestedMemory(t, deployments); total.Value() > tc.limit {
+				t.Fatalf("app memory requests total %s, above %d bytes", total.String(), tc.limit)
+			}
+		})
+	}
+}
+
+// requestedMemory sums the Deployments' first-container memory requests.
+func requestedMemory(t *testing.T, deployments map[string]map[string]any) resource.Quantity {
+	t.Helper()
+	var total resource.Quantity
+	for name, deployment := range deployments {
+		if request := memoryRequest(deployment); request != "" {
+			quantity, err := resource.ParseQuantity(request)
+			if err != nil {
+				t.Fatalf("%s memory request %q: %v", name, request, err)
+			}
+			total.Add(quantity)
+		}
+	}
+	return total
+}
+
+// The same values file sets the infra chart's profile: Elasticsearch, RabbitMQ
+// and Soketi request less, and Elasticsearch's heap follows its request. With
+// the app chart that is under 2 GiB, which leaves room for an ingress
+// controller and k3s's own pods in the ~3 GiB a 4 GB Raspberry Pi 5 can
+// allocate once the kubelet reserves memory for the system.
+func TestLightweightProfileRequestsLessInfraMemory(t *testing.T) {
+	javaOpts := func(deployment map[string]any) string { return containerEnv(deployment)["ES_JAVA_OPTS"] }
+	for _, tc := range []struct {
+		name     string
+		values   map[string]string
+		want     map[string]string
+		javaOpts string
+	}{
+		{"lightweight", lightweightValues(""), map[string]string{
+			"patchworks-elasticsearch": "512Mi",
+			"patchworks-rabbitmq":      "256Mi",
+			"patchworks-soketi":        "128Mi",
+		}, "-Xms256m -Xmx256m"},
+		{"standard", monoInboundValues("false", "false"), map[string]string{
+			"patchworks-elasticsearch": "1Gi",
+			"patchworks-rabbitmq":      "512Mi",
+			"patchworks-soketi":        "",
+		}, "-Xms512m -Xmx512m"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parsed := writeMonoInboundValues(t, tc.values)
+			infra := deploymentNames(renderInfraObjects(t, parsed))
+			for name, want := range tc.want {
+				deployment, ok := infra[name]
+				if !ok {
+					t.Fatalf("%s missing: %v", name, keys(infra))
+				}
+				if got := memoryRequest(deployment); got != want {
+					t.Errorf("%s memory request = %q, want %q", name, got, want)
 				}
 			}
-			if total.Value() > tc.limit {
-				t.Fatalf("app memory requests total %s, above %d bytes", total.String(), tc.limit)
+			if got := javaOpts(infra["patchworks-elasticsearch"]); got != tc.javaOpts {
+				t.Errorf("ES_JAVA_OPTS = %q, want %q", got, tc.javaOpts)
+			}
+			if tc.name != "lightweight" {
+				return
+			}
+			total := requestedMemory(t, infra)
+			total.Add(requestedMemory(t, deploymentNames(renderComponentSelection(t, "patchworks", "patchworks", parsed))))
+			if limit := resource.MustParse("2Gi"); total.Cmp(limit) > 0 {
+				t.Fatalf("app and infra memory requests total %s, above %s", total.String(), limit.String())
 			}
 		})
 	}

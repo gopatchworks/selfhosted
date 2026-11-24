@@ -32,6 +32,7 @@ values API so a shared values file can be passed to both releases.
 - [Pod DNS](#pod-dns)
 - [Images](#images)
 - [Generated infrastructure credentials](#generated-infrastructure-credentials)
+- [Installation profile](#installation-profile)
 - [Application](#application)
 - [Dashboard](#dashboard)
 - [Passport OAuth keys](#passport-oauth-keys)
@@ -76,6 +77,31 @@ Generated Secret names are derived from the stable chart fullname:
 
 Set the relevant `auth.existingSecret.name` to bring your own Secret, or set
 the inline password value to bypass generated credentials for that field.
+
+## Installation profile
+
+`profile` is shared with the app chart through one values file (see the app
+chart's [Installation profile](../patchworks-app/README.md#installation-profile)).
+Under `profile: lightweight`, the bundled Elasticsearch, RabbitMQ and Soketi
+request less memory, so the release and an ingress controller can be scheduled
+on a small single node. On a 4 GB Raspberry Pi 5, the kubelet's system
+reservation left about 3 GiB allocatable. There, Contour's 192Mi of requests
+and the infra chart's standard 1792Mi left too little for the gateway. With
+both charts on the lightweight profile, the release requests about 1.9 GiB.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `profile` | `standard` | `standard` or `lightweight` |
+| `lightweight.elasticsearch.javaOpts` | `-Xms256m -Xmx256m` | Replaces `elasticsearch.javaOpts`: a heap at half the request below. Search over a large history needs the standard heap |
+| `lightweight.elasticsearch.resources` | requests memory `512Mi` | Goes over `elasticsearch.resources` (`1Gi`). Elasticsearch used about 990Mi with the 512m heap |
+| `lightweight.rabbitmq.resources` | requests memory `256Mi` | Goes over `rabbitmq.resources` (`512Mi`); the `1Gi` limit stays. RabbitMQ used about 80–130Mi |
+| `lightweight.soketi.resources` | requests memory `128Mi` | Goes over `soketi.resources`, whose limits otherwise also count as the request (`256Mi`). Soketi used about 45Mi |
+
+Each `resources` block goes over the component's own: its requests replace the
+component's, and the component's other settings, such as `cpu` and `limits`,
+stay. Set a block to `null` to use the component's settings alone. Requests
+only reserve memory: a node that schedules every pod can still run short when
+they get busy. MySQL, Redis, S3 and KubeFaaS are unchanged.
 
 ## Global
 
@@ -758,7 +784,7 @@ kubefaas:
 | `rabbitmq.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `rabbitmq.persistence.size` | `5Gi` | PVC size |
 | `rabbitmq.persistence.existingClaim` | `""` | Use a pre-existing PVC |
-| `rabbitmq.resources` | See `values.yaml` | CPU/memory resources for bundled RabbitMQ |
+| `rabbitmq.resources` | See `values.yaml` | CPU/memory resources for bundled RabbitMQ. Under `profile: lightweight`, `lightweight.rabbitmq.resources` goes over it |
 | `rabbitmq.topology.enabled` | `true` | Shared app-chart value for processor and PHP worker hub queue creation |
 | `rabbitmq.topology.command` | `[monocore]` | Shared app-chart value for the queue topology hook command. Image comes from `workers.mono.image` |
 | `rabbitmq.topology.args` | `[apply-rabbitmq-topology, --rabbitmq-topology-file=/etc/patchworks/rabbitmq/topology.yaml]` | Shared app-chart value for the queue topology hook arguments |
@@ -805,7 +831,7 @@ If you can't set it on the nodes, `elasticsearch.sysctlInitContainer.enabled=tru
 | `elasticsearch.external.existingSecret.passwordKey` | `ELASTIC_SEARCH_PASSWORD` | Key for `ELASTIC_SEARCH_PASSWORD` |
 | `elasticsearch.persistence.size` | `15Gi` | PVC size |
 | `elasticsearch.persistence.existingClaim` | `""` | Use a pre-existing PVC |
-| `elasticsearch.javaOpts` | `-Xms512m -Xmx512m` | JVM heap settings |
+| `elasticsearch.javaOpts` | `-Xms512m -Xmx512m` | JVM heap settings. Under `profile: lightweight`, `lightweight.elasticsearch.javaOpts` replaces it |
 
 ---
 
@@ -908,7 +934,7 @@ inline or via `pusher.existingSecret`.
 | `soketi.mode` | `full` | `SOKETI_MODE`; app credentials are rendered into an array-driver config file from `pusher.*` |
 | `soketi.service.type` | `ClusterIP` | Soketi Service type |
 | `soketi.service.port` | `6001` | Soketi Service port |
-| `soketi.resources` | CPU `250m`, memory `256Mi` limits | Native Soketi resource requests/limits |
+| `soketi.resources` | CPU `250m`, memory `256Mi` limits | Native Soketi resource requests/limits. Under `profile: lightweight`, `lightweight.soketi.resources` goes over it |
 | `soketi.extraEnv` | `[]` | Additional env vars for the native Soketi container |
 | `soketi.subchart.enabled` | `false` | Use the upstream Soketi subchart instead of the native template. Configure upstream chart values under `soketi.*` when enabled |
 
