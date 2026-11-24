@@ -545,6 +545,16 @@ const primaryPurple = "#7C3AED"
 
 var version = "dev"
 
+// helmFieldManager is the field manager the installer's Helm actions apply
+// as. It is the Helm CLI's, so the printed `helm upgrade` commands and the
+// installer can take turns on a release without server-side apply conflicts.
+// Left unset, Helm would name it after the binary.
+const helmFieldManager = "helm"
+
+func init() {
+	kube.ManagedFieldsManager = helmFieldManager
+}
+
 func main() {
 	opts, err := parseCLI(os.Args[1:])
 	if err != nil {
@@ -1455,10 +1465,22 @@ func helmUpgradeOrInstall(ctx context.Context, cfg *action.Configuration, releas
 		install.Timeout = timeout
 		install.DependencyUpdate = true
 		install.Labels = labels
+		install.ForceConflicts = install.ServerSideApply
 		_, err := install.RunWithContext(ctx, chart, values)
 		return err
 	}
 
+	upgrade := newHelmUpgrade(cfg, releaseName, namespace, timeout, labels)
+	_, err := upgrade.RunWithContext(ctx, releaseName, chart, values)
+	return err
+}
+
+// newHelmUpgrade configures the upgrade of an existing release. The values
+// this run renders are the ones the user chose, so a server-side apply forces
+// its way past fields another field manager last set, as
+// `helm upgrade --force-conflicts` does. Helm keeps a release on the apply
+// method its last revision used and rejects a forced client-side apply.
+func newHelmUpgrade(cfg *action.Configuration, releaseName, namespace string, timeout time.Duration, labels map[string]string) *action.Upgrade {
 	upgrade := action.NewUpgrade(cfg)
 	upgrade.Namespace = namespace
 	upgrade.WaitStrategy = kube.StatusWatcherStrategy
@@ -1466,8 +1488,20 @@ func helmUpgradeOrInstall(ctx context.Context, cfg *action.Configuration, releas
 	upgrade.Timeout = timeout
 	upgrade.DependencyUpdate = true
 	upgrade.Labels = labels
-	_, err := upgrade.RunWithContext(ctx, releaseName, chart, values)
-	return err
+	upgrade.ForceConflicts = helmReleaseServerSide(cfg, releaseName)
+	return upgrade
+}
+
+// helmReleaseServerSide reports whether Helm upgrades the release with
+// server-side apply. Under the default ServerSideApply "auto" Helm follows the
+// apply method of the last revision, whatever its status.
+func helmReleaseServerSide(cfg *action.Configuration, releaseName string) bool {
+	last, err := cfg.Releases.Last(releaseName)
+	if err != nil {
+		return false
+	}
+	release, ok := last.(*releasev1.Release)
+	return ok && release.ApplyMethod == string(releasev1.ApplyMethodServerSideApply)
 }
 
 func installerLabels() map[string]string {

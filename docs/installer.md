@@ -348,6 +348,17 @@ selected namespace, runs the install through the Helm Go SDK using the prepared
 charts, then checks workload status through the Kubernetes API. The Helm CLI is
 only needed if you choose to copy and run the manual commands yourself.
 
+The installer and the printed `helm upgrade` commands can take turns on the same
+releases. The installer applies under the Helm CLI's field manager, `helm`, and,
+on a release Helm applies server-side, forces conflicts as
+`helm upgrade --force-conflicts` does. Re-running the installer to change a
+setting, such as the ingress class, therefore overwrites values that the Helm
+CLI, `kubectl edit` or an earlier installer last set. Earlier installers applied
+under their binary's name, `patchworks-installer`. That manager stays in an
+object's `managedFields` and keeps co-owning the fields it set that have not
+changed since, so if a later chart stops setting such a field, server-side
+apply leaves it on the object instead of removing it.
+
 During the infra and app Helm installs, the progress screen polls Kubernetes
 Jobs and readiness state so it can show phases such as credential generation,
 RabbitMQ queue setup, Fabric migrations, Fabric seeders, Core migrations, and
