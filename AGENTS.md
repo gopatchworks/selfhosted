@@ -301,7 +301,7 @@ Monocore's optional shapes (Merge, Data Transformation, Cross-Reference, and wai
 ### Component split
 
 - **Controller**: manages function lifecycle; needs ClusterRole (pods, deployments, services, namespaces, HPAs).
-- **Builder**: builds function images; runs a Docker-in-Docker sidecar with mutual TLS.
+- **Builder**: builds function images; runs a Docker-in-Docker sidecar with mutual TLS. Its readiness probe is `/v1/readyz`, which fails until Docker answers and every template's base image is in the registry. Startup and liveness stay on `/v1/healthz`. Keep the probes in step with the KubeFaaS chart (`charts/kubefaas/templates/builder/deployment.yaml` in the kubefaas repo). With readiness on `/v1/healthz` it took builds before their base images existed, and they failed with `failed to resolve source metadata ... not found`. `tests/kubefaas_builder_readiness_test.rb` checks this.
 - **Redis**: shared state between controller and builder; separate from app Redis.
 - **Functions**: one Namespace + ServiceAccount per execution slot, optional NetworkPolicy.
 

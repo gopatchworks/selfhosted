@@ -1158,9 +1158,12 @@ kubefaas:
       enabled: true
 ```
 
-The builder reports ready only once it has built the base image of every
-function template, one at a time, so the first install with KubeFaaS can take
-a long time: allow `--timeout 60m` or more. The KubeFaaS controller and builder
+The builder reports ready (`/v1/readyz`) only once it has built the base image
+of every function template, one at a time, so the first install with KubeFaaS
+can take a long time: allow `--timeout 60m` or more. Until then the builder
+Service has no endpoints, so a script deployed meanwhile fails to reach the
+builder instead of building on a base image that isn't there yet. On a
+Raspberry Pi 5 each base image took from about 40 seconds to 5 minutes. The KubeFaaS controller and builder
 images come from the same registry as the application images, so the image
 pull Secret named in `image.pullSecrets` must also exist in the KubeFaaS
 namespace; the installer copies it there.
