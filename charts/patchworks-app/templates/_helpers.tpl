@@ -223,6 +223,24 @@ Takes (dict "root" $ "name" "web" "shared" <shared resources>).
 {{- end }}
 
 {{/*
+The Deployment strategy of the gateway, start, processor and Monocore pods
+under profile=lightweight: lightweight.rollingUpdate, so the old pod is stopped
+as its replacement is created and an upgrade needs no spare memory. Empty under
+profile=standard, or with the block null, leaving Kubernetes' default. Looked
+up here, so values without the block, as under --reuse-values, still render.
+*/}}
+{{- define "patchworks.lightweight.strategy" -}}
+{{- if include "patchworks.lightweight" . -}}
+{{- with dig "rollingUpdate" dict (.Values.lightweight | default dict) -}}
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    {{- toYaml . | nindent 4 }}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 "true" when workers.mono.allCompanies leaves out a processor's schedule CronJob
 while its Deployment keeps running. Takes (dict "root" $ "processor" $processor).
 */}}

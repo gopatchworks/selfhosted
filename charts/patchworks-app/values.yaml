@@ -255,6 +255,18 @@ lightweight:
     resources:
       requests:
         memory: 128Mi
+  # How the gateway (and start), the processor and Monocore roll out. With
+  # maxSurge 0 the old pod is stopped as its replacement is created, rather
+  # than once the replacement is ready. An upgrade then needs no spare memory
+  # beside the running pods, which a small node may not have once KubeFaaS's
+  # script pods run: on a full node the new pod waits for the old one to
+  # exit. Each service is unavailable from the old pod's stop until the new
+  # pod is ready, longer when it waits for the old pod to drain (the gateway's
+  # RoadRunner for up to 160s); Monocore's messages wait in RabbitMQ. Set null
+  # for Kubernetes' default, which keeps the old pod until the new one is ready.
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
 
 # ── Core Scheduler ─────────────────────────────────────────────────────────────
 # Shared defaults for processor scheduler CronJobs.

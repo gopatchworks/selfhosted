@@ -82,12 +82,25 @@ the inline password value to bypass generated credentials for that field.
 
 `profile` is shared with the app chart through one values file (see the app
 chart's [Installation profile](../patchworks-app/README.md#installation-profile)).
-Under `profile: lightweight`, the bundled Elasticsearch, RabbitMQ and Soketi
-request less memory, so the release and an ingress controller can be scheduled
-on a small single node. On a 4 GB Raspberry Pi 5, the kubelet's system
-reservation left about 3 GiB allocatable. There, Contour's 192Mi of requests
-and the infra chart's standard 1792Mi left too little for the gateway. With
-both charts on the lightweight profile, the release requests about 1.9 GiB.
+Under `profile: lightweight`, the bundled Elasticsearch, RabbitMQ, Soketi and
+KubeFaaS request less memory, so the release and an ingress controller can be
+scheduled on a small single node. On a 4 GB Raspberry Pi 5, the kubelet's system
+reservation left 3021Mi allocatable. There, Contour's 192Mi of requests and the
+infra chart's standard 1792Mi left too little for the gateway. With both charts
+on the lightweight profile, the release requests about 1.9 GiB.
+
+KubeFaaS's standard requests, about 1.6 GiB, didn't fit next to that release:
+the builder stayed Pending. Under the profile it runs one controller and
+requests 240Mi with the bundled registry. Each script Core deploys adds a pod
+requesting 35M, Core's own request, which runs until 24 hours after the script's
+last call. With k3s's and Contour's pods and one deployed script, about 500Mi of
+the Pi's 3021Mi stays free. The app chart's gateway, processor and Monocore
+roll without a surge under the profile, so their upgrades don't need it. It
+leaves room for the pods that still surge here, the largest being the builder
+(176Mi). These figures cover scheduling only. The builder's image builds were
+not measured on the Pi. They run in dind against its 2Gi limit, not its 128Mi
+request, and under swap limits that follow requests (as with k3s's
+`LimitedSwap`), the smaller request also means less swap for them.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -96,12 +109,21 @@ both charts on the lightweight profile, the release requests about 1.9 GiB.
 | `lightweight.elasticsearch.resources` | requests memory `512Mi` | Goes over `elasticsearch.resources` (`1Gi`). Elasticsearch used about 990Mi with the 512m heap |
 | `lightweight.rabbitmq.resources` | requests memory `256Mi` | Goes over `rabbitmq.resources` (`512Mi`); the `1Gi` limit stays. RabbitMQ used about 80–130Mi |
 | `lightweight.soketi.resources` | requests memory `128Mi` | Goes over `soketi.resources`, whose limits otherwise also count as the request (`256Mi`). Soketi used about 45Mi |
+| `lightweight.kubefaas.controller.replicaCount` | `1` | Replaces `kubefaas.controller.replicaCount` (`3`). `null` keeps it |
+| `lightweight.kubefaas.controller.resources` | requests memory `32Mi` | Goes over `kubefaas.controller.resources` (`128Mi`). The controller used about 13–22Mi |
+| `lightweight.kubefaas.redis.resources` | requests memory `16Mi` | Goes over `kubefaas.redis.resources` (`512Mi`); the `768Mi` limit stays. Redis used about 7Mi |
+| `lightweight.kubefaas.registry.bundled.resources` | requests memory `16Mi` | Goes over `kubefaas.registry.bundled.resources` (`64Mi`). The registry used about 5Mi |
+| `lightweight.kubefaas.builder.resources` | requests memory `32Mi` | Goes over `kubefaas.builder.resources` (`128Mi`). Its `registry-proxy` sidecar keeps `16Mi` |
+| `lightweight.kubefaas.builder.dind.resources` | requests memory `128Mi` | Goes over `kubefaas.builder.dind.resources` (`512Mi`); the `2Gi` limit stays for image builds |
+| `lightweight.kubefaas.functions.profile.resources` | requests memory `16M` | Replaces `kubefaas.functions.profile.resources` (`128M`), the request of a function pod that doesn't set its own. A string, so it replaces the profile's rather than merging. Core's scripts set their own (`35M`), which wins |
 
 Each `resources` block goes over the component's own: its requests replace the
 component's, and the component's other settings, such as `cpu` and `limits`,
-stay. Set a block to `null` to use the component's settings alone. Requests
+stay. Each `lightweight.kubefaas` block goes over the `kubefaas` block at the
+same path. Set a block to `null` to use the component's settings alone. Requests
 only reserve memory: a node that schedules every pod can still run short when
-they get busy. MySQL, Redis, S3 and KubeFaaS are unchanged.
+they get busy, and KubeFaaS's image builds do. MySQL, Redis and S3 are
+unchanged.
 
 ## Global
 
@@ -1035,7 +1057,9 @@ pusher:
 
 ## KubeFaaS
 
-Optional serverless function execution layer. Disabled by default.
+Optional serverless function execution layer. Disabled by default. Under
+`profile: lightweight` it runs one controller and requests less memory (see
+[Installation profile](#installation-profile)).
 
 When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate` are all true, missing auth credentials are generated into `<release>-kubefaas-auth` in both the KubeFaaS namespace and the app release namespace. The app chart consumes the release namespace copy. For external KubeFaaS, provide both inline auth values or `kubefaas.auth.existingSecret.name`.
 

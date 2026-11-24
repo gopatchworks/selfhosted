@@ -503,6 +503,7 @@ mono installation measured on 2026-11-23, the seven processor pods held about
 | `lightweight.worker.resources` | requests memory `384Mi` | Goes over `workers.resources` for `<fullname>-processor` |
 | `lightweight.worker.nodeSelector`, `tolerations`, `affinity`, `podAnnotations` | empty | Default to the matching `workers.*` settings |
 | `lightweight.mono.resources` | requests memory `128Mi` | Goes over `workers.resources` for the Monocore hub and company workers (`workers.type: mono`). A company's own `resources` replace it |
+| `lightweight.rollingUpdate` | `maxSurge: 0`, `maxUnavailable: 1` | The `rollingUpdate` of the gateway, start, `<fullname>-processor` and Monocore Deployments: the old pod is stopped as its replacement is created. `null` keeps Kubernetes' default, which keeps the old pod until the new one is ready |
 
 What changes under `profile: lightweight`:
 
@@ -544,6 +545,20 @@ What changes under `profile: lightweight`:
   to `null` to use the shared one alone. Requests only reserve memory: a node
   that schedules every pod can still run short when they get busy. With mono
   workers the app chart requests 1024Mi in all.
+- **Rollouts.** The gateway, start, `<fullname>-processor` and Monocore
+  Deployments roll with `maxSurge: 0` (`lightweight.rollingUpdate`). The old
+  pod is stopped as its replacement is created, so an upgrade needs no spare
+  memory beside the running pods. On a full node the new pod waits until the
+  old one has exited. With the default surge, an upgrade needed room for a
+  second gateway pod (512Mi). A small node may not have that once KubeFaaS's
+  script pods run, and the new pod then stays Pending until Helm gives up.
+  The cost is a gap in each service during an upgrade, from the old pod's stop
+  until the new pod is ready. It is longer when the new pod waits for the old
+  one to drain: the gateway's RoadRunner drains for up to 160s. New Monocore
+  messages wait in RabbitMQ. Helm's legacy readiness check (Helm 3's `--wait`,
+  Helm 4's `--wait=legacy`) counts `maxUnavailable`, so with one replica it
+  can return before the new pods are ready. The status watcher (Helm 4's
+  `--wait=watcher`, which the installer uses) waits for them.
 - **Infra chart.** The same values file sets the infra chart's profile, which
   halves Elasticsearch's request and heap (`512Mi`, `-Xms256m -Xmx256m`) and
   lowers RabbitMQ's and Soketi's requests to `256Mi` and `128Mi`: 896Mi in
@@ -551,6 +566,8 @@ What changes under `profile: lightweight`:
   [Installation profile](../patchworks-infra/README.md#installation-profile)).
   Both charts together request about 1.9 GiB, which leaves room for an
   ingress controller such as Contour on a node with about 3 GiB allocatable.
+  KubeFaaS, when enabled, runs one controller and adds 240Mi in place of
+  about 1.6 GiB, plus 35M for each script Core has deployed.
 - **Unchanged.** Monocore's other settings, standalone and microservice
   workers (`workers.resources` and `workers.processes` still apply to them),
   Fabric, the dashboard and S3 Manager. With `workers.mono.allCompanies` its

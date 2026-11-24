@@ -141,6 +141,50 @@ lightweight:
     resources:
       requests:
         memory: 128Mi
+  # KubeFaaS, when kubefaas.enabled: each block goes over the kubefaas block at
+  # the same path. About 1.6Gi of requests become 240Mi, including the bundled
+  # registry and its 16Mi proxy in the builder pod. The limits stay: dind keeps
+  # 2Gi for image builds, which use far more than its request.
+  kubefaas:
+    controller:
+      # Replaces kubefaas.controller.replicaCount (3). Set null to keep it.
+      replicaCount: 1
+      # Used ~13-22Mi.
+      resources:
+        requests:
+          memory: 32Mi
+    # Used ~7Mi. kubefaas.redis.resources' 768Mi limit stays.
+    redis:
+      resources:
+        requests:
+          memory: 16Mi
+    # The bundled image registry. Used ~5Mi.
+    registry:
+      bundled:
+        resources:
+          requests:
+            memory: 16Mi
+    builder:
+      resources:
+        requests:
+          memory: 32Mi
+      # Docker-in-Docker, which runs the image builds. The 2Gi limit stays.
+      dind:
+        resources:
+          requests:
+            memory: 128Mi
+    # Replaces kubefaas.functions.profile.resources: the request of a function
+    # pod that doesn't set its own. Core's scripts set their own (35M), which
+    # wins, and keep their pod until 24 hours after their last call.
+    functions:
+      profile:
+        resources: |
+          requests:
+              cpu: 10m
+              memory: 16M
+          limits:
+              cpu: ""
+              memory: ""
 
 # ── Core Web ───────────────────────────────────────────────────────────────────
 # Shared defaults for the two HTTP-facing Laravel deployments (gateway + start).

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -128,6 +129,35 @@ func TestLightweightProfileRequestsLessMemory(t *testing.T) {
 	}
 }
 
+// Under the lightweight profile the gateway, the Core worker and Monocore
+// replace each pod in place, so an upgrade needs no memory beside the running
+// pods; the standard profile keeps Kubernetes' default.
+func TestLightweightProfileRollsWithoutSurge(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+		names  []string
+		want   string
+	}{
+		{"lightweight", lightweightValues(""), []string{"patchworks-gateway", "patchworks-processor", "patchworks-workers"}, "map[rollingUpdate:map[maxSurge:0 maxUnavailable:1] type:RollingUpdate]"},
+		{"standard", monoInboundValues("false", "false"), []string{"patchworks-gateway", "patchworks-start", "patchworks-workers"}, "<nil>"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parsed := writeMonoInboundValues(t, tc.values)
+			deployments := deploymentNames(renderComponentSelection(t, "patchworks", "patchworks", parsed))
+			for _, name := range tc.names {
+				deployment, ok := deployments[name]
+				if !ok {
+					t.Fatalf("%s missing: %v", name, keys(deployments))
+				}
+				if got := fmt.Sprint(deployment["spec"].(map[string]any)["strategy"]); got != tc.want {
+					t.Errorf("%s strategy = %s, want %s", name, got, tc.want)
+				}
+			}
+		})
+	}
+}
+
 // requestedMemory sums the Deployments' first-container memory requests.
 func requestedMemory(t *testing.T, deployments map[string]map[string]any) resource.Quantity {
 	t.Helper()
@@ -190,6 +220,82 @@ func TestLightweightProfileRequestsLessInfraMemory(t *testing.T) {
 			total.Add(requestedMemory(t, deploymentNames(renderComponentSelection(t, "patchworks", "patchworks", parsed))))
 			if limit := resource.MustParse("2Gi"); total.Cmp(limit) > 0 {
 				t.Fatalf("app and infra memory requests total %s, above %s", total.String(), limit.String())
+			}
+		})
+	}
+}
+
+// lightweightKubeFaaSValues are installer answers for a lightweight
+// installation with KubeFaaS and the bundled registry, checked against a chart
+// whose lightweight profile shrinks KubeFaaS.
+func lightweightKubeFaaSValues() map[string]string {
+	values := lightweightValues("")
+	for key, value := range kubefaasValues(true, "linux/arm64") {
+		if strings.HasPrefix(strings.ToLower(key), "kubefaas") || key == "infraKubefaasEnabled" {
+			values[key] = value
+		}
+	}
+	values["kubefaasLightweightSupported"] = "true"
+	return values
+}
+
+// namespaceMemory sums the memory requests of every container of every replica
+// of the Deployments in a namespace.
+func namespaceMemory(t *testing.T, objects []map[string]any, namespace string) resource.Quantity {
+	t.Helper()
+	var total resource.Quantity
+	for _, object := range objects {
+		metadata := object["metadata"].(map[string]any)
+		if object["kind"] != "Deployment" || metadata["namespace"] != namespace {
+			continue
+		}
+		spec := object["spec"].(map[string]any)
+		replicas := int64(spec["replicas"].(int))
+		for _, c := range spec["template"].(map[string]any)["spec"].(map[string]any)["containers"].([]any) {
+			resources, _ := c.(map[string]any)["resources"].(map[string]any)
+			requests, _ := resources["requests"].(map[string]any)
+			if memory, ok := requests["memory"].(string); ok {
+				quantity := resource.MustParse(memory)
+				quantity.Mul(replicas)
+				total.Add(quantity)
+			}
+		}
+	}
+	return total
+}
+
+// Under the lightweight profile KubeFaaS runs one controller and requests
+// 240Mi instead of about 1.6 GiB, so it fits next to the rest of a lightweight
+// release on a 4 GB node. Function pods that don't set their own request ask
+// for 16M; Core's scripts ask for 35M. The install summary states the 240Mi.
+func TestLightweightProfileRequestsLessKubeFaaSMemory(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		values   map[string]string
+		want     string
+		function string
+	}{
+		{"lightweight", lightweightKubeFaaSValues(), "240Mi", "16M"},
+		{"standard", kubefaasValues(true, "linux/arm64"), "1616Mi", "128M"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parsed := writeMonoInboundValues(t, tc.values)
+			objects := renderInfraObjects(t, parsed)
+			if total := namespaceMemory(t, objects, "kubefaas"); total.Cmp(resource.MustParse(tc.want)) != 0 {
+				t.Fatalf("KubeFaaS memory requests = %s, want %s", total.String(), tc.want)
+			}
+			var profile struct {
+				Requests struct{ Memory string } `yaml:"requests"`
+			}
+			if err := yaml.Unmarshal([]byte(findObject(objects, "ConfigMap", "profile-default")["data"].(map[string]any)["resources"].(string)), &profile); err != nil {
+				t.Fatal(err)
+			}
+			if profile.Requests.Memory != tc.function {
+				t.Fatalf("function memory request = %q, want %q", profile.Requests.Memory, tc.function)
+			}
+			summary := kubefaasSummary(tc.values)
+			if lightweight := tc.name == "lightweight"; lightweight != strings.Contains(summary, "requests about "+tc.want+" of memory") {
+				t.Fatalf("summary = %q", summary)
 			}
 		})
 	}

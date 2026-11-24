@@ -347,12 +347,20 @@ the infra chart's
 [Installation profile](../charts/patchworks-infra/README.md#installation-profile)).
 With mono workers and KubeFaaS off, the two charts request about 1.9 GiB, so
 the release and Contour can be scheduled on a single 4 GB node. A Raspberry
-Pi 5 with a system reservation had about 3 GiB allocatable. Standalone and
-microservice workers keep their 900Mi request. These are requests, not limits:
-a small node can still run short of memory once the pods are busy. The
-installer writes no resource settings. To change them, add the
-`lightweight.*.resources` blocks (or `lightweight.elasticsearch.javaOpts`) to
-the values file and apply it with Helm (see
+Pi 5 with a system reservation had 3021Mi allocatable. KubeFaaS, with the
+bundled registry, runs one controller and requests 240Mi instead of about
+1.6 GiB, plus 35M for each script Core deploys. The install summary's KubeFaaS
+line states that cost. It also says when the selected release predates the
+change and keeps KubeFaaS's standard requests. The gateway, Core worker and
+Monocore roll without a surge: the old pod is stopped as its replacement is
+created. An upgrade then needs no spare memory, at the cost of a short gap in
+each. Standalone and microservice workers keep their 900Mi request. These are
+requests, not limits: a small node can still run short of memory once the pods
+are busy, and KubeFaaS's image builds can use up to dind's 2Gi limit. The
+installer writes no resource or rollout settings. To change them, add the
+`lightweight.*` blocks (such as `lightweight.elasticsearch.javaOpts`,
+`lightweight.kubefaas.builder.dind.resources` or `lightweight.rollingUpdate`)
+to the values file and apply it with Helm (see
 [Install From Generated Values](#install-from-generated-values)). The
 installer writes the file afresh on its next run.
 `--save-config` keeps the choice as `profile`. When the selected chart release

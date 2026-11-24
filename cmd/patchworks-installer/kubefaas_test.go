@@ -201,6 +201,14 @@ func TestKubeFaaSSupport(t *testing.T) {
 	if registry || platform || namespace != "functions" {
 		t.Fatalf("older chart = (%t, %t, %q)", registry, platform, namespace)
 	}
+	if !kubefaasLightweightSupported(load(t, func(map[string]any) {})) {
+		t.Fatalf("current chart's lightweight profile does not shrink KubeFaaS")
+	}
+	if kubefaasLightweightSupported(load(t, func(values map[string]any) {
+		delete(values["lightweight"].(map[string]any), "kubefaas")
+	})) {
+		t.Fatalf("older chart's lightweight profile shrinks KubeFaaS")
+	}
 
 	values := kubefaasValues(true, "linux/arm64")
 	delete(values, "kubefaasChecked")
@@ -208,6 +216,9 @@ func TestKubeFaaSSupport(t *testing.T) {
 	checkKubeFaaS(values, load(t, func(map[string]any) {}))
 	if kubefaasRegistryEnabled(values) || values["kubefaasRegistryUnsupported"] == "" {
 		t.Fatalf("registry kept on cri-o nodes: %v", values)
+	}
+	if values["kubefaasLightweightSupported"] != "true" {
+		t.Fatalf("lightweight KubeFaaS support not recorded: %v", values)
 	}
 }
 
@@ -247,6 +258,9 @@ func TestKubeFaaSSummary(t *testing.T) {
 		{"off", withValue(kubefaasValues(true, ""), "infraKubefaasEnabled", "false"), "off"},
 		{"registry and arm64", kubefaasValues(true, "linux/arm64"), "on; bundled image registry; functions built for linux/arm64; the first install builds base images and can take a long time"},
 		{"own registry", kubefaasValues(false, ""), "on; your own registry: set kubefaas.registry.config; the first install builds base images and can take a long time"},
+		{"lightweight", lightweightKubeFaaSValues(), "on; bundled image registry; functions built for linux/arm64; lightweight: KubeFaaS requests about 240Mi of memory and each deployed script 35M, though image builds can use up to 2Gi; the first install builds base images and can take a long time"},
+		{"lightweight, older release", withValue(lightweightKubeFaaSValues(), "kubefaasLightweightSupported", "false"), "on; bundled image registry; functions built for linux/arm64; this release keeps KubeFaaS's standard memory requests under the lightweight profile, about 1.6 GiB, more than a 4 GB node has left; choose a newer release with --chart-version; the first install builds base images and can take a long time"},
+		{"lightweight unsupported by the app chart", withValue(lightweightKubeFaaSValues(), "profileUnsupported", "this chart release has no lightweight profile"), "on; bundled image registry; functions built for linux/arm64; the first install builds base images and can take a long time"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := kubefaasSummary(tc.values); got != tc.want {
