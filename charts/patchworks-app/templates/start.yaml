@@ -25,6 +25,9 @@ metadata:
 spec:
   replicas: {{ $svc.replicaCount }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  {{- with include "patchworks.lightweight.strategy" . }}
+  {{- . | nindent 2 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "start" "Release" .Release) | nindent 6 }}

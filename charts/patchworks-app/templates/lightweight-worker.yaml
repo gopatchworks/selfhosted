@@ -90,6 +90,9 @@ metadata:
 spec:
   replicas: {{ $lw.replicaCount }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
+  {{- with include "patchworks.lightweight.strategy" $root }}
+  {{- . | nindent 2 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" "processor" "Release" $root.Release) | nindent 6 }}

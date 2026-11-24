@@ -115,6 +115,18 @@ func kubefaasSupport(chart helmchart.Charter) (registry, platform bool, namespac
 	return registry, platform, namespace
 }
 
+// kubefaasLightweightSupported is whether the selected infra chart's
+// lightweight profile shrinks KubeFaaS (lightweight.kubefaas).
+func kubefaasLightweightSupported(chart helmchart.Charter) bool {
+	accessor, err := helmchart.NewAccessor(chart)
+	if err != nil {
+		return false
+	}
+	lightweight, _ := accessor.Values()["lightweight"].(map[string]any)
+	_, ok := lightweight["kubefaas"].(map[string]any)
+	return ok
+}
+
 // checkKubeFaaS records what the values file can turn on for KubeFaaS with the
 // selected infra chart and the nodes the settings form saw.
 func checkKubeFaaS(values map[string]string, chart helmchart.Charter) {
@@ -124,6 +136,7 @@ func checkKubeFaaS(values map[string]string, chart helmchart.Charter) {
 	registry, platform, namespace := kubefaasSupport(chart)
 	values["kubefaasNamespace"] = namespace
 	values["kubefaasPlatformSupported"] = fmt.Sprintf("%t", platform)
+	values["kubefaasLightweightSupported"] = fmt.Sprintf("%t", kubefaasLightweightSupported(chart))
 	if values["kubefaasRegistry"] == "true" && values["infrastructure"] != "external" {
 		switch {
 		case !registry:
@@ -183,8 +196,26 @@ func kubefaasSummary(values map[string]string) string {
 	case values["kubefaasMixedArchitectures"] == "true":
 		parts = append(parts, "functions built for linux/amd64, though the nodes mix architectures")
 	}
+	if part := kubefaasLightweightSummary(values); part != "" {
+		parts = append(parts, part)
+	}
 	parts = append(parts, "the first install builds base images and can take a long time")
 	return strings.Join(parts, "; ")
+}
+
+// kubefaasLightweightSummary is KubeFaaS's memory cost under the lightweight
+// profile, empty under the standard one. The infra chart's lightweight.kubefaas
+// requests 240Mi with the bundled registry (tests/lightweight_profile_test.rb);
+// Core asks for 35M per script it deploys.
+func kubefaasLightweightSummary(values map[string]string) string {
+	switch {
+	case !lightweightEnabled(values) || values["kubefaasChecked"] != "true":
+		return ""
+	case values["kubefaasLightweightSupported"] != "true":
+		return "this release keeps KubeFaaS's standard memory requests under the lightweight profile, about 1.6 GiB, more than a 4 GB node has left; choose a newer release with --chart-version"
+	default:
+		return "lightweight: KubeFaaS requests about 240Mi of memory and each deployed script 35M, though image builds can use up to 2Gi"
+	}
 }
 
 // ensureReleaseNamespace creates a namespace the release will own, labelled

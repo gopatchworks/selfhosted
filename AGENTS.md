@@ -321,6 +321,12 @@ Set `kubefaas.builder.tls.mode`:
 
 The `setup-docker-certs` initContainer renames keys from `ca.crt/tls.crt/tls.key` → `ca.pem/cert.pem/key.pem` so dind and the builder binary can consume them directly.
 
+### Lightweight profile
+
+Under `profile: lightweight` KubeFaaS runs one controller and requests 240Mi in place of about 1.6 GiB. The function profile requests 16M, but Core's scripts send their own 35M request, which wins, and keep their pod until 24 hours after their last call. The templates take replicas, resources and the function profile from `patchworks.kubefaas.sizing`, which lays `lightweight.kubefaas.<path>` over `kubefaas.<path>`. Read sizes from it, never `$kf.*.resources` directly, and leave `$kf` as given: `checksum/config` hashes it.
+
+The app chart's gateway, start, processor and Monocore roll with `maxSurge: 0` under the profile (`patchworks.lightweight.strategy`): the old pod is stopped as its replacement is created, so their upgrades need no spare memory. Helm's legacy wait returns early on those one-replica Deployments; the installer uses the status watcher. `tests/lightweight_profile_test.rb` checks the budget. A 3021Mi node runs k3s's and Contour's pods, both charts, KubeFaaS and one 35M script pod. It must still have room for the largest pod that does surge. The installer's summary repeats the 240Mi figure, and `TestLightweightProfileRequestsLessKubeFaaSMemory` ties the two together.
+
 ### Auth and registry
 
 The auth secret (`kubefaas.auth.*`) is shared between controller, builder, and monocore workers. The registry secret holds the raw `registries.yaml` content consumed by the builder.

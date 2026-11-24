@@ -2,6 +2,8 @@
 {{- $ns := include "patchworks.kubefaas.namespace" . }}
 {{- $name := include "patchworks.kubefaas.registry.name" . }}
 {{- $reg := .Values.kubefaas.registry.bundled }}
+{{- /* profile=lightweight: smaller requests from lightweight.kubefaas (patchworks.kubefaas.sizing). */}}
+{{- $sizing := include "patchworks.kubefaas.sizing" . | fromYaml }}
 {{- $p := $reg.persistence }}
 {{- $authSecret := include "patchworks.kubefaas.registry.authSecretName" . }}
 {{- $login := include "patchworks.kubefaas.registry.login" . | fromJson }}
@@ -157,7 +159,7 @@ spec:
             - name: auth
               mountPath: /auth
               readOnly: true
-          {{- with $reg.resources }}
+          {{- with $sizing.registry }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}

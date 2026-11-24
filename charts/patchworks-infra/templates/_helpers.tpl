@@ -35,13 +35,79 @@ profile's smaller requests win and the component's other settings, such as
 cpu and limits, stay. Empty under profile=standard. The block is looked up
 here, so values without it, such as an older release's under helm upgrade
 --reuse-values, still render.
-Takes (dict "root" $ "name" "elasticsearch" "shared" <component resources>).
+Takes (dict "root" $ "name" "elasticsearch" "shared" <component resources>),
+or "path" in place of "name" for a nested block, such as
+(list "kubefaas" "builder" "dind") for lightweight.kubefaas.builder.dind.
 */}}
 {{- define "patchworks.lightweight.resources" -}}
 {{- if include "patchworks.lightweight" .root -}}
-{{- $profile := dig .name "resources" dict (.root.Values.lightweight | default dict) -}}
+{{- $block := include "patchworks.lightweight.block" (dict "root" .root "path" (.path | default (list .name))) | fromYaml -}}
+{{- $profile := get $block "resources" -}}
 {{- toYaml (mergeOverwrite (deepCopy (.shared | default dict)) (deepCopy ($profile | default dict))) -}}
 {{- end -}}
+{{- end }}
+
+{{/*
+The lightweight block at a path, such as (list "kubefaas" "controller") for
+lightweight.kubefaas.controller, as YAML for fromYaml. Empty when a level is
+missing or null, so values without it still render.
+Takes (dict "root" $ "path" (list ...)).
+*/}}
+{{- define "patchworks.lightweight.block" -}}
+{{- $block := .root.Values.lightweight -}}
+{{- range $key := .path -}}
+{{- if kindIs "map" $block -}}
+{{- $block = get $block $key -}}
+{{- else -}}
+{{- $block = dict -}}
+{{- end -}}
+{{- end -}}
+{{- if kindIs "map" $block -}}
+{{- toYaml $block -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+KubeFaaS sizing for the profile, as YAML for fromYaml. Under
+profile=standard each value is the component's own; under lightweight:
+  controllerReplicas: lightweight.kubefaas.controller.replicaCount, unless
+    unset or null
+  controller, builder, dind, redis, registry: resources, with
+    lightweight.kubefaas.<same path>.resources over the component's own
+  functionResources: lightweight.kubefaas.functions.profile.resources, unless
+    empty; a string, so it replaces the profile's rather than merging
+The kubefaas values themselves are left as given: checksum/config hashes them.
+*/}}
+{{- define "patchworks.kubefaas.sizing" -}}
+{{- $kf := .Values.kubefaas -}}
+{{- $sizing := dict
+  "controllerReplicas" $kf.controller.replicaCount
+  "controller" $kf.controller.resources
+  "builder" $kf.builder.resources
+  "dind" $kf.builder.dind.resources
+  "redis" $kf.redis.resources
+  "registry" $kf.registry.bundled.resources
+  "functionResources" $kf.functions.profile.resources -}}
+{{- if include "patchworks.lightweight" . -}}
+{{- $controller := include "patchworks.lightweight.block" (dict "root" . "path" (list "kubefaas" "controller")) | fromYaml -}}
+{{- if and (hasKey $controller "replicaCount") (not (kindIs "invalid" (get $controller "replicaCount"))) -}}
+{{- $_ := set $sizing "controllerReplicas" (get $controller "replicaCount") -}}
+{{- end -}}
+{{- $paths := dict
+  "controller" (list "kubefaas" "controller")
+  "builder" (list "kubefaas" "builder")
+  "dind" (list "kubefaas" "builder" "dind")
+  "redis" (list "kubefaas" "redis")
+  "registry" (list "kubefaas" "registry" "bundled") -}}
+{{- range $name, $path := $paths -}}
+{{- $_ := set $sizing $name (include "patchworks.lightweight.resources" (dict "root" $ "path" $path "shared" (get $sizing $name)) | fromYaml) -}}
+{{- end -}}
+{{- $profile := include "patchworks.lightweight.block" (dict "root" . "path" (list "kubefaas" "functions" "profile")) | fromYaml -}}
+{{- with get $profile "resources" -}}
+{{- $_ := set $sizing "functionResources" . -}}
+{{- end -}}
+{{- end -}}
+{{- toYaml $sizing -}}
 {{- end }}
 
 {{/*

@@ -436,6 +436,9 @@ spec:
   replicas: {{ dig "replicaCount" $mono.replicaCount $company }}
   {{- end }}
   revisionHistoryLimit: {{ $root.Values.revisionHistoryLimit }}
+  {{- with include "patchworks.lightweight.strategy" $root }}
+  {{- . | nindent 2 }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "patchworks.selectorLabels" (dict "component" $slug "Release" $root.Release) | nindent 6 }}

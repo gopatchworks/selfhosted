@@ -3,6 +3,8 @@
 {{- $fullname := include "patchworks.fullname" . }}
 {{- $ns := include "patchworks.kubefaas.namespace" . }}
 {{- $kf := .Values.kubefaas }}
+{{- /* profile=lightweight: smaller requests from lightweight.kubefaas (patchworks.kubefaas.sizing). */}}
+{{- $sizing := include "patchworks.kubefaas.sizing" . | fromYaml }}
 {{- $redisHost := include "patchworks.kubefaas.redisHost" . }}
 {{- $redisPort := include "patchworks.kubefaas.redisPort" . }}
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
@@ -377,7 +379,7 @@ spec:
             - name: docker-client-certs
               mountPath: /certs/client
               readOnly: true
-          {{- with $kf.builder.resources }}
+          {{- with $sizing.builder }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
@@ -421,7 +423,7 @@ spec:
             - name: docker-client-certs
               mountPath: /certs/client
               readOnly: true
-          {{- with $kf.builder.dind.resources }}
+          {{- with $sizing.dind }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
