@@ -79,6 +79,7 @@ One logical component per template file. KubeFaaS is the canonical example:
 | `kubefaas-builder.yaml` | Registry Secret, TLS resources, ServiceAccount, ConfigMap, Deployment, Service |
 | `kubefaas-redis.yaml` | PVC, Deployment, Service — gated on `kubefaas.redis.enabled` |
 | `kubefaas-functions.yaml` | Profile ConfigMap, function ServiceAccounts, Namespaces, optional NetworkPolicies |
+| `kubefaas-registry.yaml` | Bundled image registry: login and `registries.yaml` Secrets, pull Secrets, PVC, Deployment, NodePort Service — gated on `kubefaas.registry.bundled.enabled` |
 
 Don't bundle unrelated resources into one file just because they share a feature flag.
 
@@ -325,6 +326,12 @@ The `setup-docker-certs` initContainer renames keys from `ca.crt/tls.crt/tls.key
 The auth secret (`kubefaas.auth.*`) is shared between controller, builder, and monocore workers. The registry secret holds the raw `registries.yaml` content consumed by the builder.
 
 Both support `existingSecret` for bringing pre-created Secrets.
+
+The chart renders the KubeFaaS auth Secret itself, in the KubeFaaS and release namespaces, not the credential generator Job: that pre-install hook runs before the KubeFaaS namespace exists, and Helm decides which objects to adopt before hooks run, so a hook can't create it either. Logins that several templates embed go through `patchworks.memoLogin`: inline values, else the existing Secret's (`lookup`), else generated, cached on `.Values._memo` so every template in one render gets the same value. `patchworks.secretRenderable` skips a Secret this release doesn't own, such as one an older chart's generator wrote, and its login is reused. Under `helm template` and Argo CD `lookup` returns nothing, so generated logins change on every render; the values comments say to set them there.
+
+### Bundled image registry
+
+`kubefaas.registry.bundled.enabled` runs `registry:2` in the KubeFaaS namespace for installations without a registry. Images are named `localhost:<nodePort>/...`: nodes pull through the NodePort on localhost (containerd uses plain HTTP for localhost; kube-proxy in iptables mode routes it), and the builder pushes through its `registry-proxy` socat sidecar on `127.0.0.1:<nodePort>` (Docker treats localhost as insecure). No node or daemon configuration is needed. One login (`patchworks.kubefaas.registry.login`) goes into the registry's htpasswd, `registries.yaml` and a dockerconfigjson pull Secret in every function namespace (`patchworks.kubefaas.functionNamespaces`); `tests/kubefaas_registry_test.rb` checks they match. `kubefaas.builder.platform` sets `BASE_IMAGE_PLATFORM`; the builder defaults to `linux/amd64`, so arm64 clusters need `linux/arm64`. The registry login has no `existingSecret`, a deliberate exception to the existingSecret pattern: `registries.yaml` and the pull Secrets embed the password, so the chart needs the value itself. The installer offers both with bundled infrastructure (`cmd/patchworks-installer/kubefaas.go`) and copies the image pull Secret into the KubeFaaS namespace, which it creates labelled for `patchworks-infra` to adopt.
 
 ---
 

@@ -1,0 +1,190 @@
+{{- if include "patchworks.kubefaas.registry.bundled" . }}
+{{- $ns := include "patchworks.kubefaas.namespace" . }}
+{{- $name := include "patchworks.kubefaas.registry.name" . }}
+{{- $reg := .Values.kubefaas.registry.bundled }}
+{{- $p := $reg.persistence }}
+{{- $authSecret := include "patchworks.kubefaas.registry.authSecretName" . }}
+{{- $login := include "patchworks.kubefaas.registry.login" . | fromJson }}
+{{- $host := include "patchworks.kubefaas.registry.host" . }}
+{{- if include "patchworks.secretRenderable" (dict "root" . "ns" $ns "name" $authSecret) }}
+---
+# Secret — the registry login, read by the htpasswd init container.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ $authSecret }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-image-registry
+type: Opaque
+data:
+  username: {{ $login.username | b64enc }}
+  password: {{ $login.password | b64enc }}
+{{- end }}
+---
+# Secret — registries.yaml for the builder: function images and template base
+# images, both pushed as localhost:<nodePort>/... through its proxy sidecar.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "patchworks.kubefaas.registrySecretName" . }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-builder
+type: Opaque
+stringData:
+  registries.yaml: |
+    {{- $entries := list (dict "name" .Values.kubefaas.registry.name "image" "functions") }}
+    {{- if ne .Values.kubefaas.registry.name .Values.kubefaas.builder.baseImagesRegistry }}
+    {{- $entries = append $entries (dict "name" .Values.kubefaas.builder.baseImagesRegistry "image" "kubefaas-templates") }}
+    {{- end }}
+    {{- range $entries }}
+    - name: {{ .name | quote }}
+      type: docker
+      url: {{ $host | quote }}
+      username: {{ $login.username | quote }}
+      password: {{ $login.password | quote }}
+      imagePrefix: {{ $host | quote }}
+      validImages:
+        - {{ .image }}
+    {{- end }}
+{{- range (include "patchworks.kubefaas.functionNamespaces" . | fromJsonArray) }}
+---
+# Secret — pull Secret for function pods (the function ServiceAccounts list it).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "patchworks.kubefaas.registry.pullSecretName" $ }}
+  namespace: {{ . }}
+  labels:
+    {{- include "patchworks.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-image-registry
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: {{ dict "auths" (dict $host (dict "username" $login.username "password" $login.password "auth" (printf "%s:%s" $login.username $login.password | b64enc))) | toJson | b64enc }}
+{{- end }}
+{{- if not $p.existingClaim }}
+---
+# PersistentVolumeClaim — function and base images.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-image-registry
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+# Deployment — container registry for KubeFaaS function images, behind an
+# htpasswd login.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-image-registry
+spec:
+  replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  # One pod at a time on a ReadWriteOnce volume.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-image-registry" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-image-registry" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/login: {{ $login | toJson | sha256sum }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas) | nindent 6 }}
+      initContainers:
+        - name: htpasswd
+          image: {{ $reg.htpasswdImage.repository }}:{{ $reg.htpasswdImage.tag }}
+          imagePullPolicy: {{ $reg.htpasswdImage.pullPolicy }}
+          command: [sh, -c, 'htpasswd -Bbn "$REGISTRY_USERNAME" "$REGISTRY_PASSWORD" > /auth/htpasswd']
+          env:
+            - name: REGISTRY_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $authSecret }}
+                  key: username
+            - name: REGISTRY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $authSecret }}
+                  key: password
+          volumeMounts:
+            - name: auth
+              mountPath: /auth
+      containers:
+        - name: registry
+          image: {{ $reg.image.repository }}:{{ $reg.image.tag }}
+          imagePullPolicy: {{ $reg.image.pullPolicy }}
+          env:
+            - name: REGISTRY_AUTH
+              value: htpasswd
+            - name: REGISTRY_AUTH_HTPASSWD_REALM
+              value: KubeFaaS
+            - name: REGISTRY_AUTH_HTPASSWD_PATH
+              value: /auth/htpasswd
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+          ports:
+            - name: registry
+              containerPort: 5000
+          readinessProbe:
+            tcpSocket:
+              port: registry
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: registry
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+            - name: auth
+              mountPath: /auth
+              readOnly: true
+          {{- with $reg.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default $name }}
+        - name: auth
+          emptyDir: {}
+---
+# Service — NodePort, so each node's container runtime pulls the images as
+# localhost:<nodePort>/... (plain HTTP to localhost needs no node configuration).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kubefaas-image-registry
+spec:
+  type: NodePort
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-image-registry" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: registry
+      nodePort: {{ $reg.nodePort }}
+{{- end }}

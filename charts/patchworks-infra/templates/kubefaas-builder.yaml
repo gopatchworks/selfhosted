@@ -20,7 +20,8 @@
 {{- $clientTLSSecret = $kf.builder.tls.existingSecret.clientTls }}
 {{- end }}
 
-{{- if not $kf.registry.existingSecret.name }}
+{{- /* kubefaas-registry.yaml renders registries.yaml for the bundled registry. */}}
+{{- if and (not $kf.registry.existingSecret.name) (not (include "patchworks.kubefaas.registry.bundled" .)) }}
 ---
 apiVersion: v1
 kind: Secret
@@ -225,6 +226,9 @@ data:
   REDIS_DATABASE: "0"
   AUTH_ENABLED: {{ $kf.auth.enabled | toString | quote }}
   BASE_IMAGES_REGISTRY: {{ $kf.builder.baseImagesRegistry | quote }}
+  {{- with $kf.builder.platform }}
+  BASE_IMAGE_PLATFORM: {{ . | quote }}
+  {{- end }}
   {{- if $kf.builder.cacheBucket }}
   CACHE_S3_BUCKET: {{ $kf.builder.cacheBucket | quote }}
   AWS_REGION: {{ include "patchworks.s3.region" $root | quote }}
@@ -254,6 +258,12 @@ spec:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-builder" "Release" .Release) | nindent 8 }}
       annotations:
         checksum/config: {{ $kf | toJson | sha256sum }}
+        {{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
+        checksum/auth: {{ include "patchworks.kubefaas.authLogin" . | sha256sum }}
+        {{- end }}
+        {{- if include "patchworks.kubefaas.registry.bundled" . }}
+        checksum/registry-login: {{ include "patchworks.kubefaas.registry.login" . | sha256sum }}
+        {{- end }}
     spec:
       {{- include "patchworks.podDnsConfig" (list .Values .Values.kubefaas .Values.kubefaas.builder) | nindent 6 }}
       serviceAccountName: {{ $fullname }}-kubefaas-builder
@@ -371,6 +381,21 @@ spec:
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        {{- if include "patchworks.kubefaas.registry.bundled" . }}
+        {{- $proxy := $kf.registry.bundled.proxyImage }}
+        # The bundled registry as localhost:<nodePort>, the name nodes pull it
+        # by: Docker pushes to localhost over plain HTTP without configuration.
+        - name: registry-proxy
+          image: {{ $proxy.repository }}:{{ $proxy.tag }}
+          imagePullPolicy: {{ $proxy.pullPolicy }}
+          args:
+            - {{ printf "TCP-LISTEN:%v,fork,reuseaddr,bind=127.0.0.1" $kf.registry.bundled.nodePort | quote }}
+            - {{ printf "TCP:%s.%s.svc.cluster.local:5000" (include "patchworks.kubefaas.registry.name" .) $ns | quote }}
+          resources:
+            requests:
+              cpu: 5m
+              memory: 16Mi
+        {{- end }}
         - name: dind
           image: docker:27.0.1-dind
           command: [dockerd-entrypoint.sh]

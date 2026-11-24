@@ -941,6 +941,8 @@ Optional serverless function execution layer. Disabled by default.
 
 When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate` are all true, missing auth credentials are generated into `<release>-kubefaas-auth` in both the KubeFaaS namespace and the app release namespace. The app chart consumes the release namespace copy. For external KubeFaaS, provide both inline auth values or `kubefaas.auth.existingSecret.name`.
 
+The chart renders both copies itself from one login, not the credential generator Job, because the KubeFaaS namespace doesn't exist yet when that Job runs. A generated login is kept across upgrades by looking up the existing Secret; a copy that this release didn't create, such as one an earlier chart's generator wrote, is left alone and its login reused. `helm template` and Argo CD can't look Secrets up, so there a generated login changes on every render: set `kubefaas.auth.username` and `kubefaas.auth.password`, or `kubefaas.auth.existingSecret.name`, to pin it.
+
 | Key | Default | Description |
 |-----|---------|-------------|
 | `kubefaas.enabled` | `false` | Deploy KubeFaaS in-cluster |
@@ -957,7 +959,65 @@ When `kubefaas.enabled`, `kubefaas.auth.enabled`, and `credentials.autoGenerate`
 | `kubefaas.auth.existingSecret.name` | `""` | Source auth credentials from this Secret instead of inline values |
 | `kubefaas.auth.existingSecret.usernameKey` | `username` | Key for the username |
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |
-| `kubefaas.registry.name` | `""` | Container registry for built function images |
+| `kubefaas.builder.platform` | `""` | Docker platform base and function images are built for (`BASE_IMAGE_PLATFORM`). Empty keeps the builder's default, `linux/amd64`; set `linux/arm64` for arm64 nodes |
+| `kubefaas.registry.name` | `default` | Name of the `registries.yaml` entry function images are pushed to |
+| `kubefaas.registry.config` | `""` | Raw `registries.yaml` for your own registry |
+| `kubefaas.registry.existingSecret.name` | `""` | Read `registries.yaml` from this Secret instead |
+| `kubefaas.registry.bundled.enabled` | `false` | Run a registry in the cluster for function images (see below) |
+| `kubefaas.registry.bundled.nodePort` | `30500` | Node port of the bundled registry; images are named `localhost:<nodePort>/...` |
+| `kubefaas.registry.bundled.auth.username` | `""` | Registry login; generated (`kubefaas` and a random password) when empty |
+| `kubefaas.registry.bundled.auth.password` | `""` | Set both to pin the login under `helm template` or Argo CD |
+| `kubefaas.registry.bundled.persistence.*` | `20Gi`, `ReadWriteOnce` | Image storage, through `patchworks.pvcSpec` (`existingClaim`, `accessModes`, `size`, `storageClass`, `spec`) |
+| `kubefaas.registry.bundled.image` / `htpasswdImage` / `proxyImage` | `registry:2` / `httpd:2.4-alpine` / `alpine/socat:1.8.0.3` | Registry, htpasswd writer and builder proxy images |
+
+### Bundled image registry
+
+The builder pushes every image it builds, the base image of each function
+template and each function, to a registry, and function pods pull them from it.
+With `kubefaas.registry.bundled.enabled` the chart runs that registry in the
+KubeFaaS namespace (`kubefaas-registry.yaml`) for installations without one of
+their own:
+
+- The registry (`registry:2`) keeps images on a PersistentVolumeClaim and
+  requires a login, written to its htpasswd file by an init container.
+- Images are named `localhost:<nodePort>/...`. Each node's container runtime
+  pulls them through the registry's NodePort on its own localhost, which
+  containerd reaches over plain HTTP without configuration.
+- The builder pushes to the same name through a `registry-proxy` sidecar that
+  forwards `127.0.0.1:<nodePort>` to the registry Service. Docker treats
+  localhost as an insecure registry, so the dind daemon needs no configuration
+  either.
+- The chart renders the login, `registries.yaml` for the builder (the
+  `kubefaas.registry.name` and `kubefaas.builder.baseImagesRegistry` entries)
+  and a `kubernetes.io/dockerconfigjson` pull Secret in the KubeFaaS namespace
+  and every function namespace, which the function ServiceAccounts list. A
+  generated login is kept across upgrades the same way as the KubeFaaS auth
+  login.
+
+On k3s, which runs containerd with kube-proxy in iptables mode, a push from a
+dind daemon through the proxy and a pull by containerd with the pull Secret have
+been checked. Nodes that use another runtime, or whose kube-proxy doesn't route
+NodePorts on localhost (IPVS mode, or a kube-proxy replacement), need a registry
+of their own in `kubefaas.registry.config`. The bundled registry renders its own
+`registries.yaml`, so the chart fails when `kubefaas.registry.config` or
+`kubefaas.registry.existingSecret.name` is also set.
+
+```yaml
+kubefaas:
+  enabled: true
+  builder:
+    platform: linux/arm64   # arm64 nodes
+  registry:
+    bundled:
+      enabled: true
+```
+
+The builder reports ready only once it has built the base image of every
+function template, one at a time, so the first install with KubeFaaS can take
+a long time: allow `--timeout 60m` or more. The KubeFaaS controller and builder
+images come from the same registry as the application images, so the image
+pull Secret named in `image.pullSecrets` must also exist in the KubeFaaS
+namespace; the installer copies it there.
 
 When upgrading a cluster where the cert-manager CA has already rotated, force-renew the
 `<release>-kubefaas-docker-server` and `<release>-kubefaas-docker-client` Certificates once

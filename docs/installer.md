@@ -14,6 +14,7 @@ It checks for:
 - Contour HTTPProxy support
 - cert-manager CRDs
 - Existing `quay-credentials` pull secret in the selected namespace
+- Node architectures and container runtimes, for KubeFaaS
 
 Cluster discovery is performed through the Kubernetes API from inside the Go
 application. The installer does not shell out to `kubectl`. The interface uses
@@ -227,6 +228,8 @@ The TUI asks for:
   and start API, and, with ingress on, whether the ingress routes their paths
   to it (see [Monocore inbound triggers](../charts/patchworks-app/README.md#monocore-inbound-triggers))
 - With mono workers, whether to install the sample flows (**Samples**)
+- With bundled infrastructure, whether to install **KubeFaaS**, which runs
+  Script steps, and with it the **Bundled image registry**
 - Image pull secret mode: existing secret, create from Quay credentials, or none
 - Initial company and admin details, including an optional admin password
 - Output values file path
@@ -265,6 +268,32 @@ installer leaves samples off, and says why in the install summary, when the
 selected release has no samples, cannot run every company on Monocore, or the run
 creates no initial company/admin. The progress screen shows the Job as
 "Creating sample flows".
+
+**KubeFaaS**, offered with bundled infrastructure and off by default, writes
+`kubefaas.enabled: true`. **Bundled image registry**, asked next and on by
+default, adds `kubefaas.registry.bundled.enabled: true`: a registry in the
+cluster that the KubeFaaS builder pushes function images to and nodes pull them
+from as `localhost:<port>/...`, behind a generated login (see
+[Bundled image registry](../charts/patchworks-infra/README.md#bundled-image-registry)).
+It needs nodes that run containerd and route NodePorts on localhost, as k3s
+does; the prompt notes nodes that don't run containerd, and the installer then
+leaves the registry off and says so in the install summary. Answer No to use
+your own registry, and set `kubefaas.registry.config` in the values file. When
+every node is arm64, the installer also writes `kubefaas.builder.platform:
+linux/arm64`, since the builder otherwise builds for `linux/amd64`; nodes of
+mixed architectures keep `linux/amd64`, and the install summary says so.
+`--save-config` keeps the answers as `infrastructure.kubefaas` and
+`infrastructure.kubefaasRegistry`. With your own infrastructure, KubeFaaS stays as `config.yaml`
+has it, without the bundled registry.
+
+With KubeFaaS and an image pull secret, the installer creates the KubeFaaS
+namespace before the infra install, labelled for `patchworks-infra` to adopt
+(a namespace that exists is left as it is), and copies the pull secret into it, since the controller and builder images come
+from the same registry as the application. The infra install then waits up to
+60 minutes instead of 15: the builder is ready only once it has built the base
+image of every function template, one at a time. A release whose chart has no
+bundled registry or builder platform setting leaves those out and says so in
+the install summary.
 
 **Installation size** chooses the chart's `profile`. Lightweight runs Core in one
 web pod and one worker pod instead of separate gateway and start pods, a pod per
@@ -360,7 +389,10 @@ same Kubernetes context for these Helm commands. If you chose external
 infrastructure, follow the installer-generated commands, which skip the infra
 release. If you selected **Only write values**, create any requested Quay pull
 Secret separately before the manual install; it is created automatically only
-when the installer performs the installation.
+when the installer performs the installation. With KubeFaaS and a pull secret,
+the printed commands first create the KubeFaaS namespace for `patchworks-infra`
+to adopt, unless it exists, and copy the pull secret into it with `kubectl`, and
+give the infra install `--timeout 60m`.
 
 The installer prints the dashboard URL and initial admin email address once:
 after a successful install, or after writing values when you selected **Only

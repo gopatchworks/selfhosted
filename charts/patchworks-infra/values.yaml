@@ -850,6 +850,10 @@ kubefaas:
     extraEnv: []
     # Registry name (from registries.yaml) used for base image operations.
     baseImagesRegistry: kubefaas-templates
+    # Docker platform the builder builds base and function images for
+    # (BASE_IMAGE_PLATFORM). Empty keeps the builder's default, linux/amd64.
+    # Set linux/arm64 when the nodes that run functions are arm64.
+    platform: ""
     # S3 bucket used to cache compiled function images between builds.
     cacheBucket: kubefaas-cache
     # TLS configuration for the Docker-in-Docker sidecar.
@@ -886,7 +890,9 @@ kubefaas:
 
   # Credentials shared between controller, builder, and monocore workers.
   # When kubefaas.enabled and credentials.autoGenerate are true, missing values
-  # are generated into a Secret by the infra chart.
+  # are generated into a Secret by the infra chart, in the KubeFaaS and release
+  # namespaces, and kept across upgrades. `helm template` and Argo CD cannot
+  # look the Secret up, so there set both values (or existingSecret) to pin them.
   auth:
     enabled: true
     username: ""
@@ -905,6 +911,53 @@ kubefaas:
     existingSecret:
       name: ""
       key: registries.yaml
+    # A registry inside the cluster, for installations without one of their
+    # own (kubefaas-registry.yaml). Images are named localhost:<nodePort>/...:
+    # - nodes pull them through the registry's NodePort on localhost, which
+    #   containerd reaches over plain HTTP and kube-proxy (iptables mode) routes;
+    # - the builder pushes through a proxy sidecar on the same localhost port,
+    #   which Docker treats as an insecure registry without configuration.
+    # So no node or Docker daemon configuration is needed. The registry needs a
+    # login (htpasswd); the chart renders it, registries.yaml and a pull Secret
+    # in every function namespace.
+    # Checked on k3s (containerd, kube-proxy in iptables mode): a push from a
+    # dind daemon through the proxy, and a pull by containerd.
+    # Leave config and existingSecret empty: the chart renders registries.yaml.
+    bundled:
+      enabled: false
+      # Node port the registry listens on; images are named localhost:<nodePort>.
+      nodePort: 30500
+      image:
+        repository: registry
+        tag: "2"
+        pullPolicy: IfNotPresent
+      # Writes the registry's htpasswd file from the credentials.
+      htpasswdImage:
+        repository: httpd
+        tag: 2.4-alpine
+        pullPolicy: IfNotPresent
+      # Forwards localhost:<nodePort> in the builder pod to the registry.
+      proxyImage:
+        repository: alpine/socat
+        tag: 1.8.0.3
+        pullPolicy: IfNotPresent
+      # Registry login. Generated when empty and kept across upgrades; with
+      # `helm template` or Argo CD, which cannot look the Secret up, set both to
+      # pin it. No existingSecret: registries.yaml and the pull Secrets embed
+      # the password, so the chart needs the value itself.
+      auth:
+        username: ""
+        password: ""
+      persistence:
+        existingClaim: ""
+        accessModes: [ReadWriteOnce]
+        size: 20Gi
+        storageClass: ""
+        spec: {}
+      resources:
+        requests:
+          cpu: 10m
+          memory: 64Mi
 
   # Redis used by the controller and builder for function lifecycle tracking.
   # Set enabled: false and populate external.* to use an existing Redis.

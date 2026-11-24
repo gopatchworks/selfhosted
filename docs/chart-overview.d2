@@ -64,9 +64,15 @@ optional: "Optional Integrations" {
       shape: rectangle
       style.stroke-dash: 4
     }
+    registry: "Image Registry\nkubefaas.registry.bundled\n(NodePort, localhost:<port>)" {
+      shape: cylinder
+      style.stroke-dash: 4
+    }
     controller -> kfredis
     builder    -> kfredis
     controller -> functions: manages
+    builder    -> registry: push (proxy sidecar)
+    functions  -> registry: pull
   }
 
   soketi: "Soketi\n(PUSHER_*)" { shape: rectangle }
