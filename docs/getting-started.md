@@ -214,7 +214,13 @@ helm upgrade patchworks-app ./charts/patchworks-app \
 
 Only upgrade the infrastructure chart when you intentionally want to change
 baseline services such as MySQL, RabbitMQ, Redis, Elasticsearch, S3/MinIO,
-Soketi, or KubeFaaS:
+Soketi, or KubeFaaS. With KubeFaaS on, apply the chart's CRDs first: Helm
+applies `crds/` only on a first install (see
+[CRDs and function profiles](../charts/patchworks-infra/README.md#crds-and-function-profiles)).
+
+```bash
+kubectl apply --server-side --field-manager=helm --force-conflicts -f charts/patchworks-infra/crds/
+```
 
 ```bash
 helm upgrade patchworks-infra ./charts/patchworks-infra \

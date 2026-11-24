@@ -68,6 +68,17 @@ Takes (dict "root" $ "path" (list ...)).
 {{- end }}
 
 {{/*
+checksum/config of the KubeFaaS controller and builder: the kubefaas values
+without functions.profile and functions.profiles. They only shape the Profiles,
+which the controller watches, so editing one restarts neither pod.
+*/}}
+{{- define "patchworks.kubefaas.configChecksum" -}}
+{{- $kf := deepCopy .Values.kubefaas -}}
+{{- $_ := set $kf "functions" (omit (default dict $kf.functions) "profile" "profiles") -}}
+{{- $kf | toJson | sha256sum -}}
+{{- end }}
+
+{{/*
 KubeFaaS sizing for the profile, as YAML for fromYaml. Under
 profile=standard each value is the component's own; under lightweight:
   controllerReplicas: lightweight.kubefaas.controller.replicaCount, unless
@@ -76,7 +87,8 @@ profile=standard each value is the component's own; under lightweight:
     lightweight.kubefaas.<same path>.resources over the component's own
   functionResources: lightweight.kubefaas.functions.profile.resources, unless
     empty; a string, so it replaces the profile's rather than merging
-The kubefaas values themselves are left as given: checksum/config hashes them.
+The kubefaas values themselves are left as given: patchworks.kubefaas.configChecksum
+hashes them.
 */}}
 {{- define "patchworks.kubefaas.sizing" -}}
 {{- $kf := .Values.kubefaas -}}

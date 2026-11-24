@@ -78,7 +78,8 @@ One logical component per template file. KubeFaaS is the canonical example:
 | `kubefaas-controller.yaml` | ServiceAccount, ClusterRole/Binding, ConfigMap, Deployment, Service |
 | `kubefaas-builder.yaml` | Registry Secret, TLS resources, ServiceAccount, ConfigMap, Deployment, Service |
 | `kubefaas-redis.yaml` | PVC, Deployment, Service — gated on `kubefaas.redis.enabled` |
-| `kubefaas-functions.yaml` | Profile ConfigMap, function ServiceAccounts, Namespaces, optional NetworkPolicies |
+| `kubefaas-functions.yaml` | Profiles (`kubefaas.functions.profiles`), function ServiceAccounts, Namespaces, optional NetworkPolicies |
+| `crds/kubefaas.io_*.yaml` | The `Function` and `Profile` CRDs, copied from KubeFaaS (see KubeFaaS CRDs below) |
 | `kubefaas-registry.yaml` | Bundled image registry: login and `registries.yaml` Secrets, pull Secrets, PVC, Deployment, NodePort Service — gated on `kubefaas.registry.bundled.enabled` |
 
 Don't bundle unrelated resources into one file just because they share a feature flag.
@@ -300,10 +301,20 @@ Monocore's optional shapes (Merge, Data Transformation, Cross-Reference, and wai
 
 ### Component split
 
-- **Controller**: manages function lifecycle; needs ClusterRole (pods, deployments, services, namespaces, HPAs).
+- **Controller**: manages function lifecycle; needs ClusterRole (its `Function` and `Profile` resources, pods, deployments, services, namespaces, HPAs, PodDisruptionBudgets).
 - **Builder**: builds function images; runs a Docker-in-Docker sidecar with mutual TLS. Its readiness probe is `/v1/readyz`, which fails until Docker answers and every template's base image is in the registry. Startup and liveness stay on `/v1/healthz`. Keep the probes in step with the KubeFaaS chart (`charts/kubefaas/templates/builder/deployment.yaml` in the kubefaas repo). With readiness on `/v1/healthz` it took builds before their base images existed, and they failed with `failed to resolve source metadata ... not found`. `tests/kubefaas_builder_readiness_test.rb` checks this.
 - **Redis**: shared state between controller and builder; separate from app Redis.
 - **Functions**: one Namespace + ServiceAccount per execution slot, optional NetworkPolicy.
+
+### KubeFaaS CRDs and profiles
+
+The controller keeps functions and profiles as cluster-scoped `Function` and `Profile` resources (`kubefaas.patchworks.io/v1alpha1`). Their CRDs are in `charts/patchworks-infra/crds/`, copied unchanged from `charts/kubefaas/crds/` in the kubefaas repo at the commit `selfhosted-releases` pins in `projects/kubefaas` (named in each file's header). When that pin moves, copy them again and diff the controller's ClusterRole against `charts/kubefaas/templates/controller/serviceaccount.yaml` there. The chart's ClusterRole once lacked `policy/poddisruptionbudgets`, which the `autoscaling` profile's disruption budget needs.
+
+Helm applies `crds/` only on a release's first install and never updates a CRD that exists, so `applyChartCRDs` (`cmd/patchworks-installer/crds.go`) server-side applies them as the `helm` field manager before every infra install or upgrade with KubeFaaS on. It then waits for them to be served and resets the Helm config's discovery, or the upgrade can't map `Profile`. The printed manual commands do the same with `kubectl apply --server-side`. Don't move the CRDs into `templates/`: Helm builds every object of a release before it creates any, so a `Profile` next to its CRD fails on the install that adds it.
+
+`kubefaas.functions.profiles` renders one `Profile` per key, named after it: `default`, `test` and `autoscaling`, from Haberdashery's dev2-aws `app-kubefaas.yaml` without topology spread. Core picks them by name, and the controller refuses a function whose profile is missing, except `default`. A profile without `resources` gets the `functionResources` of `patchworks.kubefaas.sizing`. The controller no longer reads the `profile-default` ConfigMap earlier charts rendered. Its one-off migration from labelled ConfigMaps to Profiles is recorded in KubeFaaS Redis (`migration:legacy-state:v1:complete`, set on piwks); if it runs after the upgrade and finds the ConfigMap, the Profile Helm made already exists and it moves on. `tests/kubefaas_profiles_test.rb` checks every rendered spec against the Profile CRD's schema, because the API server drops unknown fields.
+
+Manage profiles through values, not the controller's `/profiles` API. Profiles Helm creates have no `status`, so the installer's status watcher treats them as ready. The API writes `status.observedGeneration`; after that, a chart change to that profile's spec leaves the watcher waiting until the infra timeout, because the controller's watch doesn't update the status.
 
 ### Namespace count
 
@@ -323,7 +334,7 @@ The `setup-docker-certs` initContainer renames keys from `ca.crt/tls.crt/tls.key
 
 ### Lightweight profile
 
-Under `profile: lightweight` KubeFaaS runs one controller and requests 240Mi in place of about 1.6 GiB. The function profile requests 16M, but Core's scripts send their own 35M request, which wins, and keep their pod until 24 hours after their last call. The templates take replicas, resources and the function profile from `patchworks.kubefaas.sizing`, which lays `lightweight.kubefaas.<path>` over `kubefaas.<path>`. Read sizes from it, never `$kf.*.resources` directly, and leave `$kf` as given: `checksum/config` hashes it.
+Under `profile: lightweight` KubeFaaS runs one controller and requests 240Mi in place of about 1.6 GiB. The function profile requests 16M, but Core's scripts send their own 35M request, which wins, and keep their pod until 24 hours after their last call. The templates take replicas, resources and the function profile from `patchworks.kubefaas.sizing`, which lays `lightweight.kubefaas.<path>` over `kubefaas.<path>`. Read sizes from it, never `$kf.*.resources` directly, and leave `$kf` as given: `checksum/config` hashes it through `patchworks.kubefaas.configChecksum`, which leaves out `functions.profile` and `functions.profiles` so a profile edit restarts neither the controller nor the builder.
 
 The app chart's gateway, start, processor and Monocore roll with `maxSurge: 0` under the profile (`patchworks.lightweight.strategy`): the old pod is stopped as its replacement is created, so their upgrades need no spare memory. Helm's legacy wait returns early on those one-replica Deployments; the installer uses the status watcher. `tests/lightweight_profile_test.rb` checks the budget. A 3021Mi node runs k3s's and Contour's pods, both charts, KubeFaaS and one 35M script pod. It must still have room for the largest pod that does surge. The installer's summary repeats the 240Mi figure, and `TestLightweightProfileRequestsLessKubeFaaSMemory` ties the two together.
 

@@ -278,7 +278,7 @@ spec:
       labels:
         {{- include "patchworks.selectorLabels" (dict "component" "kubefaas-builder" "Release" .Release) | nindent 8 }}
       annotations:
-        checksum/config: {{ $kf | toJson | sha256sum }}
+        checksum/config: {{ include "patchworks.kubefaas.configChecksum" . }}
         {{- if and $kf.auth.enabled (not $kf.auth.existingSecret.name) }}
         checksum/auth: {{ include "patchworks.kubefaas.authLogin" . | sha256sum }}
         {{- end }}

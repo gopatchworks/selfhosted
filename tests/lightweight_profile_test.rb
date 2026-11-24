@@ -282,7 +282,7 @@ def replicas(docs, name)
   find(docs, 'Deployment', name).dig('spec', 'replicas')
 end
 def function_profile(docs)
-  YAML.safe_load(find(docs, 'ConfigMap', 'profile-default').dig('data', 'resources'))
+  find(docs, 'Profile', 'default').dig('spec', 'resources')
 end
 kf_standard = render_infra(KUBEFAAS)
 check(kf_standard, render_infra(deep_merge(KUBEFAAS, 'profile' => 'standard')), 'explicit standard profile with KubeFaaS')

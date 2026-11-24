@@ -1,0 +1,309 @@
+# Copied unchanged from gopatchworks/kubefaas 3a3d631 charts/kubefaas/crds/kubefaas.io_profiles.yaml,
+# the KubeFaaS commit selfhosted-releases builds kubefaas-controller from.
+# Copy it again when that pin moves (see AGENTS.md, KubeFaaS CRDs).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: profiles.kubefaas.patchworks.io
+spec:
+  group: kubefaas.patchworks.io
+  scope: Cluster
+  names:
+    plural: profiles
+    singular: profile
+    kind: Profile
+    listKind: ProfileList
+    categories:
+      - all
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              properties:
+                nodeSelector:
+                  type: object
+                  additionalProperties:
+                    type: string
+                tolerations:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                affinity:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                topologySpreadConstraints:
+                  type: array
+                  items:
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                dnsConfig:
+                  type: object
+                  properties:
+                    nameservers:
+                      type: array
+                      items:
+                        type: string
+                    searches:
+                      type: array
+                      items:
+                        type: string
+                    options:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                          - name
+                        properties:
+                          name:
+                            type: string
+                          value:
+                            type: string
+                resources:
+                  type: object
+                  properties:
+                    requests:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                    limits:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                constraints:
+                  type: object
+                  properties:
+                    min:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                    max:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                resizePolicy:
+                  type: object
+                  properties:
+                    cpu:
+                      type: string
+                      enum:
+                        - NotRequired
+                        - RestartContainer
+                    memory:
+                      type: string
+                      enum:
+                        - NotRequired
+                        - RestartContainer
+                vpa:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    consumeRecommendations:
+                      type: boolean
+                    minimumStep:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                autoscaler:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    minReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    maxReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    targetCPUUtilizationPercentage:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 100
+                    behavior:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    disruptionBudget:
+                      type: object
+                      properties:
+                        maxUnavailable:
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          x-kubernetes-int-or-string: true
+                enableServiceLinks:
+                  type: boolean
+                automountServiceAccountToken:
+                  type: boolean
+                  default: true
+                shutdownAfterInactive:
+                  type: string
+                autoDeleteAfter:
+                  type: string
+                livenessProbe:
+                  type: object
+                  properties:
+                    periodSeconds:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    timeoutSeconds:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    failureThreshold:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                shared:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    runtimes:
+                      type: array
+                      items:
+                        type: string
+                        enum:
+                          - php
+                          - node
+                          - python
+                          - ruby
+                          - csharp
+                          - go
+                          - rust
+                    minReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    maxReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    targetCPUUtilizationPercentage:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 100
+                    shutdownAfterInactive:
+                      type: string
+                    maxConcurrentInvocations:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                    drain:
+                      type: object
+                      properties:
+                        preStopSeconds:
+                          type: integer
+                          format: int32
+                          minimum: 0
+                        terminationGracePeriodSeconds:
+                          type: integer
+                          format: int64
+                          minimum: 0
+                    disruptionBudget:
+                      type: object
+                      properties:
+                        maxUnavailable:
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          x-kubernetes-int-or-string: true
+                    resources:
+                      type: object
+                      properties:
+                        requests:
+                          type: object
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                        limits:
+                          type: object
+                          properties:
+                            cpu:
+                              type: string
+                            memory:
+                              type: string
+                    topologySpreadConstraints:
+                      type: array
+                      items:
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    behavior:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+            status:
+              type: object
+              properties:
+                observedGeneration:
+                  type: integer
+                  format: int64
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - type
+                  items:
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string

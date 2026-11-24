@@ -1092,6 +1092,50 @@ The chart renders both copies itself from one login, not the credential generato
 | `kubefaas.registry.bundled.auth.password` | `""` | Set both to pin the login under `helm template` or Argo CD |
 | `kubefaas.registry.bundled.persistence.*` | `20Gi`, `ReadWriteOnce` | Image storage, through `patchworks.pvcSpec` (`existingClaim`, `accessModes`, `size`, `storageClass`, `spec`) |
 | `kubefaas.registry.bundled.image` / `htpasswdImage` / `proxyImage` | `registry:2` / `httpd:2.4-alpine` / `alpine/socat:1.8.0.3` | Registry, htpasswd writer and builder proxy images |
+| `kubefaas.functions.profiles` | `default`, `test`, `autoscaling` | One cluster-scoped `Profile` per key (see below) |
+| `kubefaas.functions.profile.resources` | requests `10m`, `128M` | Resources of a profile that doesn't set its own. A YAML string or a map |
+
+### CRDs and function profiles
+
+The KubeFaaS controller keeps functions and profiles as cluster-scoped custom
+resources, `Function` and `Profile` in `kubefaas.patchworks.io/v1alpha1`. Their
+CRDs are in `crds/`, copied from the KubeFaaS release the images are built from.
+Without them the controller logs `the server could not find the requested
+resource` and no script can be deployed.
+
+Helm applies `crds/` only when it first installs a release, whatever
+`kubefaas.enabled` says, and never changes a CRD that exists. The installer
+applies them itself before every infra install or upgrade with KubeFaaS on. With
+the Helm CLI, apply them before upgrading a release that turns KubeFaaS on, or
+after a chart update:
+
+```bash
+kubectl apply --server-side --field-manager=helm --force-conflicts -f charts/patchworks-infra/crds/
+```
+
+Otherwise the upgrade fails with `no matches for kind "Profile"`. Uninstalling
+the release leaves the CRDs and the `Function` resources in place.
+
+Core names a profile when it deploys a script, and the controller refuses a
+function whose profile doesn't exist ("profile not found"), except `default`.
+`kubefaas.functions.profiles` renders one `Profile` per key, named after it, with
+the value as its `spec` (the fields in `crds/kubefaas.io_profiles.yaml`):
+
+| Profile | What it sets |
+|---|---|
+| `default` | `enableServiceLinks: false` |
+| `test` | Pods stop, and the function is deleted, 30 minutes after its last call (`shutdownAfterInactive`, `autoDeleteAfter`) |
+| `autoscaling` | For functions that fail their health checks under load: `125m` and `256M` per pod, 2 to 10 pods at 80% CPU, `maxUnavailable: 1` disruption budget, a liveness probe that allows 7 failures 10 seconds apart; pods stop after 2 hours idle and the function is deleted 36 hours after its last call |
+
+A profile without `resources` gets `kubefaas.functions.profile.resources`, or
+`lightweight.kubefaas.functions.profile.resources` (`16M`) under
+`profile: lightweight`. `autoscaling` keeps its own, so a function on it
+requests at least 512M on a small node. Override a field with the same key
+(`kubefaas.functions.profiles.autoscaling.autoscaler.maxReplicas: 4`), add a
+profile with a new key, or set a key to `null` to leave it out.
+
+These replace the `profile-default` ConfigMap earlier charts rendered, which the
+controller no longer reads.
 
 ### The builder's S3 login
 

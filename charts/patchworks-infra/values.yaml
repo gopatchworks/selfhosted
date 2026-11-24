@@ -1080,6 +1080,7 @@ kubefaas:
     # Disabled by default; enable in production to isolate function execution namespaces.
     networkPolicy:
       enabled: false
+    # The resources of a profile in profiles that doesn't set its own.
     profile:
       resources: |
         requests:
@@ -1088,6 +1089,44 @@ kubefaas:
         limits:
             cpu: ""
             memory: ""
+    # Function profiles: one cluster-scoped Profile (kubefaas.patchworks.io)
+    # per key, named after it. Core picks one by name when it deploys a script.
+    # The controller refuses a function whose profile is missing ("profile not
+    # found"), except default. Each value is the Profile's spec (the fields in
+    # crds/kubefaas.io_profiles.yaml). Set a key to null to leave that profile out.
+    profiles:
+      default:
+        enableServiceLinks: false
+      # Short-lived functions: pods stop and the function is deleted 30 minutes
+      # after its last call.
+      test:
+        enableServiceLinks: false
+        shutdownAfterInactive: 30m
+        autoDeleteAfter: 30m
+      # For functions that fail their health checks under load: at least two
+      # pods of 256M, up to 10 at 80% CPU, and a disruption budget.
+      autoscaling:
+        enableServiceLinks: false
+        resources:
+          requests:
+            cpu: 125m
+            memory: 256M
+          limits:
+            cpu: ""
+            memory: ""
+        autoscaler:
+          enabled: true
+          minReplicas: 2
+          maxReplicas: 10
+          targetCPUUtilizationPercentage: 80
+          disruptionBudget:
+            maxUnavailable: 1
+        livenessProbe:
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 7
+        shutdownAfterInactive: 2h
+        autoDeleteAfter: 36h
 
   # Connection overrides — only used when enabled: false.
   # When enabled: true these are auto-derived from the in-cluster services.

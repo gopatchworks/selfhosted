@@ -1,0 +1,275 @@
+# Copied unchanged from gopatchworks/kubefaas 3a3d631 charts/kubefaas/crds/kubefaas.io_functions.yaml,
+# the KubeFaaS commit selfhosted-releases builds kubefaas-controller from.
+# Copy it again when that pin moves (see AGENTS.md, KubeFaaS CRDs).
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: functions.kubefaas.patchworks.io
+spec:
+  group: kubefaas.patchworks.io
+  scope: Cluster
+  names:
+    plural: functions
+    singular: function
+    kind: Function
+    listKind: FunctionList
+    shortNames:
+      - fn
+    categories:
+      - all
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      additionalPrinterColumns:
+        - name: Strategy
+          type: string
+          jsonPath: .spec.execution.strategy
+        - name: Image
+          type: string
+          jsonPath: .spec.image
+        - name: Replicas
+          type: integer
+          jsonPath: .spec.replicas
+        - name: Profile
+          type: string
+          jsonPath: .spec.profile
+        - name: Namespace
+          type: string
+          jsonPath: .status.assignedNamespace
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+      subresources:
+        status: {}
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            apiVersion:
+              type: string
+            kind:
+              type: string
+            metadata:
+              type: object
+            spec:
+              type: object
+              x-kubernetes-validations:
+                - rule: "has(self.execution) && self.execution.strategy == 'language-server' ? !has(self.image) || self.image == '' : has(self.image) && self.image != ''"
+                  message: "spec.image is required for legacy workloads and must be empty for language-server execution"
+                - rule: "!has(self.execution) || self.execution.strategy != 'language-server' || !has(self.replicas) || self.replicas == 0"
+                  message: "spec.replicas must be 0 for language-server execution"
+              properties:
+                image:
+                  type: string
+                execution:
+                  type: object
+                  required:
+                    - strategy
+                  properties:
+                    strategy:
+                      type: string
+                      enum:
+                        - legacy-workload
+                        - language-server
+                    version:
+                      type: string
+                    artifactDigest:
+                      type: string
+                      pattern: '^sha256:[0-9a-f]{64}$'
+                    variantName:
+                      type: string
+                      pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                  x-kubernetes-validations:
+                    - rule: "self.strategy != 'language-server' || (has(self.version) && self.version != '' && has(self.artifactDigest) && has(self.variantName))"
+                      message: "language-server execution requires version, artifactDigest, and variantName"
+                    - rule: "self.strategy != 'legacy-workload' || (!has(self.version) && !has(self.artifactDigest) && !has(self.variantName))"
+                      message: "legacy-workload execution cannot reference an artifact"
+                replicas:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                  default: 0
+                labels:
+                  type: object
+                  additionalProperties:
+                    type: string
+                annotations:
+                  type: object
+                  additionalProperties:
+                    type: string
+                resources:
+                  type: object
+                  properties:
+                    requests:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                    limits:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                constraints:
+                  type: object
+                  properties:
+                    min:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                    max:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                resizePolicy:
+                  type: object
+                  properties:
+                    cpu:
+                      type: string
+                      enum:
+                        - NotRequired
+                        - RestartContainer
+                    memory:
+                      type: string
+                      enum:
+                        - NotRequired
+                        - RestartContainer
+                profile:
+                  type: string
+                  default: default
+                automountServiceAccountToken:
+                  type: boolean
+                vpa:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    consumeRecommendations:
+                      type: boolean
+                    minimumStep:
+                      type: object
+                      properties:
+                        cpu:
+                          type: string
+                        memory:
+                          type: string
+                autoscaler:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                    minReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    maxReplicas:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                    targetCPUUtilizationPercentage:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 100
+                    behavior:
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                    disruptionBudget:
+                      type: object
+                      properties:
+                        maxUnavailable:
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          x-kubernetes-int-or-string: true
+                options:
+                  type: object
+                  default: {}
+                  properties:
+                    shutdownAfterInactive:
+                      type: string
+                    port:
+                      type: integer
+                      format: int32
+                      minimum: 1
+                      maximum: 65535
+                      default: 8080
+                    healthCheckEndpoint:
+                      type: string
+                    healthCheckPort:
+                      type: integer
+                      format: int32
+                      minimum: 0
+                      maximum: 65535
+            status:
+              type: object
+              properties:
+                assignedNamespace:
+                  type: string
+                readyAt:
+                  type: string
+                  format: date-time
+                lastInvokedAt:
+                  type: string
+                  format: date-time
+                currentReplicas:
+                  type: integer
+                  format: int32
+                  minimum: 0
+                observedGeneration:
+                  type: integer
+                  format: int64
+                sharedGroup:
+                  type: object
+                  required:
+                    - name
+                    - namespace
+                  properties:
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                conditions:
+                  type: array
+                  x-kubernetes-list-type: map
+                  x-kubernetes-list-map-keys:
+                    - type
+                  items:
+                    type: object
+                    required:
+                      - lastTransitionTime
+                      - message
+                      - reason
+                      - status
+                      - type
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                        enum:
+                          - "True"
+                          - "False"
+                          - Unknown
+                      observedGeneration:
+                        type: integer
+                        format: int64
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
