@@ -334,9 +334,13 @@ spec:
             periodSeconds: 5
             timeoutSeconds: 5
             failureThreshold: 24
+          # /v1/readyz fails until Docker answers and every template's base
+          # image is in the registry, so the Service sends no builds before
+          # then: a function build would fail on a missing base image. As in
+          # the KubeFaaS chart (charts/kubefaas/templates/builder/deployment.yaml).
           readinessProbe:
             httpGet:
-              path: /v1/healthz
+              path: /v1/readyz
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 5

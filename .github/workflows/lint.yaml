@@ -133,3 +133,6 @@ jobs:
 
       - name: Dashboard broadcasting render tests
         run: ruby tests/dashboard_broadcasting_test.rb
+
+      - name: KubeFaaS builder probe render tests
+        run: ruby tests/kubefaas_builder_readiness_test.rb
