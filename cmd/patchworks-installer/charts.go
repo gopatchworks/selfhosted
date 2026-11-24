@@ -104,7 +104,10 @@ func chooseChartRequest(opts cliOptions, defaults localConfig, previous *chartLo
 		return chartRequest{Source: "bundled"}, nil, nil
 	}
 	// The lock wins over config defaults, including a stale config saved before
-	// an explicit latest run. Changing versions always requires an explicit flag.
+	// an explicit latest run. Changing versions requires an explicit flag, with
+	// one exception: selectInstallCharts moves a bundled lock from an older
+	// installer to this installer's newer bundled charts, because only the
+	// binary that wrote a bundled lock has the locked charts.
 	if previous != nil && opts.ChartVersion == "" && (opts.ChartSource == "" || opts.ChartSource == previous.Source) {
 		return chartRequest{Source: previous.Source, Version: previous.Version}, previous, nil
 	}
@@ -368,6 +371,74 @@ func selectedChartsOrigin(request chartRequest, pinned *chartLock, selectedVersi
 	}
 }
 
+// selectInstallCharts chooses an install's charts from the chart flags, the
+// lock at lockPath and the config defaults, then reconciles a bundled lock with
+// this installer's bundled charts. notice is set when the run moves to them.
+func selectInstallCharts(opts cliOptions, defaults localConfig, lockPath string) (chartRequest, *chartLock, string, error) {
+	previous, err := readChartLock(lockPath)
+	if err != nil {
+		return chartRequest{}, nil, "", err
+	}
+	request, pinned, err := chooseChartRequest(opts, defaults, previous)
+	if err != nil || pinned == nil || pinned.Source != "bundled" {
+		return request, pinned, "", err
+	}
+	bundled, err := prepareCharts(chartRequest{Source: "bundled"}, nil)
+	if err != nil {
+		return chartRequest{}, nil, "", err
+	}
+	return bundledLockSelection(request, pinned, bundled.Lock, lockPath)
+}
+
+// bundledLockSelection reconciles a lock pinned to bundled charts with the
+// charts bundled in this installer. A bundled lock records the charts embedded
+// in the binary that wrote it, so no other binary can install them. When this
+// installer bundles a newer release, the run moves to it, like a moving
+// selection, and the notice offers the upgrade; the new lock is written once
+// the install summary is accepted. A lock that pins newer charts, or the same
+// release with different contents, stays an error that names the flags.
+func bundledLockSelection(request chartRequest, pinned *chartLock, bundled chartLock, lockPath string) (chartRequest, *chartLock, string, error) {
+	if pinned == nil || pinned.Source != "bundled" || !chartDigestsDiffer(*pinned, bundled) {
+		return request, pinned, "", nil
+	}
+	if compareChartVersions(pinned.Version, bundled.Version) < 0 {
+		notice := fmt.Sprintf("Upgrading from bundled charts %[1]s, pinned in %[2]s, to this installer's %[3]s; to stay on %[1]s, quit and run with --chart-version %[1]s for release %[1]s from GitHub", pinned.Version, lockPath, bundled.Version)
+		return chartRequest{Source: "bundled"}, nil, notice, nil
+	}
+	return chartRequest{}, nil, "", bundledLockError(*pinned, bundled, lockPath, false)
+}
+
+// bundledLockError explains a lock pinned to bundled charts that this
+// installer doesn't have. unpack-charts can't combine --chart-lock with the
+// chart flags, so its hint drops the lock first.
+func bundledLockError(pinned, bundled chartLock, lockPath string, unpack bool) error {
+	differs := fmt.Sprintf("this installer's bundled %s charts have different contents", bundled.Version)
+	switch compareChartVersions(pinned.Version, bundled.Version) {
+	case -1:
+		differs = fmt.Sprintf("this installer bundles newer charts (%s)", bundled.Version)
+	case 1:
+		differs = fmt.Sprintf("this installer bundles older charts (%s)", bundled.Version)
+	}
+	if unpack {
+		return fmt.Errorf("%[1]s pins bundled charts %[2]s, and %[3]s; only the installer that wrote the lock has them, so use that installer, or drop --chart-lock and pass --chart-source bundled for this installer's charts or --chart-version %[2]s for release %[2]s from GitHub", lockPath, pinned.Version, differs)
+	}
+	return fmt.Errorf("%[1]s pins bundled charts %[2]s, and %[3]s; only the installer that wrote the lock has them, so use that installer, run with --chart-source bundled for this installer's charts, or run with --chart-version %[2]s for release %[2]s from GitHub", lockPath, pinned.Version, differs)
+}
+
+// compareChartVersions orders two exact chart versions; an invalid one
+// compares equal.
+func compareChartVersions(a, b string) int {
+	left, err := semver.StrictNewVersion(strings.TrimPrefix(a, "v"))
+	if err != nil {
+		return 0
+	}
+	right, err := semver.StrictNewVersion(strings.TrimPrefix(b, "v"))
+	if err != nil {
+		return 0
+	}
+	return left.Compare(right)
+}
+
 func bundledChartFiles() (map[string]map[string][]byte, error) {
 	files := map[string]map[string][]byte{}
 	for _, name := range patchworksChartNames {
@@ -582,9 +653,11 @@ func writeChartLock(path string, lock chartLock) error {
 }
 
 func selectedHelmCommandText(namespace, valuesFile string, installInfrastructure bool, kubefaas manualKubeFaaS) string {
-	lockPath := cleanPath(valuesFile) + ".charts.lock.yaml"
-	return "patchworks-installer unpack-charts --chart-lock " + shellQuote(lockPath) + " --output ./charts\n" + helmCommandText(namespace, valuesFile, installInfrastructure, kubefaas)
+	return "patchworks-installer unpack-charts --chart-lock " + shellQuote(chartLockPath(valuesFile)) + " --output ./charts\n" + helmCommandText(namespace, valuesFile, installInfrastructure, kubefaas)
 }
+
+// chartLockPath is the chart lock kept beside a generated values file.
+func chartLockPath(valuesFile string) string { return cleanPath(valuesFile) + ".charts.lock.yaml" }
 
 func shellQuote(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
 
@@ -611,6 +684,17 @@ func runUnpackCharts(opts cliOptions) error {
 			return fmt.Errorf("chart lock %s does not exist", opts.ChartLockPath)
 		}
 		request = chartRequest{Source: pinned.Source, Version: pinned.Version}
+		// --chart-lock exports exactly the locked charts, so a bundled lock
+		// from another installer is an error even when this one is newer.
+		if pinned.Source == "bundled" {
+			bundled, err := prepareCharts(chartRequest{Source: "bundled"}, nil)
+			if err != nil {
+				return err
+			}
+			if chartDigestsDiffer(*pinned, bundled.Lock) {
+				return bundledLockError(*pinned, bundled.Lock, opts.ChartLockPath, true)
+			}
+		}
 	} else {
 		// Preserve the existing unpack-charts default, independently of installs.
 		if opts.ChartSource == "" && opts.ChartVersion == "" {

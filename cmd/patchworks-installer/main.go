@@ -687,6 +687,12 @@ func runInstaller(opts cliOptions) error {
 	if loaded {
 		printDone("Loaded settings from " + opts.ConfigPath)
 	}
+	// Stop on a chart lock this installer can't use before any prompt or
+	// cluster change. This checks the lock beside the default values file; the
+	// settings form can choose another file, which is checked after it.
+	if _, _, _, err := selectInstallCharts(opts, defaults, chartLockPath(defaultValuesFile(defaults))); err != nil {
+		return err
+	}
 
 	access, err := selectKubeAccess(defaults)
 	if err != nil {
@@ -768,12 +774,8 @@ func runInstaller(opts cliOptions) error {
 		config.Values["ingressAddressNotice"] = loadBalancerNotice(*ingressService)
 	}
 
-	lockPath := cleanPath(config.Output) + ".charts.lock.yaml"
-	previous, err := readChartLock(lockPath)
-	if err != nil {
-		return err
-	}
-	request, pinned, err := chooseChartRequest(opts, defaults, previous)
+	lockPath := chartLockPath(config.Output)
+	request, pinned, upgradeNotice, err := selectInstallCharts(opts, defaults, lockPath)
 	if err != nil {
 		return err
 	}
@@ -802,6 +804,11 @@ func runInstaller(opts cliOptions) error {
 		return nil
 	}); err != nil {
 		return err
+	}
+	// Quitting before the install summary is accepted keeps the old lock.
+	if upgradeNotice != "" {
+		fmt.Println(warningLine(upgradeNotice))
+		config.Values["chartNotice"] = upgradeNotice
 	}
 	if chartsNotice != "" {
 		fmt.Println(warningLine(chartsNotice))
@@ -2654,7 +2661,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	adminEmail := stringDefault(defaults.AdminEmail, "admin@example.com")
 	adminPassword := defaults.AdminPassword
 	userRole := stringDefault(defaults.UserRole, "superadmin")
-	output := stringDefault(defaults.Output, "patchworks.values.yaml")
+	output := defaultValuesFile(defaults)
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -3314,6 +3321,11 @@ func setComponentEnabledValue(values map[string]string, key string, enabled *boo
 	if enabled != nil {
 		values[key] = fmt.Sprintf("%t", *enabled)
 	}
+}
+
+// defaultValuesFile is the values file the settings form offers first.
+func defaultValuesFile(defaults localConfig) string {
+	return stringDefault(defaults.Output, "patchworks.values.yaml")
 }
 
 func stringDefault(value, fallback string) string {

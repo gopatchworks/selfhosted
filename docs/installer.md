@@ -133,9 +133,10 @@ release, not installation success. Keep it beside the generated values.
 
 Repeat runs using that values path download the saved commit and verify the
 chart digests. Bundled selections verify the embedded chart contents and reject
-a changed bundle. Selection precedence is explicit CLI options, then the
-adjacent lock, then `installer.chartSource` / `installer.chartVersion` in
-`config.yaml`, then `github` / `latest`.
+a changed bundle; see [Bundled locks from another installer](#bundled-locks-from-another-installer)
+for a lock written by a different installer binary. Selection precedence is
+explicit CLI options, then the adjacent lock, then `installer.chartSource` /
+`installer.chartVersion` in `config.yaml`, then `github` / `latest`.
 
 Use `--chart-version latest` explicitly to refresh a saved selection.
 `--save-config` also writes the resolved source and application release:
@@ -169,6 +170,39 @@ release's `Update image tags for vX.Y.Z` commit bundles exactly that release's
 charts, so it stays silent unless a lock or `config.yaml` pins an older
 release. Chart options suppress the check.
 
+### Bundled locks from another installer
+
+A bundled lock records the charts embedded in the installer binary that wrote
+it, and no other binary has them. This usually happens when you download a newer
+installer and re-run it beside an existing lock. With no chart option, the
+installer compares the lock with its own bundled charts before the first prompt,
+and again for the values file chosen in the settings form.
+
+When this installer bundles a newer release, it moves to those charts, like a
+moving selection. It warns under the **Prepared charts** line and repeats the
+offer in the install summary:
+
+```text
+✓ Prepared charts 0.2.20 (bundled) · 1s
+  ! Upgrading from bundled charts 0.2.19, pinned in patchworks.values.yaml.charts.lock.yaml, to this installer's 0.2.20; to stay on 0.2.19, quit and run with --chart-version 0.2.19 for release 0.2.19 from GitHub
+```
+
+The lock moves to the new release once the summary is accepted, including with
+**Only write values**. Quit at the summary to keep the old lock. `--chart-version`
+downloads the public release, which can differ from a development build's
+bundle. Only the installer that wrote the lock has exactly the locked charts.
+
+The other mismatches stop the run before the first prompt and name the same
+options: a lock from a newer installer (the run never moves to older charts),
+and a lock for the same release with different contents (a development build,
+or a changed bundle):
+
+```text
+patchworks.values.yaml.charts.lock.yaml pins bundled charts 0.2.21, and this installer bundles older charts (0.2.20); only the installer that wrote the lock has them, so use that installer, run with --chart-source bundled for this installer's charts, or run with --chart-version 0.2.21 for release 0.2.21 from GitHub
+```
+
+`--chart-source bundled` or `--chart-version` skips the comparison.
+
 ### Unpack charts
 
 `unpack-charts` defaults to the current binary's bundle. Use an explicit release
@@ -187,6 +221,12 @@ switching versions. The default is `./patchworks-charts`. Each export includes
 `charts.lock.yaml`. `--chart-lock` is only supported by `unpack-charts` and cannot
 be combined with `--chart-version` or `--chart-source`. Without that flag, exports
 do not read installation locks or config defaults.
+
+`--chart-lock` exports exactly the locked charts and never moves to newer ones.
+A bundled lock written by another installer binary is an error, even when this
+binary bundles a newer release. The error names the options: drop `--chart-lock`
+and pass `--chart-source bundled` for this binary's charts, or
+`--chart-version X` for release X from GitHub.
 
 ### Chart compatibility metadata
 
@@ -387,7 +427,9 @@ For a manual install, use the printed Helm commands. They unpack the exact
 selection from the adjacent chart lock, then install the local charts. No
 repository checkout, GitHub login, or registry login is needed. Dependencies
 are already included in the snapshot. For bundled selections, use the same
-installer binary that generated the lock.
+installer binary that generated the lock; another binary refuses it. To move a
+bundled lock to a newer installer's charts, re-run that installer's `install`
+(choose **Only write values** to skip the installation), which rewrites the lock.
 
 ```bash
 patchworks-installer unpack-charts \
