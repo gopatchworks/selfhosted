@@ -183,6 +183,14 @@ unset = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'web' => {'
   check(STANDARD_REQUEST, resources(unset, name), "#{name} with the profile's block null")
 end
 
+# Values without the blocks' parents, such as an older release's under
+# helm upgrade --reuse-values, still render: unchanged in standard, the shared
+# block alone in lightweight.
+check(standard, render({'lightweight' => nil}), 'standard without lightweight values')
+check(standard_mono, render(deep_merge(MONO, 'lightweight' => {'mono' => nil})), 'standard mono without lightweight.mono')
+older = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'mono' => nil}))
+check(STANDARD_REQUEST, resources(older, 'patchworks-workers'), 'lightweight Monocore without lightweight.mono')
+
 # Web apart: both web pods take the profile's request.
 apart_mono = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'web' => {'combine' => false}}))
 %w[patchworks-gateway patchworks-start].each do |name|

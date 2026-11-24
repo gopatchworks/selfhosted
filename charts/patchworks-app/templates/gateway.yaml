@@ -1,6 +1,6 @@
 {{- if .Values.web.gateway.enabled }}
 {{- $web := deepCopy .Values.web -}}
-{{- with include "patchworks.lightweight.resources" (dict "root" . "shared" .Values.web.resources "profile" .Values.lightweight.web.resources) }}
+{{- with include "patchworks.lightweight.resources" (dict "root" . "name" "web" "shared" .Values.web.resources) }}
 {{- $_ := set $web "resources" (fromYaml .) }}
 {{- end }}
 {{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}

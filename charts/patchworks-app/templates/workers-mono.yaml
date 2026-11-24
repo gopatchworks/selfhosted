@@ -225,7 +225,7 @@ spec:
 
 {{- /* profile=lightweight: lightweight.mono.resources over workers.resources. */}}
 {{- $monoResources := $root.Values.workers.resources }}
-{{- with include "patchworks.lightweight.resources" (dict "root" $root "shared" $root.Values.workers.resources "profile" $root.Values.lightweight.mono.resources) }}
+{{- with include "patchworks.lightweight.resources" (dict "root" $root "name" "mono" "shared" $root.Values.workers.resources) }}
 {{- $monoResources = fromYaml . }}
 {{- end }}
 {{- range $workers }}
