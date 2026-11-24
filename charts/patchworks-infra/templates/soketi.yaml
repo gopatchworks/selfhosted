@@ -1,5 +1,10 @@
 {{- if and .Values.pusher.enabled (not (dig "subchart" "enabled" false .Values.soketi)) }}
 {{- $fullname := include "patchworks.fullname" . }}
+{{- /* profile=lightweight: lightweight.soketi.resources over soketi.resources. */}}
+{{- $resources := .Values.soketi.resources }}
+{{- with include "patchworks.lightweight.resources" (dict "root" . "name" "soketi" "shared" .Values.soketi.resources) }}
+{{- $resources = fromYaml . }}
+{{- end }}
 {{- $secretName := printf "%s-soketi-auth" $fullname }}
 {{- $pusherSecret := .Values.pusher.existingSecret }}
 {{- $pusherGenerated := and .Values.credentials.autoGenerate (not $pusherSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) }}
@@ -158,7 +163,7 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 1
             failureThreshold: 1
-          {{- with .Values.soketi.resources }}
+          {{- with $resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}

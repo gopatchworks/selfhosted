@@ -543,14 +543,18 @@ What changes under `profile: lightweight`:
   `GOMEMLIMIT` still follows `workers.resources.limits.memory`. Set the block
   to `null` to use the shared one alone. Requests only reserve memory: a node
   that schedules every pod can still run short when they get busy. With mono
-  workers the app chart requests about 1.1 GB in all; the infra chart's
-  requests (Elasticsearch `1Gi`, RabbitMQ `512Mi`, Soketi `256Mi`) are
-  unchanged.
+  workers the app chart requests 1024Mi in all.
+- **Infra chart.** The same values file sets the infra chart's profile, which
+  halves Elasticsearch's request and heap (`512Mi`, `-Xms256m -Xmx256m`) and
+  lowers RabbitMQ's and Soketi's requests to `256Mi` and `128Mi`: 896Mi in
+  place of 1792Mi (see the infra chart's
+  [Installation profile](../patchworks-infra/README.md#installation-profile)).
+  Both charts together request about 1.9 GiB, which leaves room for an
+  ingress controller such as Contour on a node with about 3 GiB allocatable.
 - **Unchanged.** Monocore's other settings, standalone and microservice
   workers (`workers.resources` and `workers.processes` still apply to them),
-  Fabric, the dashboard, S3 Manager and the infra chart. With
-  `workers.mono.allCompanies` its left-out processors and schedules stay out
-  of the worker too.
+  Fabric, the dashboard and S3 Manager. With `workers.mono.allCompanies` its
+  left-out processors and schedules stay out of the worker too.
 
 A standard installation can switch in an upgrade. The processor pods stop and
 `<fullname>-processor` starts, with queued jobs waiting in RabbitMQ in between.
