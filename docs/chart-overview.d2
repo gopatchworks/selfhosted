@@ -70,6 +70,10 @@ optional: "Optional Integrations" {
       shape: cylinder
       style.stroke-dash: 4
     }
+    profiles: "Function + Profile CRDs (crds/)\nProfiles: default, test, autoscaling\nkubefaas.functions.profiles" {
+      shape: page
+    }
+    controller -> profiles: watches
     controller -> kfredis
     builder    -> kfredis
     controller -> functions: manages

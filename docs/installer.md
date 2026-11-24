@@ -326,6 +326,11 @@ mixed architectures keep `linux/amd64`, and the install summary says so.
 `infrastructure.kubefaasRegistry`. With your own infrastructure, KubeFaaS stays as `config.yaml`
 has it, without the bundled registry.
 
+With KubeFaaS on, the installer applies the infra chart's KubeFaaS CRDs before
+every infra install or upgrade, since Helm applies `crds/` only on a first
+install. The printed manual commands run the same `kubectl apply` before the
+infra upgrade.
+
 With KubeFaaS and an image pull secret, the installer creates the KubeFaaS
 namespace before the infra install, labelled for `patchworks-infra` to adopt
 (a namespace that exists is left as it is), and copies the pull secret into it, since the controller and builder images come

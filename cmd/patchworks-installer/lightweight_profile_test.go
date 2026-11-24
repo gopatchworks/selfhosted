@@ -284,14 +284,9 @@ func TestLightweightProfileRequestsLessKubeFaaSMemory(t *testing.T) {
 			if total := namespaceMemory(t, objects, "kubefaas"); total.Cmp(resource.MustParse(tc.want)) != 0 {
 				t.Fatalf("KubeFaaS memory requests = %s, want %s", total.String(), tc.want)
 			}
-			var profile struct {
-				Requests struct{ Memory string } `yaml:"requests"`
-			}
-			if err := yaml.Unmarshal([]byte(findObject(objects, "ConfigMap", "profile-default")["data"].(map[string]any)["resources"].(string)), &profile); err != nil {
-				t.Fatal(err)
-			}
-			if profile.Requests.Memory != tc.function {
-				t.Fatalf("function memory request = %q, want %q", profile.Requests.Memory, tc.function)
+			resources := findObject(objects, "Profile", "default")["spec"].(map[string]any)["resources"].(map[string]any)
+			if memory := resources["requests"].(map[string]any)["memory"]; memory != tc.function {
+				t.Fatalf("function memory request = %v, want %q", memory, tc.function)
 			}
 			summary := kubefaasSummary(tc.values)
 			if lightweight := tc.name == "lightweight"; lightweight != strings.Contains(summary, "requests about "+tc.want+" of memory") {

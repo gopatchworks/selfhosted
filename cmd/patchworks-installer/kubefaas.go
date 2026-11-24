@@ -135,6 +135,8 @@ func checkKubeFaaS(values map[string]string, chart helmchart.Charter) {
 	}
 	registry, platform, namespace := kubefaasSupport(chart)
 	values["kubefaasNamespace"] = namespace
+	files, _ := chartCRDFiles(chart)
+	values["kubefaasCRDs"] = fmt.Sprintf("%t", len(files) > 0)
 	values["kubefaasPlatformSupported"] = fmt.Sprintf("%t", platform)
 	values["kubefaasLightweightSupported"] = fmt.Sprintf("%t", kubefaasLightweightSupported(chart))
 	if values["kubefaasRegistry"] == "true" && values["infrastructure"] != "external" {
@@ -297,10 +299,16 @@ func prepareKubeFaaSNamespace(ctx context.Context, access kubeAccess, values map
 	return copyPullSecret(ctx, client, pullSecret, values["namespace"], namespace)
 }
 
+// kubefaasValuesEnabled is whether the merged Helm values turn KubeFaaS on.
+func kubefaasValuesEnabled(values map[string]any) bool {
+	kubefaas, _ := values["kubefaas"].(map[string]any)
+	enabled, _ := kubefaas["enabled"].(bool)
+	return enabled
+}
+
 // infraInstallTimeout is how long the infra install waits for readiness.
 func infraInstallTimeout(values map[string]any) time.Duration {
-	kubefaas, _ := values["kubefaas"].(map[string]any)
-	if enabled, _ := kubefaas["enabled"].(bool); enabled {
+	if kubefaasValuesEnabled(values) {
 		return kubefaasInfraTimeout
 	}
 	return 15 * time.Minute
@@ -335,17 +343,19 @@ func addKubeFaaSValues(values map[string]string, infrastructureMode string, kube
 }
 
 // manualKubeFaaS is what the printed Helm commands need for KubeFaaS: its
-// namespace, and the pull Secret to copy there. The zero value is KubeFaaS off.
+// namespace, the pull Secret to copy there, and whether the infra chart has
+// CRDs to apply first. The zero value is KubeFaaS off.
 type manualKubeFaaS struct {
 	Namespace  string
 	PullSecret string
+	CRDs       bool
 }
 
 func manualKubeFaaSFor(values map[string]string, installInfrastructure bool) manualKubeFaaS {
 	if !installInfrastructure || !kubefaasEnabled(values) {
 		return manualKubeFaaS{}
 	}
-	return manualKubeFaaS{Namespace: stringDefault(values["kubefaasNamespace"], defaultKubeFaaSNamespace), PullSecret: values["pullSecret"]}
+	return manualKubeFaaS{Namespace: stringDefault(values["kubefaasNamespace"], defaultKubeFaaSNamespace), PullSecret: values["pullSecret"], CRDs: values["kubefaasCRDs"] == "true"}
 }
 
 // kubefaasPullSecretCommands do by hand what prepareKubeFaaSNamespace does

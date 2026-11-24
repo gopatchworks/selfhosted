@@ -92,6 +92,9 @@ jobs:
       - name: KubeFaaS builder S3 login render tests
         run: ruby tests/kubefaas_s3_credentials_test.rb
 
+      - name: KubeFaaS CRD and Profile render tests
+        run: ruby tests/kubefaas_profiles_test.rb
+
       - name: Lightweight profile render tests
         run: ruby tests/lightweight_profile_test.rb
 

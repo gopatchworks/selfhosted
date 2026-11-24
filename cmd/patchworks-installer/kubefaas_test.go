@@ -391,28 +391,37 @@ func TestManualCommandsPrepareKubeFaaS(t *testing.T) {
 	values := kubefaasValues(true, "")
 	values["namespace"] = "patchworks"
 	values["pullSecret"] = "quay-credentials"
+	values["kubefaasCRDs"] = "true"
 	commands := helmCommandText("patchworks", "patchworks.values.yaml", true, manualKubeFaaSFor(values, true))
 	lines := strings.Split(commands, "\n")
-	if len(lines) != 4 {
+	if len(lines) != 5 {
 		t.Fatalf("commands:\n%s", commands)
 	}
+	crds := "kubectl apply --server-side --field-manager=helm --force-conflicts -f ./charts/patchworks-infra/crds/"
 	for i, want := range []string{
 		"kubectl get namespace 'kubefaas' >/dev/null 2>&1 || kubectl create namespace 'kubefaas' --dry-run=client -o yaml | kubectl label --local -f - app.kubernetes.io/managed-by=Helm -o yaml | kubectl annotate --local -f - meta.helm.sh/release-name=patchworks-infra meta.helm.sh/release-namespace='patchworks' -o yaml | kubectl create -f -",
 		`kubectl get secret 'quay-credentials' -n 'patchworks' -o go-template='{{index .data ".dockerconfigjson" | base64decode}}' | kubectl create secret generic 'quay-credentials' -n 'kubefaas' --type=kubernetes.io/dockerconfigjson --from-file=.dockerconfigjson=/dev/stdin --dry-run=client -o yaml | kubectl apply -f -`,
+		crds,
 	} {
 		if lines[i] != want {
 			t.Fatalf("line %d = %q, want %q", i, lines[i], want)
 		}
 	}
-	if !strings.Contains(lines[2], "patchworks-infra") || !strings.Contains(lines[2], "--timeout 60m") || !strings.Contains(lines[3], "--timeout 15m") {
+	if !strings.Contains(lines[3], "patchworks-infra") || !strings.Contains(lines[3], "--timeout 60m") || !strings.Contains(lines[4], "--timeout 15m") {
 		t.Fatalf("helm commands:\n%s", commands)
 	}
 
-	// No pull Secret: only the longer wait.
+	// No pull Secret: the CRDs and the longer wait.
 	values["pullSecret"] = ""
 	commands = helmCommandText("patchworks", "patchworks.values.yaml", true, manualKubeFaaSFor(values, true))
-	if strings.Contains(commands, "kubectl") || !strings.Contains(commands, "--timeout 60m") {
+	if lines := strings.Split(commands, "\n"); len(lines) != 3 || lines[0] != crds || !strings.Contains(lines[1], "--timeout 60m") {
 		t.Fatalf("without a pull secret:\n%s", commands)
+	}
+	// An infra chart without crds/, such as an older release's: nothing to apply.
+	values["kubefaasCRDs"] = "false"
+	commands = helmCommandText("patchworks", "patchworks.values.yaml", true, manualKubeFaaSFor(values, true))
+	if strings.Contains(commands, "kubectl") || !strings.Contains(commands, "--timeout 60m") {
+		t.Fatalf("without CRDs in the chart:\n%s", commands)
 	}
 	// KubeFaaS off, or no infra release: as before.
 	values["pullSecret"] = "quay-credentials"

@@ -1113,6 +1113,11 @@ func installPatchworks(access kubeAccess, namespace, valuesFile string, installI
 			Monitor:  installPhaseMonitor(access, namespace, "infra"),
 			StopNote: helmStopNote("patchworks-infra"),
 		}, func(ctx context.Context) error {
+			if kubefaasValuesEnabled(values) {
+				if err := applyChartCRDs(cfg, charts.Charts["patchworks-infra"]); err != nil {
+					return err
+				}
+			}
 			return helmUpgradeOrInstall(ctx, cfg, "patchworks-infra", namespace, charts.Charts["patchworks-infra"], values, true, infraInstallTimeout(values), installerLabels())
 		}); err != nil {
 			if !errors.Is(err, huh.ErrUserAborted) {
@@ -1570,10 +1575,14 @@ func helmCommandText(namespace, valuesFile string, installInfrastructure bool, k
 			shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 	}
 	infraTimeout := "15m"
+	crds := ""
 	if kubefaas.Namespace != "" {
 		infraTimeout = fmt.Sprintf("%dm", int(kubefaasInfraTimeout.Minutes()))
 	}
-	return kubefaasPullSecretCommands(namespace, kubefaas) + fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout %s --wait
+	if kubefaas.CRDs {
+		crds = kubefaasCRDCommand
+	}
+	return kubefaasPullSecretCommands(namespace, kubefaas) + crds + fmt.Sprintf(`helm upgrade --install patchworks-infra ./charts/patchworks-infra -n %s --create-namespace -f %s --timeout %s --wait
 helm upgrade --install patchworks-app ./charts/patchworks-app -n %s -f %s --timeout 15m --wait`,
 		shellQuote(namespace), shellQuote(cleanPath(valuesFile)), infraTimeout, shellQuote(namespace), shellQuote(cleanPath(valuesFile)))
 }

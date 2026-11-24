@@ -10,21 +10,32 @@
 {{- if include "patchworks.kubefaas.registry.bundled" . }}
 {{- $pullSecrets = append $pullSecrets (dict "name" (include "patchworks.kubefaas.registry.pullSecretName" .)) }}
 {{- end }}
+{{- /* A profile without resources gets kubefaas.functions.profile.resources, which the lightweight profile replaces. */}}
+{{- $functionResources := $sizing.functionResources }}
+{{- if kindIs "string" $functionResources }}
+{{- $functionResources = $functionResources | fromYaml }}
+{{- end }}
+{{- range $name, $profile := $kf.functions.profiles }}
+{{- if kindIs "map" $profile }}
+{{- $spec := deepCopy $profile }}
+{{- if not (hasKey $spec "resources") }}
+{{- $_ := set $spec "resources" $functionResources }}
+{{- end }}
 ---
-# Default function resource profile — consumed by the controller when scheduling functions.
-apiVersion: v1
-kind: ConfigMap
+# Function resource profile. Core names one when it deploys a script, and the
+# controller reads it by name. Cluster-scoped; the CRD is in crds/.
+apiVersion: kubefaas.patchworks.io/v1alpha1
+kind: Profile
 metadata:
-  name: profile-default
-  namespace: {{ $ns }}
+  name: {{ $name }}
   labels:
-    {{- include "patchworks.labels" . | nindent 4 }}
+    {{- include "patchworks.labels" $root | nindent 4 }}
     app.kubefaas.io/profile: "true"
-    app.kubefaas.io/profile-name: default
-data:
-  resources: |
-    {{ $sizing.functionResources | nindent 4 | trim }}
-  enableServiceLinks: "false"
+    app.kubefaas.io/profile-name: {{ $name | quote }}
+spec:
+  {{- toYaml $spec | nindent 2 }}
+{{- end }}
+{{- end }}
 ---
 # kubefaas-function ServiceAccount in the control-plane namespace (used as the profile default).
 apiVersion: v1
