@@ -300,14 +300,19 @@ web pod and one worker pod instead of separate gateway and start pods, a pod per
 processor queue and a schedule CronJob per processor (see
 [Installation profile](../charts/patchworks-app/README.md#installation-profile)).
 Its Core web pod, Core worker pod and Monocore request 512Mi, 384Mi and 128Mi
-of memory instead of 900Mi each. With mono workers and KubeFaaS off, the app
-chart requests about 1.1 GB, so the release can be scheduled next to the
-bundled infrastructure on a single 4 GB node. Standalone and microservice
-workers keep their 900Mi request. These are requests, not limits: a small node
-can still run short of memory once the pods are busy. The installer writes no
-resource settings. To change them, add `lightweight.web.resources`,
-`lightweight.worker.resources` or `lightweight.mono.resources` to the values
-file and apply it with Helm (see
+of memory instead of 900Mi each. The profile reaches the infra chart through
+the same values file. There, bundled Elasticsearch requests 512Mi with a 256m
+heap instead of 1Gi with 512m, RabbitMQ requests 256Mi and Soketi 128Mi (see
+the infra chart's
+[Installation profile](../charts/patchworks-infra/README.md#installation-profile)).
+With mono workers and KubeFaaS off, the two charts request about 1.9 GiB, so
+the release and Contour can be scheduled on a single 4 GB node. A Raspberry
+Pi 5 with a system reservation had about 3 GiB allocatable. Standalone and
+microservice workers keep their 900Mi request. These are requests, not limits:
+a small node can still run short of memory once the pods are busy. The
+installer writes no resource settings. To change them, add the
+`lightweight.*.resources` blocks (or `lightweight.elasticsearch.javaOpts`) to
+the values file and apply it with Helm (see
 [Install From Generated Values](#install-from-generated-values)). The
 installer writes the file afresh on its next run.
 `--save-config` keeps the choice as `profile`. When the selected chart release

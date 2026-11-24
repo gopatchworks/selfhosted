@@ -17,6 +17,34 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
+"true" for profile=lightweight, else empty. The values file the installer
+writes sets profile for both charts.
+*/}}
+{{- define "patchworks.lightweight" -}}
+{{- $profile := .Values.profile | default "standard" -}}
+{{- if not (has $profile (list "standard" "lightweight")) -}}
+{{- fail (printf "profile must be standard or lightweight, got %q" $profile) -}}
+{{- end -}}
+{{- if eq $profile "lightweight" -}}true{{- end -}}
+{{- end }}
+
+{{/*
+A component's resources under profile=lightweight, as YAML for fromYaml:
+lightweight.<name>.resources over the component's own (shared), so the
+profile's smaller requests win and the component's other settings, such as
+cpu and limits, stay. Empty under profile=standard. The block is looked up
+here, so values without it, such as an older release's under helm upgrade
+--reuse-values, still render.
+Takes (dict "root" $ "name" "elasticsearch" "shared" <component resources>).
+*/}}
+{{- define "patchworks.lightweight.resources" -}}
+{{- if include "patchworks.lightweight" .root -}}
+{{- $profile := dig .name "resources" dict (.root.Values.lightweight | default dict) -}}
+{{- toYaml (mergeOverwrite (deepCopy (.shared | default dict)) (deepCopy ($profile | default dict))) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Name of the Secret containing PASSPORT_PRIVATE_KEY / PASSPORT_PUBLIC_KEY.
 Shared between Core and Fabric. Returns the existingSecret name if configured,
 otherwise the auto-generated secret name.

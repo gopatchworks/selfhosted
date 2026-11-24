@@ -4,7 +4,8 @@
 # (APP_DOMAINS=start) and the start Service selects its pods; <fullname>-processor
 # consumes every enabled processor queue in two pools and runs each processor's
 # schedule in place of the processor Deployments and schedule CronJobs.
-# profile=standard renders as before.
+# The infra chart reads the same profile for smaller Elasticsearch, RabbitMQ and
+# Soketi requests. profile=standard renders as before.
 require 'yaml'
 require 'open3'
 require 'tempfile'
@@ -201,5 +202,47 @@ end
 fails(deep_merge(LIGHT, 'processorDeployments' => {'autoscaling' => {'enabled' => true}}), 'cannot autoscale per queue')
 fails(deep_merge(LIGHT, 'web' => {'start' => {'namespace' => 'elsewhere'}}), 'lightweight.web.combine needs web.gateway and web.start in one namespace')
 render(deep_merge(LIGHT, 'web' => {'start' => {'namespace' => 'elsewhere'}}, 'lightweight' => {'web' => {'combine' => false}}))
+
+# The infra chart reads the same profile: Elasticsearch, RabbitMQ and Soketi
+# request less, and Elasticsearch's heap stays at half its request.
+INFRA = File.expand_path('../charts/patchworks-infra', __dir__)
+def render_infra(values)
+  Tempfile.create(['lightweight-infra', '.yaml']) do |f|
+    f.write(values.empty? ? "" : YAML.dump(values)); f.flush
+    output, error, status = Open3.capture3('helm', 'template', 'test', INFRA, '--namespace', 'install', '-f', f.path)
+    raise error unless status.success?
+    YAML.load_stream(output).compact
+  end
+end
+java_opts = ->(docs) { env(find(docs, 'Deployment', 'patchworks-elasticsearch'))['ES_JAVA_OPTS'] }
+infra_standard = render_infra({})
+check(infra_standard, render_infra({'profile' => 'standard'}), 'explicit standard infra profile')
+check(infra_standard, render_infra({'lightweight' => nil}), 'standard infra without lightweight values')
+check({'requests' => {'memory' => '1Gi'}}, resources(infra_standard, 'patchworks-elasticsearch'), 'standard Elasticsearch resources')
+check('-Xms512m -Xmx512m', java_opts.call(infra_standard), 'standard Elasticsearch heap')
+check({'requests' => {'cpu' => '100m', 'memory' => '512Mi'}, 'limits' => {'memory' => '1Gi'}}, resources(infra_standard, 'patchworks-rabbitmq'), 'standard RabbitMQ resources')
+check({'limits' => {'cpu' => '250m', 'memory' => '256Mi'}}, resources(infra_standard, 'patchworks-soketi'), 'standard Soketi resources')
+
+infra_light = render_infra(LIGHT)
+check({'requests' => {'memory' => '512Mi'}}, resources(infra_light, 'patchworks-elasticsearch'), 'lightweight Elasticsearch resources')
+check('-Xms256m -Xmx256m', java_opts.call(infra_light), 'lightweight Elasticsearch heap')
+check({'requests' => {'cpu' => '100m', 'memory' => '256Mi'}, 'limits' => {'memory' => '1Gi'}}, resources(infra_light, 'patchworks-rabbitmq'), 'lightweight RabbitMQ resources')
+check({'requests' => {'memory' => '128Mi'}, 'limits' => {'cpu' => '250m', 'memory' => '256Mi'}}, resources(infra_light, 'patchworks-soketi'), 'lightweight Soketi resources')
+assert(requested(infra_light) + requested(hub_only) <= 2048, "lightweight app and infra memory requests #{requested(infra_light) + requested(hub_only)}Mi exceed 2Gi")
+fails_infra = ->(values, message) do
+  Tempfile.create(['lightweight-infra', '.yaml']) do |f|
+    f.write(YAML.dump(values)); f.flush
+    _, error, status = Open3.capture3('helm', 'template', 'test', INFRA, '--namespace', 'install', '-f', f.path)
+    assert(!status.success? && error.include?(message), "expected infra failure #{message.inspect}: #{error}")
+  end
+end
+fails_infra.call({'profile' => 'tiny'}, 'profile must be standard or lightweight')
+
+# Null blocks fall back to the component's own settings.
+infra_unset = render_infra(deep_merge(LIGHT, 'lightweight' => {'elasticsearch' => nil, 'rabbitmq' => nil, 'soketi' => nil}))
+%w[patchworks-elasticsearch patchworks-rabbitmq patchworks-soketi].each do |name|
+  check(resources(infra_standard, name), resources(infra_unset, name), "#{name} with the profile's block null")
+end
+check('-Xms512m -Xmx512m', java_opts.call(infra_unset), 'Elasticsearch heap with the profile block null')
 
 puts 'lightweight_profile_test.rb: ok'

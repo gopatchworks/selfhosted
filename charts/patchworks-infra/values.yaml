@@ -111,6 +111,37 @@ credentials:
       tag: 1.36.1
       pullPolicy: IfNotPresent
 
+# ── Installation profile ───────────────────────────────────────────────────────
+# Shared with the app chart through one values file (see its profile). Under
+# lightweight, Elasticsearch, RabbitMQ and Soketi request less memory from the
+# resources blocks below, so the release and an ingress controller can be
+# scheduled on a small single node, such as a 4 GB Raspberry Pi 5. Requests
+# only reserve memory; the pods use what they use. Each block goes over the
+# component's own resources: its requests replace the component's, and the
+# component's other settings, such as cpu and limits, stay. Set a block to null
+# to use the component's alone.
+profile: standard
+lightweight:
+  elasticsearch:
+    # Replaces elasticsearch.javaOpts when set: a smaller heap, kept to half of
+    # the request below. Search over a large history needs the standard heap.
+    javaOpts: "-Xms256m -Xmx256m"
+    # Used ~990Mi with the 512m heap on a Raspberry Pi 5.
+    resources:
+      requests:
+        memory: 512Mi
+  # Used ~80-130Mi on a Raspberry Pi 5. rabbitmq.resources' 1Gi limit stays.
+  rabbitmq:
+    resources:
+      requests:
+        memory: 256Mi
+  # Used ~45Mi on a Raspberry Pi 5. soketi.resources sets only limits, which
+  # Kubernetes otherwise takes as the request too.
+  soketi:
+    resources:
+      requests:
+        memory: 128Mi
+
 # ── Core Web ───────────────────────────────────────────────────────────────────
 # Shared defaults for the two HTTP-facing Laravel deployments (gateway + start).
 # Any field under web.gateway.* or web.start.* overrides the corresponding

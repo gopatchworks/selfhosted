@@ -4,6 +4,13 @@
 {{- $p := .Values.elasticsearch.persistence }}
 {{- $auth := .Values.elasticsearch.auth }}
 {{- $secret := fromJson (include "patchworks.elasticsearch.secret" .) }}
+{{- /* profile=lightweight: a smaller heap and request (lightweight.elasticsearch). */}}
+{{- $javaOpts := .Values.elasticsearch.javaOpts }}
+{{- $resources := .Values.elasticsearch.resources }}
+{{- if include "patchworks.lightweight" . }}
+{{- $javaOpts = dig "elasticsearch" "javaOpts" "" (.Values.lightweight | default dict) | default $javaOpts }}
+{{- $resources = include "patchworks.lightweight.resources" (dict "root" . "name" "elasticsearch" "shared" .Values.elasticsearch.resources) | fromYaml }}
+{{- end }}
 {{- if not $p.existingClaim }}
 ---
 apiVersion: v1
@@ -71,7 +78,7 @@ spec:
             - name: discovery.type
               value: single-node
             - name: ES_JAVA_OPTS
-              value: {{ .Values.elasticsearch.javaOpts | quote }}
+              value: {{ $javaOpts | quote }}
             - name: ELASTIC_PASSWORD
               {{- if and $secret.name $secret.passwordKey }}
               valueFrom:
@@ -106,7 +113,7 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /usr/share/elasticsearch/data
-          {{- with .Values.elasticsearch.resources }}
+          {{- with $resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}

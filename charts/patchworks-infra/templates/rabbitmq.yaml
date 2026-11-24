@@ -3,6 +3,11 @@
 {{- $ns := include "patchworks.rabbitmq.namespace" . }}
 {{- $rmq := .Values.rabbitmq }}
 {{- $p := $rmq.persistence }}
+{{- /* profile=lightweight: lightweight.rabbitmq.resources over rabbitmq.resources. */}}
+{{- $resources := $rmq.resources }}
+{{- with include "patchworks.lightweight.resources" (dict "root" . "name" "rabbitmq" "shared" $rmq.resources) }}
+{{- $resources = fromYaml . }}
+{{- end }}
 {{- if $rmq.metrics.enabled }}
 ---
 apiVersion: v1
@@ -95,7 +100,7 @@ spec:
               subPath: enabled_plugins
               readOnly: true
             {{- end }}
-          {{- with $rmq.resources }}
+          {{- with $resources }}
           resources:
             {{- toYaml . | nindent 12 }}
           {{- end }}
