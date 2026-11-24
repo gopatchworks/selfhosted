@@ -741,7 +741,7 @@ Each key in `workers.microservices` (except `_default`) creates one Deployment. 
 | `workers.mono.allCompanies.disableSchedulers` | `[gateway]` | Processor queues whose schedule CronJob alone is left out |
 | `workers.mono.enable.merge` | `null` | `WORKER_ENABLE_MERGE` on the hub and every company: run the Merge shape. `null` follows `workers.mono.allCompanies.enabled`; `true` or `false` overrides it. See [Monocore's optional shapes](#monocores-optional-shapes) |
 | `workers.mono.enable.dataProcessing` | `null` | `WORKER_ENABLE_DATA_PROCESSING`: the Data Processing shape. `null` follows `allCompanies.enabled` |
-| `workers.mono.enable.dataTransform` | `null` | `WORKER_ENABLE_DATA_TRANSFORM`: the Data Transformation shape, whose functions run natively in the worker. `null` follows `allCompanies.enabled` |
+| `workers.mono.enable.dataTransform` | `null` | `WORKER_ENABLE_DATA_TRANSFORM`: the Data Transformation shape, whose functions run natively in the worker. `null` follows `allCompanies.enabled`. The `v0.2.17` Dashboard has no node for this shape, so it can't add one and shows an existing one as broken; Monocore still runs the step |
 | `workers.mono.enable.crossReference` | `null` | `WORKER_ENABLE_CROSS_REFERENCE`: the Cross-Reference shape. `null` follows `allCompanies.enabled` |
 | `workers.mono.enable.syncSubprocess` | `null` | `WORKER_ENABLE_SYNC_SUBPROCESS`: waiting Run Flow and Flow Return, where a parent holds its worker slot while its children run. `null` follows `allCompanies.enabled` |
 | `workers.mono.enable.catchAtRunEnd` | `false` | `WORKER_ENABLE_CATCH_AT_RUN_END`: run a dropped payload's Try/Catch Catch branch once the run's other branches are done, as Core does. Not a shape, so `allCompanies` leaves it off. Turn it on only once every worker runs a release that reads the deferred Catch branch |
@@ -1843,9 +1843,9 @@ company with none as off, so they have to be stored for each company.
 - Companies with a stored value keep it. Switch an existing company from its
   feature settings, with `monocore` first; `monocore-scheduler` needs a
   coordinated handover of its pending cron work.
-- Every Monocore worker runs the optional shapes Core then offers every
-  company: Merge, Data Processing, Data Transformation, Cross-Reference and
-  waiting Run Flow with Flow Return. See
+- Every Monocore worker runs the optional shapes, since every company's runs
+  now reach it: Merge, Data Processing, Data Transformation, Cross-Reference
+  and waiting Run Flow with Flow Return. See
   [Monocore's optional shapes](#monocores-optional-shapes).
 
 It also leaves out the Core processes Monocore companies don't need:
@@ -1868,8 +1868,7 @@ Change `disableProcessors` or `disableSchedulers` to keep or leave out others.
 
 Monocore registers no step runner for some shapes unless it is told to, and
 fails a run that reaches one of their steps (`step "merge" has no registered
-runner`) instead of handing it to Core. Core offers them to every company with
-the `monocore` feature. `workers.mono.enable` sets the variables Monocore reads
+runner`) instead of handing it to Core. `workers.mono.enable` sets the variables Monocore reads
 for them, the same ones its own chart sets from `monocore.worker.enable.*`, on
 the hub and every company:
 
@@ -1889,6 +1888,12 @@ as Monocore's own defaults do, so set them `true` when you turn `monocore` on
 for companies by hand; set one `false` to keep it off with `allCompanies`.
 `catchAtRunEnd` stays `false` either way. Turn it on only once every worker
 runs a release that reads the deferred Catch branch.
+
+Core has every one of these shapes, but the `v0.2.17` Dashboard has no
+Data Transformation node: its canvas can't add that shape, and shows a step
+made another way, such as through Core's API, as broken. Monocore still runs
+the step when `dataTransform` is on, so it follows `allCompanies` like the
+others; turning it off would only make such a run fail.
 
 Each shape needs the Core code of its own release, so keep Core and Monocore on
 one release. The Monocore images of `v0.2.15` to `v0.2.17` read all six. A

@@ -1666,7 +1666,7 @@ when every name is skipped). Monocore registers no step runner for these unless
 told to, and fails a run that reaches one. Each is workers.mono.enable.<key>,
 rendered "true" or "false" as Monocore's own chart renders
 monocore.worker.enable.*; a shape left null follows workers.mono.allCompanies,
-under which Core offers it to every company and Monocore is its only runtime.
+under which Monocore is the only runtime of every company's runs.
 catchAtRunEnd is no shape and never follows it. A name in $skip (the worker's
 own extraEnv) is left to it.
 Usage: {{ include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEnvNames) }}

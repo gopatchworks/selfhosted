@@ -961,7 +961,9 @@ workers:
       merge: null
       dataProcessing: null
       # Data Transformation. Its functions run natively in the worker, so the
-      # image needs nothing extra.
+      # image needs nothing extra. The v0.2.17 Dashboard has no node for it:
+      # it can't add the step and shows an existing one as broken, but
+      # Monocore still runs it.
       dataTransform: null
       crossReference: null
       # Waiting Run Flow and Flow Return: a parent holds its worker slot while
