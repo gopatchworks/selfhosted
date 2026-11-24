@@ -53,7 +53,7 @@ schedule locks a process takes are the ones another releases.
 {{- $confName := include "patchworks.resourceName" (printf "%s-processor-supervisord" $fullname) }}
 {{- $conf := include "patchworks.lightweight.supervisordConf" (dict "pools" $pools "schedules" $schedules "artisan" $artisan "connection" $root.Values.workers.queue.connection) }}
 {{- $script := include "patchworks.lightweight.scheduleScript" (dict "artisan" $artisan) }}
-{{- $resources := $lw.resources | default $root.Values.workers.resources }}
+{{- $resources := include "patchworks.lightweight.resources" (dict "root" $root "shared" $root.Values.workers.resources "profile" $lw.resources) | fromYaml }}
 {{- $nodeSelector := $lw.nodeSelector | default $root.Values.workers.nodeSelector }}
 {{- $tolerations := $lw.tolerations | default $root.Values.workers.tolerations }}
 {{- $affinity := $lw.affinity | default $root.Values.workers.affinity }}

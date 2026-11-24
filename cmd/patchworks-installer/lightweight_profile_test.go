@@ -8,6 +8,7 @@ import (
 	yaml "go.yaml.in/yaml/v3"
 	helmloader "helm.sh/helm/v4/pkg/chart/loader"
 	chartv2 "helm.sh/helm/v4/pkg/chart/v2"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // lightweightValues are installer answers for a lightweight installation whose
@@ -65,6 +66,75 @@ func TestWriteValuesSelectsTheLightweightProfile(t *testing.T) {
 	}
 	if got := containerEnv(deployments["patchworks-gateway"])["APP_DOMAINS"]; got != "start" {
 		t.Fatalf("gateway APP_DOMAINS = %q, want start", got)
+	}
+}
+
+// memoryRequest is the first container's memory request, empty when unset.
+func memoryRequest(deployment map[string]any) string {
+	container := deployment["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)["containers"].([]any)[0].(map[string]any)
+	resources, _ := container["resources"].(map[string]any)
+	requests, _ := resources["requests"].(map[string]any)
+	memory, _ := requests["memory"].(string)
+	return memory
+}
+
+// The lightweight profile asks the scheduler for little enough memory that the
+// app chart's pods fit next to the bundled infrastructure on a 4 GB node; the
+// standard profile keeps its requests.
+func TestLightweightProfileRequestsLessMemory(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		values map[string]string
+		want   map[string]string
+		limit  int64
+	}{
+		{"lightweight", lightweightValues(""), map[string]string{
+			"patchworks-gateway":   "512Mi",
+			"patchworks-processor": "384Mi",
+			"patchworks-workers":   "128Mi",
+		}, 1200 * 1000 * 1000},
+		{"lightweight with web apart", lightweightValues("Core v0.2.16 serves one domain per process"), map[string]string{
+			"patchworks-gateway":   "512Mi",
+			"patchworks-start":     "512Mi",
+			"patchworks-processor": "384Mi",
+			"patchworks-workers":   "128Mi",
+		}, 0},
+		{"standard", monoInboundValues("false", "false"), map[string]string{
+			"patchworks-gateway":             "900Mi",
+			"patchworks-start":               "900Mi",
+			"patchworks-processor-scheduler": "900Mi",
+			"patchworks-workers":             "900Mi",
+		}, 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, parsed := writeMonoInboundValues(t, tc.values)
+			deployments := deploymentNames(renderComponentSelection(t, "patchworks", "patchworks", parsed))
+			for name, want := range tc.want {
+				deployment, ok := deployments[name]
+				if !ok {
+					t.Fatalf("%s missing: %v", name, keys(deployments))
+				}
+				if got := memoryRequest(deployment); got != want {
+					t.Errorf("%s memory request = %q, want %q", name, got, want)
+				}
+			}
+			if tc.limit == 0 {
+				return
+			}
+			var total resource.Quantity
+			for name, deployment := range deployments {
+				if request := memoryRequest(deployment); request != "" {
+					quantity, err := resource.ParseQuantity(request)
+					if err != nil {
+						t.Fatalf("%s memory request %q: %v", name, request, err)
+					}
+					total.Add(quantity)
+				}
+			}
+			if total.Value() > tc.limit {
+				t.Fatalf("app memory requests total %s, above %d bytes", total.String(), tc.limit)
+			}
+		})
 	}
 }
 

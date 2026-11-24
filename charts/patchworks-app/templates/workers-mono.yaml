@@ -223,6 +223,11 @@ spec:
               {{- end }}
 {{- end }}
 
+{{- /* profile=lightweight: lightweight.mono.resources over workers.resources. */}}
+{{- $monoResources := $root.Values.workers.resources }}
+{{- with include "patchworks.lightweight.resources" (dict "root" $root "shared" $root.Values.workers.resources "profile" $root.Values.lightweight.mono.resources) }}
+{{- $monoResources = fromYaml . }}
+{{- end }}
 {{- range $workers }}
 {{- $w := . }}
 {{- $isHub := $w.isHub }}
@@ -233,7 +238,7 @@ spec:
 {{- $wNs := $hubNs }}
 {{- $queue := $mainQueue }}
 {{- $processes := $mono.processes }}
-{{- $resources := $root.Values.workers.resources }}
+{{- $resources := $monoResources }}
 {{- $goMemLimit := $mono.goMemLimit }}
 {{- $tmpSizeLimit := dig "tmp" "sizeLimit" "" $mono }}
 {{- $configMapName := printf "%s-%s-config" $fullname $hubSlug }}
@@ -242,7 +247,7 @@ spec:
   {{- $wNs = $company.namespace | default $hubNs }}
   {{- $queue = $company.queue | default $company.name }}
   {{- $processes = dig "processes" $mono.processes $company }}
-  {{- $resources = $company.resources | default $root.Values.workers.resources }}
+  {{- $resources = $company.resources | default $monoResources }}
   {{- $goMemLimit = dig "goMemLimit" $mono.goMemLimit $company }}
   {{- $tmpSizeLimit = dig "tmp" "sizeLimit" $tmpSizeLimit $company }}
   {{- $configMapName = printf "%s-%s-config" $fullname $slug }}

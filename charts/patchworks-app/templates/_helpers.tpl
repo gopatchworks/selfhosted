@@ -206,6 +206,20 @@ CronJobs, else empty.
 {{- end }}
 
 {{/*
+A workload's resources under profile=lightweight, as YAML for fromYaml: the
+profile's block (lightweight.web, worker or mono .resources) over the shared
+one (web.resources or workers.resources), so the profile's smaller requests
+win and the shared block's other settings, such as cpu and limits, stay.
+Empty under profile=standard, where the shared block applies unchanged.
+Takes (dict "root" $ "shared" <shared resources> "profile" <profile resources>).
+*/}}
+{{- define "patchworks.lightweight.resources" -}}
+{{- if include "patchworks.lightweight" .root -}}
+{{- toYaml (mergeOverwrite (deepCopy (.shared | default dict)) (deepCopy (.profile | default dict))) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 "true" when workers.mono.allCompanies leaves out a processor's schedule CronJob
 while its Deployment keeps running. Takes (dict "root" $ "processor" $processor).
 */}}

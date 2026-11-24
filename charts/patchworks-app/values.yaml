@@ -198,18 +198,31 @@ web:
 #            Monocore and the dashboard reach it unchanged. Needs a Core image
 #            later than v0.2.16. web.gateway's settings apply; web.start's
 #            extraEnv and extraEnvFrom are added to them.
-#   worker — <fullname>-worker consumes every enabled processor queue and runs
-#            each processor's schedule every minute, instead of the processor
-#            Deployments and schedule CronJobs. Per-processor replicas,
-#            processes, resources and autoscaling do not apply; their extraEnv
-#            and extraEnvFrom apply to the shared pod.
-# Monocore workers, Fabric and the dashboard are unchanged.
+#   worker — <fullname>-processor consumes every enabled processor queue and
+#            runs each processor's schedule every minute, instead of the
+#            processor Deployments and schedule CronJobs. Per-processor
+#            replicas, processes, resources and autoscaling do not apply; their
+#            extraEnv and extraEnvFrom apply to the shared pod.
+# The web pods, the worker and Monocore workers request less memory than the
+# 900Mi of web.resources and workers.resources, from the resources blocks
+# below, so a small single node, such as a 4 GB Raspberry Pi 5, can schedule
+# them. Requests only reserve memory; the pods use what they use. Each block
+# goes over web.resources or workers.resources: its requests replace the shared
+# ones, and the shared block's other settings, such as cpu and limits, stay.
+# Set a block to null to use the shared one alone. Standalone and microservice
+# workers, Fabric and the dashboard are unchanged.
 profile: standard
 lightweight:
   web:
     # Off keeps separate gateway and start Deployments under the lightweight
     # worker, for Core images without APP_DOMAINS.
     combine: true
+    # The gateway pods, which serve the start routes too, and the start pods
+    # when combine is off. web.gateway.resources and web.start.resources still
+    # go over this. Used ~360Mi idle on a Raspberry Pi 5.
+    resources:
+      requests:
+        memory: 512Mi
   worker:
     replicaCount: 1
     # Queue workers in the main pool, which takes every enabled processor queue
@@ -225,13 +238,23 @@ lightweight:
     # scheduler.activeDeadlineSeconds. Off renders the schedule CronJobs as in
     # the standard profile.
     schedules: true
-    # Defaults to workers.resources, nodeSelector, tolerations, affinity and
-    # podAnnotations when empty.
-    resources: {}
+    # Goes over workers.resources, as above. Used ~250Mi idle on a Raspberry
+    # Pi 5 with the default processes.
+    resources:
+      requests:
+        memory: 384Mi
+    # Default to workers.nodeSelector, tolerations, affinity and podAnnotations
+    # when empty.
     nodeSelector: {}
     tolerations: []
     affinity: {}
     podAnnotations: {}
+  # Monocore hub and company workers (workers.type: mono). A company's own
+  # resources replace this. Used ~30Mi idle on a Raspberry Pi 5.
+  mono:
+    resources:
+      requests:
+        memory: 128Mi
 
 # ── Core Scheduler ─────────────────────────────────────────────────────────────
 # Shared defaults for processor scheduler CronJobs.

@@ -299,6 +299,16 @@ the install summary.
 web pod and one worker pod instead of separate gateway and start pods, a pod per
 processor queue and a schedule CronJob per processor (see
 [Installation profile](../charts/patchworks-app/README.md#installation-profile)).
+Its Core web pod, Core worker pod and Monocore request 512Mi, 384Mi and 128Mi
+of memory instead of 900Mi each, so with mono workers the app chart requests
+about 1.1 GB and the release can be scheduled next to the bundled
+infrastructure on a single 4 GB node. Standalone and microservice workers keep
+their 900Mi request. These are requests, not limits: a small node can still
+run short of memory once the pods are busy. The installer writes no resource
+settings, so to change them, add `lightweight.web.resources`,
+`lightweight.worker.resources` or `lightweight.mono.resources` to the values
+file and run `helm upgrade` with it; the installer writes the file afresh on
+its next run.
 `--save-config` keeps the choice as `profile`. When the selected chart release
 has no lightweight profile, the installer writes the standard profile and says
 so in the install summary. With a Core image `v0.2.16` or older it still runs

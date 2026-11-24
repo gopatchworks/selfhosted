@@ -494,12 +494,15 @@ mono installation measured on 2026-11-23, the seven processor pods held about
 |---|---|---|
 | `profile` | `standard` | `standard` or `lightweight` |
 | `lightweight.web.combine` | `true` | The gateway Deployment also serves the start routes (`APP_DOMAINS=start`) and the start Service selects its pods. Needs a Core image later than `v0.2.16`, and `web.gateway` and `web.start` in one namespace. Off keeps separate gateway and start Deployments |
+| `lightweight.web.resources` | requests memory `512Mi` | Goes over `web.resources` for the gateway pods, and the start pods with `combine` off. `web.gateway.resources` and `web.start.resources` still go over it |
 | `lightweight.worker.replicaCount` | `1` | Replicas of `<fullname>-processor` |
 | `lightweight.worker.processes` | `2` | Queue workers in the main pool, which consumes every enabled processor queue not in `slowQueues`, in `processors[]` order |
 | `lightweight.worker.slowQueues` | `[medium-processor, long-processor]` | Queues whose jobs can run for hours, given a pool of their own so they cannot hold up scheduling and the API's background jobs |
 | `lightweight.worker.slowProcesses` | `1` | Queue workers in the slow pool |
 | `lightweight.worker.schedules` | `true` | Run each processor's schedule in the pod instead of its CronJob. Off renders the schedule CronJobs as in the standard profile |
-| `lightweight.worker.resources`, `nodeSelector`, `tolerations`, `affinity`, `podAnnotations` | empty | Default to the matching `workers.*` settings |
+| `lightweight.worker.resources` | requests memory `384Mi` | Goes over `workers.resources` for `<fullname>-processor` |
+| `lightweight.worker.nodeSelector`, `tolerations`, `affinity`, `podAnnotations` | empty | Default to the matching `workers.*` settings |
+| `lightweight.mono.resources` | requests memory `128Mi` | Goes over `workers.resources` for the Monocore hub and company workers (`workers.type: mono`). A company's own `resources` replace it |
 
 What changes under `profile: lightweight`:
 
@@ -528,15 +531,36 @@ What changes under `profile: lightweight`:
   and `namespace` do not apply; `processors[].extraEnv` and `extraEnvFrom`
   apply to the shared pod. Per-queue autoscaling is refused. The RabbitMQ
   topology hook declares the same queues as before.
-- **Unchanged.** Monocore workers, Fabric, the dashboard, S3 Manager and the
-  infra chart. With `workers.mono.allCompanies` its left-out processors and
-  schedules stay out of the worker too.
+- **Memory requests.** The web pods, `<fullname>-processor` and Monocore
+  request `512Mi`, `384Mi` and `128Mi` instead of `900Mi` each, so the
+  profile can be scheduled on a small single node. On a 4 GB Raspberry Pi 5
+  with the bundled infrastructure, the three `900Mi` requests left the
+  processor Pending (`Insufficient memory`). Idle after an install with
+  samples there, they used about 360Mi, 250Mi and 30Mi. Each
+  `lightweight.*.resources` block goes over `web.resources` or
+  `workers.resources`: its requests replace the shared ones and the shared
+  block's other settings, such as `cpu` and `limits`, stay, so Monocore's
+  `GOMEMLIMIT` still follows `workers.resources.limits.memory`. Set the block
+  to `null` to use the shared one alone. Requests only reserve memory: a node
+  that schedules every pod can still run short when they get busy. With mono
+  workers the app chart requests about 1.1 GB in all; the infra chart's
+  requests (Elasticsearch `1Gi`, RabbitMQ `512Mi`, Soketi `256Mi`) are
+  unchanged.
+- **Unchanged.** Monocore's other settings, standalone and microservice
+  workers (`workers.resources` and `workers.processes` still apply to them),
+  Fabric, the dashboard, S3 Manager and the infra chart. With
+  `workers.mono.allCompanies` its left-out processors and schedules stay out
+  of the worker too.
 
 A standard installation can switch in an upgrade. The processor pods stop and
 `<fullname>-processor` starts, with queued jobs waiting in RabbitMQ in between.
 The start Service selects the gateway pods as soon as it is updated, so the
 start, webhook and callback routes can answer 404 until the first gateway pod
 with `APP_DOMAINS` is ready; switch outside busy hours.
+
+A lightweight installation that set `web.resources` or `workers.resources`
+requests to size these pods gets the profile's requests from the release that
+added `lightweight.*.resources`. Set those blocks instead.
 
 ---
 
@@ -557,7 +581,7 @@ Gateway and Start are independently selectable Laravel web services.
 | `web.service.type` | `ClusterIP` | Kubernetes service type |
 | `web.service.port` | `80` | Service port |
 | `web.sessionDomain` | `""` | `SESSION_DOMAIN`; controls the cookie domain for authentication |
-| `web.resources` | requests memory `900Mi` | Resource requests and limits |
+| `web.resources` | requests memory `900Mi` | Resource requests and limits. Under `profile: lightweight`, `lightweight.web.resources` goes over it |
 | `web.extraEnv` | `[]` | Additional env vars for web pods only |
 | `web.extraEnvFrom` | `[]` | Additional env sources for web pods only |
 | `web.podAnnotations` | `{}` | Pod annotations |
@@ -697,7 +721,7 @@ processor scheduler CronJobs are rendered, even if an individual processor sets
 | `workers.processes` | `15` | Worker concurrency — `numprocs` in supervisord.conf (standalone/microservice) |
 | `workers.queue.connection` | `rabbitmq` | Laravel queue connection |
 | `workers.queue.name` | `default` | Hub queue name for standalone workers |
-| `workers.resources` | requests memory `900Mi` | Resource requests and limits |
+| `workers.resources` | requests memory `900Mi` | Resource requests and limits. Under `profile: lightweight`, `lightweight.worker.resources` and `lightweight.mono.resources` go over it for the processor and Monocore workers |
 | `workers.extraEnv` | `[]` | Additional env vars for all worker pods |
 | `workers.extraEnvFrom` | `[]` | Additional env sources for all worker pods |
 

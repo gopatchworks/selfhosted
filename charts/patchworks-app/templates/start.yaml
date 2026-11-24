@@ -1,6 +1,10 @@
 {{- if .Values.web.start.enabled }}
+{{- $web := deepCopy .Values.web -}}
+{{- with include "patchworks.lightweight.resources" (dict "root" . "shared" .Values.web.resources "profile" .Values.lightweight.web.resources) }}
+{{- $_ := set $web "resources" (fromYaml .) }}
+{{- end }}
 {{- /* mergeOverwrite(parent, child): child keys always win including zeros/false/empty */ -}}
-{{- $svc := mergeOverwrite (deepCopy .Values.web) .Values.web.start -}}
+{{- $svc := mergeOverwrite $web .Values.web.start -}}
 {{- /* profile=lightweight: the gateway pods serve the start routes too. */}}
 {{- $combined := include "patchworks.lightweight.combineWeb" . -}}
 {{- if not $combined }}
