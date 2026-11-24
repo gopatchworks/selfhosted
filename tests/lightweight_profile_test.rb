@@ -129,6 +129,74 @@ mono_progs = programs(mono)
 check(%w[queue queue-slow schedule-long-processor schedule-medium-processor schedule-scheduler schedule-start], mono_progs.keys.sort, 'programs with allCompanies')
 assert(mono_progs['queue']['command'].include?('--queue=scheduler,start,gateway,logging '), "queues with allCompanies: #{mono_progs['queue']['command']}")
 
+# Memory requests: the profile's smaller blocks over web.resources and
+# workers.resources, so the Core and Monocore pods fit a small single node.
+def resources(docs, name)
+  find(docs, 'Deployment', name).dig('spec', 'template', 'spec', 'containers').first['resources']
+end
+def mib(quantity)
+  number, unit = quantity.match(/\A(\d+)(Mi|Gi)\z/).captures
+  number.to_i * (unit == 'Gi' ? 1024 : 1)
+end
+def requested(docs)
+  docs.select { |d| d['kind'] == 'Deployment' }.sum do |d|
+    d.dig('spec', 'template', 'spec', 'containers').sum { |c| (r = c.dig('resources', 'requests', 'memory')) ? mib(r) : 0 }
+  end
+end
+MONO = {'workers' => {'type' => 'mono', 'companies' => [{'name' => 'molten'}]}}.freeze
+STANDARD_REQUEST = {'requests' => {'memory' => '900Mi'}}.freeze
+standard_mono = render(MONO)
+%w[patchworks-gateway patchworks-start patchworks-workers patchworks-workers-molten].each do |name|
+  check(STANDARD_REQUEST, resources(standard_mono, name), "standard #{name} resources")
+end
+check(STANDARD_REQUEST, resources(standard, 'patchworks-processor-scheduler'), 'standard processor resources')
+check(STANDARD_REQUEST, resources(standard, 'patchworks-workers'), 'standard standalone worker resources')
+
+light_mono = render(deep_merge(LIGHT, MONO))
+check({'requests' => {'memory' => '512Mi'}}, resources(light_mono, 'patchworks-gateway'), 'lightweight gateway resources')
+check({'requests' => {'memory' => '384Mi'}}, resources(light_mono, 'patchworks-processor'), 'lightweight processor resources')
+check({'requests' => {'memory' => '128Mi'}}, resources(light_mono, 'patchworks-workers'), 'lightweight Monocore hub resources')
+check({'requests' => {'memory' => '128Mi'}}, resources(light_mono, 'patchworks-workers-molten'), 'lightweight Monocore company resources')
+hub_only = render(deep_merge(LIGHT, 'workers' => {'type' => 'mono'}))
+assert(requested(hub_only) <= 1144, "lightweight app memory requests #{requested(hub_only)}Mi exceed 1.2 GB")
+# Standalone workers keep workers.resources: their 15 PHP processes need it.
+check(STANDARD_REQUEST, resources(light, 'patchworks-workers'), 'lightweight standalone worker resources')
+
+# The profile's requests win; the shared blocks' cpu and limits stay, which
+# Monocore's GOMEMLIMIT derives from.
+shared = {'requests' => {'cpu' => '100m', 'memory' => '2Gi'}, 'limits' => {'memory' => '1Gi'}}
+layered = render(deep_merge(deep_merge(LIGHT, MONO), 'web' => {'resources' => shared}, 'workers' => {'resources' => shared}))
+check({'requests' => {'cpu' => '100m', 'memory' => '512Mi'}, 'limits' => {'memory' => '1Gi'}}, resources(layered, 'patchworks-gateway'), 'gateway over web.resources')
+check({'requests' => {'cpu' => '100m', 'memory' => '384Mi'}, 'limits' => {'memory' => '1Gi'}}, resources(layered, 'patchworks-processor'), 'processor over workers.resources')
+check({'requests' => {'cpu' => '100m', 'memory' => '128Mi'}, 'limits' => {'memory' => '1Gi'}}, resources(layered, 'patchworks-workers'), 'Monocore over workers.resources')
+check('921MiB', env(find(layered, 'Deployment', 'patchworks-workers'))['GOMEMLIMIT'], 'Monocore GOMEMLIMIT from the shared limit')
+
+# web.gateway.resources and a company's resources still win; null blocks fall
+# back to the shared ones alone.
+own = render(deep_merge(deep_merge(LIGHT, MONO),
+  'web' => {'gateway' => {'resources' => {'requests' => {'memory' => '1Gi'}}}},
+  'workers' => {'companies' => [{'name' => 'molten', 'resources' => {'requests' => {'memory' => '256Mi'}}}]}))
+check({'requests' => {'memory' => '1Gi'}}, resources(own, 'patchworks-gateway'), 'web.gateway.resources over the profile')
+check({'requests' => {'memory' => '256Mi'}}, resources(own, 'patchworks-workers-molten'), 'company resources over the profile')
+unset = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'web' => {'resources' => nil}, 'worker' => {'resources' => nil}, 'mono' => {'resources' => nil}}))
+%w[patchworks-gateway patchworks-processor patchworks-workers].each do |name|
+  check(STANDARD_REQUEST, resources(unset, name), "#{name} with the profile's block null")
+end
+
+# Values without the blocks' parents, such as an older release's under
+# helm upgrade --reuse-values, still render: unchanged in standard, the shared
+# block alone in lightweight.
+check(standard, render({'lightweight' => nil}), 'standard without lightweight values')
+check(standard_mono, render(deep_merge(MONO, 'lightweight' => {'mono' => nil})), 'standard mono without lightweight.mono')
+older = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'mono' => nil}))
+check(STANDARD_REQUEST, resources(older, 'patchworks-workers'), 'lightweight Monocore without lightweight.mono')
+
+# Web apart: both web pods take the profile's request.
+apart_mono = render(deep_merge(deep_merge(LIGHT, MONO), 'lightweight' => {'web' => {'combine' => false}}))
+%w[patchworks-gateway patchworks-start].each do |name|
+  check({'requests' => {'memory' => '512Mi'}}, resources(apart_mono, name), "#{name} resources with combine off")
+end
+
 # Refusals.
 fails(deep_merge(LIGHT, 'processorDeployments' => {'autoscaling' => {'enabled' => true}}), 'cannot autoscale per queue')
 fails(deep_merge(LIGHT, 'web' => {'start' => {'namespace' => 'elsewhere'}}), 'lightweight.web.combine needs web.gateway and web.start in one namespace')
