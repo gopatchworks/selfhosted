@@ -967,6 +967,12 @@ kubefaas:
         cpu: 10m
         memory: 128Mi
     dind:
+      # MTU of dind's Docker bridge, which image builds run on. 0 matches the
+      # pod's network interface (eth0), read when dind starts. Docker's own
+      # 1500 is too large on overlay networks such as k3s's flannel (1450):
+      # replies from some hosts, GitHub among them, are then dropped and the
+      # build's downloads stall. Set a number to override.
+      mtu: 0
       resources:
         requests:
           cpu: 10m
