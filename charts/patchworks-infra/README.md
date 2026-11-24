@@ -1082,6 +1082,7 @@ The chart renders both copies itself from one login, not the credential generato
 | `kubefaas.auth.existingSecret.usernameKey` | `username` | Key for the username |
 | `kubefaas.auth.existingSecret.passwordKey` | `password` | Key for the password |
 | `kubefaas.builder.platform` | `""` | Docker platform base and function images are built for (`BASE_IMAGE_PLATFORM`). Empty keeps the builder's default, `linux/amd64`; set `linux/arm64` for arm64 nodes |
+| `kubefaas.builder.cacheBucket` | `kubefaas-cache` | S3 bucket the builder caches compiled function images in. Empty turns the cache off. See the S3 login below |
 | `kubefaas.registry.name` | `default` | Name of the `registries.yaml` entry function images are pushed to |
 | `kubefaas.registry.config` | `""` | Raw `registries.yaml` for your own registry |
 | `kubefaas.registry.existingSecret.name` | `""` | Read `registries.yaml` from this Secret instead |
@@ -1091,6 +1092,29 @@ The chart renders both copies itself from one login, not the credential generato
 | `kubefaas.registry.bundled.auth.password` | `""` | Set both to pin the login under `helm template` or Argo CD |
 | `kubefaas.registry.bundled.persistence.*` | `20Gi`, `ReadWriteOnce` | Image storage, through `patchworks.pvcSpec` (`existingClaim`, `accessModes`, `size`, `storageClass`, `spec`) |
 | `kubefaas.registry.bundled.image` / `htpasswdImage` / `proxyImage` | `registry:2` / `httpd:2.4-alpine` / `alpine/socat:1.8.0.3` | Registry, htpasswd writer and builder proxy images |
+
+### The builder's S3 login
+
+The builder runs in the KubeFaaS namespace and caches images in S3, but the S3
+login's Secret is in another namespace (`patchworks-s3-auth`, or your
+`existingSecret`), and a Pod can only read Secrets in its own. The chart
+therefore copies the login into `<release>-kubefaas-s3` in the KubeFaaS
+namespace:
+
+- **Inline login** (`s3.auth.rootUser`/`rootPassword`, or
+  `s3.external.accessKey`/`secretKey`): the builder gets the values directly,
+  with no copy.
+- **A Secret that exists**, the generated one or yours: the chart reads it with
+  `lookup` and copies it.
+- **A login the credential generator has yet to create** (a first install):
+  the chart generates it while rendering, and hands it to the generator Job,
+  which writes it to `patchworks-s3-auth`. The copy and the Secret therefore
+  agree.
+
+`helm template` and Argo CD can't look Secrets up. There, a generated login
+changes on every render while the generator keeps the first, so set the S3
+login inline. With your own `existingSecret`, the builder names it as before,
+so create it in the KubeFaaS namespace too.
 
 ### Bundled image registry
 

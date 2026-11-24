@@ -935,7 +935,12 @@ kubefaas:
     # (BASE_IMAGE_PLATFORM). Empty keeps the builder's default, linux/amd64.
     # Set linux/arm64 when the nodes that run functions are arm64.
     platform: ""
-    # S3 bucket used to cache compiled function images between builds.
+    # S3 bucket used to cache compiled function images between builds. The
+    # builder reads the S3 login from a copy in the KubeFaaS namespace
+    # (<fullname>-kubefaas-s3), since a Pod can't read another namespace's
+    # Secret. `helm template` and Argo CD can't look the S3 Secret up: there
+    # set s3.auth.rootUser and rootPassword (or s3.external.accessKey and
+    # secretKey), or create the s3 existingSecret in the KubeFaaS namespace too.
     cacheBucket: kubefaas-cache
     # TLS configuration for the Docker-in-Docker sidecar.
     # mode: helm          — Helm generates self-signed certs; CA is preserved across upgrades via lookup.

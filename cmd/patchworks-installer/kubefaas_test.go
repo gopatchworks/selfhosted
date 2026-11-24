@@ -116,6 +116,64 @@ func TestWriteValuesTurnsOnKubeFaaSWithTheBundledRegistry(t *testing.T) {
 	}
 }
 
+// A Pod reads only Secrets in its own namespace. With the installer's values
+// (bundled S3 with a generated login, KubeFaaS and its registry), every Secret
+// a KubeFaaS pod reads is rendered in the KubeFaaS namespace, including the
+// builder's copy of the S3 login.
+func TestKubeFaaSPodsReadSecretsInTheirNamespace(t *testing.T) {
+	_, parsed := writeMonoInboundValues(t, kubefaasValues(true, "linux/arm64"))
+	objects := renderInfraObjects(t, parsed)
+	rendered := map[string]bool{}
+	for _, object := range objects {
+		metadata := object["metadata"].(map[string]any)
+		if object["kind"] == "Secret" && metadata["namespace"] == "kubefaas" {
+			rendered[metadata["name"].(string)] = true
+		}
+	}
+	if !rendered["patchworks-kubefaas-s3"] {
+		t.Fatalf("builder's S3 login copy missing: %v", rendered)
+	}
+	for _, object := range objects {
+		metadata := object["metadata"].(map[string]any)
+		if object["kind"] != "Deployment" || metadata["namespace"] != "kubefaas" {
+			continue
+		}
+		spec := object["spec"].(map[string]any)["template"].(map[string]any)["spec"].(map[string]any)
+		var names []string
+		containers, _ := spec["containers"].([]any)
+		initContainers, _ := spec["initContainers"].([]any)
+		for _, c := range append(containers, initContainers...) {
+			env, _ := c.(map[string]any)["env"].([]any)
+			for _, e := range env {
+				valueFrom, _ := e.(map[string]any)["valueFrom"].(map[string]any)
+				ref, _ := valueFrom["secretKeyRef"].(map[string]any)
+				if name, ok := ref["name"].(string); ok {
+					names = append(names, name)
+				}
+			}
+			envFrom, _ := c.(map[string]any)["envFrom"].([]any)
+			for _, e := range envFrom {
+				ref, _ := e.(map[string]any)["secretRef"].(map[string]any)
+				if name, ok := ref["name"].(string); ok {
+					names = append(names, name)
+				}
+			}
+		}
+		volumes, _ := spec["volumes"].([]any)
+		for _, v := range volumes {
+			secret, _ := v.(map[string]any)["secret"].(map[string]any)
+			if name, ok := secret["secretName"].(string); ok {
+				names = append(names, name)
+			}
+		}
+		for _, name := range names {
+			if !rendered[name] {
+				t.Errorf("%s reads Secret %s, which is not rendered in the KubeFaaS namespace", metadata["name"], name)
+			}
+		}
+	}
+}
+
 func TestWriteValuesKubeFaaSWithoutRegistryOrPlatform(t *testing.T) {
 	for _, tc := range []struct {
 		name   string

@@ -349,6 +349,49 @@ true
 {{- include "patchworks.memoLogin" (dict "root" . "id" "kubefaasRegistry" "username" $auth.username "password" $auth.password "defaultUsername" "kubefaas" "lookups" (list (list (include "patchworks.kubefaas.namespace" .) (include "patchworks.kubefaas.registry.authSecretName" .)))) -}}
 {{- end }}
 
+{{/*
+The S3 login of the KubeFaaS builder's image cache, as JSON, for a copy in the
+KubeFaaS namespace (<fullname>-kubefaas-s3): a Pod reads only Secrets in its
+own namespace, and the S3 login's Secret is in another. Computed once per
+render and cached on .Values._memo, so the copy and the credential generator
+agree. Keys:
+  accessKey, secretKey: the login. Empty when no copy is needed: KubeFaaS or
+    its cacheBucket is off, the login is inline (plain env values), or the
+    Secret is the user's and lookup cannot read it (`helm template`, Argo CD),
+    in which case the builder names it in its own namespace as before.
+  seed: "true" when the login is generated here, for a Secret the credential
+    generator has yet to create. The generator then writes this login instead
+    of its own random one. Only then does the login appear in its script.
+Without lookup a generated login changes on every render, while the generator
+keeps the first: there, set s3.auth.rootUser and rootPassword.
+*/}}
+{{- define "patchworks.kubefaas.s3Login" -}}
+{{- if not (hasKey .Values "_memo") -}}
+{{- $_ := set .Values "_memo" dict -}}
+{{- end -}}
+{{- if not (hasKey .Values._memo "kubefaasS3") -}}
+{{- $login := dict -}}
+{{- if and .Values.kubefaas.enabled .Values.kubefaas.builder.cacheBucket -}}
+{{- $es := include "patchworks.s3.existingSecret" . | fromJson -}}
+{{- if $es.name -}}
+{{- /* Bundled S3 reads its Secret in the S3 namespace; app pods read external S3's in the release namespace. */ -}}
+{{- $ns := ternary (include "patchworks.s3.namespace" .) .Release.Namespace (and .Values.s3.enabled true) -}}
+{{- $data := (lookup "v1" "Secret" $ns $es.name).data | default dict -}}
+{{- $accessKey := index $data $es.accessKeyKey | default "" | b64dec -}}
+{{- $secretKey := index $data $es.secretKeyKey | default "" | b64dec -}}
+{{- $generated := and .Values.s3.enabled (not .Values.s3.auth.existingSecret.name) -}}
+{{- if and $accessKey $secretKey -}}
+{{- $login = dict "accessKey" $accessKey "secretKey" $secretKey -}}
+{{- else if $generated -}}
+{{- $login = dict "accessKey" (.Values.s3.auth.rootUser | default (randAlphaNum 32)) "secretKey" (.Values.s3.auth.rootPassword | default (randAlphaNum 32)) "seed" "true" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set .Values._memo "kubefaasS3" $login -}}
+{{- end -}}
+{{- toJson .Values._memo.kubefaasS3 -}}
+{{- end }}
+
 {{/* ── KubeFaaS bundled image registry (kubefaas-registry.yaml) ───────────────── */}}
 
 {{/* "true" when the chart runs the function image registry, else empty. */}}
