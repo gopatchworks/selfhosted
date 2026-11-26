@@ -1,0 +1,102 @@
+{{/*
+Creates the telemetry database, settings profiles and users Core connects as,
+after every install and upgrade. It mirrors Core's reference script,
+docker/clickhouse/initdb/01-create-telemetry.sh in patchworks-local-development
+(scripts/clickhouse/01-create-telemetry.sh in Core): keep the two in step.
+
+Never use OR REPLACE on these users or profiles. Replacing the migrator wipes
+the grants every materialised view runs with, and replacing a profile detaches
+it from its user. ALTER USER ... IDENTIFIED BY keeps a password in step with
+its Secret without touching grants.
+*/}}
+{{- if .Values.clickhouse.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.clickhouse.namespace" . }}
+{{- $es := fromJson (include "patchworks.clickhouse.existingSecret" .) }}
+{{- $a := .Values.clickhouse.auth }}
+{{- $db := include "patchworks.clickhouse.identifier" .Values.clickhouse.database }}
+{{- $migrator := include "patchworks.clickhouse.identifier" .Values.clickhouse.users.migrator }}
+{{- $writer := include "patchworks.clickhouse.identifier" .Values.clickhouse.users.writer }}
+{{- $reader := include "patchworks.clickhouse.identifier" .Values.clickhouse.users.reader }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-clickhouse-setup
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 5
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "clickhouse-setup" "Release" .Release) | nindent 8 }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.clickhouse) | nindent 6 }}
+      restartPolicy: Never
+      containers:
+        - name: clickhouse-setup
+          image: "{{ .Values.clickhouse.image.repository }}:{{ .Values.clickhouse.image.tag }}"
+          imagePullPolicy: {{ .Values.clickhouse.image.pullPolicy }}
+          command:
+            - bash
+            - -euc
+            - |
+              run_sql() {
+                clickhouse-client --host {{ include "patchworks.clickhouse.host" . }} --port 9000 \
+                  --user "$CLICKHOUSE_ADMIN_USER" --password "$CLICKHOUSE_ADMIN_PASSWORD" --multiquery "$@"
+              }
+
+              # Quotes a value as a ClickHouse string literal, escaping backslashes and then single quotes.
+              sql_string() {
+                local value=${1//\\/\\\\}
+                printf "'%s'" "${value//\'/\\\'}"
+              }
+
+              echo "Waiting for ClickHouse..."
+              until run_sql --query "SELECT 1" >/dev/null 2>&1; do sleep 2; done
+
+              run_sql <<EOSQL
+              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_writer_profile SETTINGS
+                  deduplicate_insert = 'enable' CONST,
+                  deduplicate_blocks_in_dependent_materialized_views = 1 CONST;
+
+              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_reader_profile SETTINGS
+                  readonly = 2,
+                  max_execution_time = 30 MIN 1 MAX 60,
+                  max_result_rows = 100000 MIN 1 MAX 1000000;
+
+              CREATE USER IF NOT EXISTS {{ $migrator }} IDENTIFIED BY $(sql_string "$TELEMETRY_MIGRATOR_PASSWORD") DEFAULT DATABASE {{ $db }};
+              CREATE USER IF NOT EXISTS {{ $writer }} IDENTIFIED BY $(sql_string "$TELEMETRY_WRITER_PASSWORD") DEFAULT DATABASE {{ $db }};
+              CREATE USER IF NOT EXISTS {{ $reader }} IDENTIFIED BY $(sql_string "$TELEMETRY_READER_PASSWORD") DEFAULT DATABASE {{ $db }};
+
+              ALTER USER {{ $migrator }} IDENTIFIED BY $(sql_string "$TELEMETRY_MIGRATOR_PASSWORD");
+              ALTER USER {{ $writer }} IDENTIFIED BY $(sql_string "$TELEMETRY_WRITER_PASSWORD");
+              ALTER USER {{ $reader }} IDENTIFIED BY $(sql_string "$TELEMETRY_READER_PASSWORD");
+
+              ALTER USER {{ $writer }} SETTINGS PROFILE 'telemetry_writer_profile';
+              ALTER USER {{ $reader }} SETTINGS PROFILE 'telemetry_reader_profile';
+
+              CREATE DATABASE IF NOT EXISTS {{ $db }};
+              GRANT SELECT, INSERT, ALTER TABLE, ALTER VIEW, CREATE TABLE, CREATE VIEW, DROP TABLE, DROP VIEW, TRUNCATE
+                  ON {{ $db }}.* TO {{ $migrator }};
+              GRANT INSERT ON {{ $db }}.* TO {{ $writer }};
+              GRANT SELECT ON {{ $db }}.* TO {{ $reader }};
+              EOSQL
+              echo "ClickHouse telemetry users ready."
+          env:
+            - name: CLICKHOUSE_ADMIN_USER
+              value: {{ $a.adminUsername | quote }}
+            {{- include "patchworks.secretEnv" (dict "name" "CLICKHOUSE_ADMIN_PASSWORD" "value" $a.adminPassword "secret" (dict "name" $es.name "key" $es.adminPasswordKey)) | nindent 12 }}
+            {{- include "patchworks.secretEnv" (dict "name" "TELEMETRY_MIGRATOR_PASSWORD" "value" $a.migratorPassword "secret" (dict "name" $es.name "key" $es.migratorPasswordKey)) | nindent 12 }}
+            {{- include "patchworks.secretEnv" (dict "name" "TELEMETRY_WRITER_PASSWORD" "value" $a.writerPassword "secret" (dict "name" $es.name "key" $es.writerPasswordKey)) | nindent 12 }}
+            {{- include "patchworks.secretEnv" (dict "name" "TELEMETRY_READER_PASSWORD" "value" $a.readerPassword "secret" (dict "name" $es.name "key" $es.readerPasswordKey)) | nindent 12 }}
+{{- end }}

@@ -1,0 +1,138 @@
+{{- if .Values.clickhouse.enabled }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.clickhouse.namespace" . }}
+{{- $p := .Values.clickhouse.persistence }}
+{{- $es := fromJson (include "patchworks.clickhouse.existingSecret" .) }}
+---
+# ConfigMap — server settings, mounted into config.d over the image's defaults.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-clickhouse
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+data:
+  patchworks.xml: |
+    {{- .Values.clickhouse.config | nindent 4 }}
+{{- if not $p.existingClaim }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $fullname }}-clickhouse
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  {{- include "patchworks.pvcSpec" $p | nindent 2 }}
+{{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-clickhouse
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  replicas: 1
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  # One server per data directory. A replacement started early fails to lock
+  # the directory and restarts until the old server has stopped.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "clickhouse" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "clickhouse" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ .Values.clickhouse.config | sha256sum }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.clickhouse) | nindent 6 }}
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: clickhouse
+          image: "{{ .Values.clickhouse.image.repository }}:{{ .Values.clickhouse.image.tag }}"
+          imagePullPolicy: {{ .Values.clickhouse.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8123
+            - name: native
+              containerPort: 9000
+          env:
+            # The image's entrypoint replaces the default user with this one.
+            # SQL access management lets it create the telemetry users.
+            - name: CLICKHOUSE_USER
+              value: {{ .Values.clickhouse.auth.adminUsername | quote }}
+            {{- include "patchworks.secretEnv" (dict "name" "CLICKHOUSE_PASSWORD" "value" .Values.clickhouse.auth.adminPassword "secret" (dict "name" $es.name "key" $es.adminPasswordKey)) | nindent 12 }}
+            - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+              value: "1"
+          # Starting can take minutes on a busy node, or while the server
+          # loads its parts after a restart: allow up to 10 minutes.
+          startupProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/clickhouse
+            - name: config
+              mountPath: /etc/clickhouse-server/config.d/patchworks.xml
+              subPath: patchworks.xml
+              readOnly: true
+          {{- with .Values.clickhouse.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ $p.existingClaim | default (printf "%s-clickhouse" $fullname) }}
+        - name: config
+          configMap:
+            name: {{ $fullname }}-clickhouse
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}-clickhouse
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: clickhouse
+spec:
+  type: {{ .Values.clickhouse.service.type }}
+  selector:
+    {{- include "patchworks.selectorLabels" (dict "component" "clickhouse" "Release" .Release) | nindent 4 }}
+  ports:
+    - name: http
+      port: 8123
+      targetPort: http
+    - name: native
+      port: 9000
+      targetPort: native
+{{- end }}

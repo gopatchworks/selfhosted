@@ -75,6 +75,8 @@ When Fabric seeds are enabled and no `seeds.tenant.adminPassword` or
 - [Redis](#redis)
 - [RabbitMQ](#rabbitmq)
 - [Elasticsearch](#elasticsearch)
+- [ClickHouse](#clickhouse)
+- [Platform telemetry](#platform-telemetry)
 - [S3 / MinIO](#s3--minio)
 - [Pusher / Soketi](#pusher--soketi)
 - [KubeFaaS](#kubefaas)
@@ -1457,6 +1459,91 @@ This default does not apply to Monocore workers.
 
 ---
 
+## ClickHouse
+
+Where Core keeps platform telemetry. Only used while `telemetry.enabled` is
+true. The infra chart's README describes the in-cluster server and its setup
+Job.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `clickhouse.enabled` | `false` | Use the in-cluster ClickHouse the infra chart deploys. Set `false` to use `clickhouse.external.*` |
+| `clickhouse.database` | `telemetry` | `TELEMETRY_CLICKHOUSE_DATABASE` |
+| `clickhouse.users.migrator` | `telemetry_migrator` | Only the telemetry setup Job connects as it |
+| `clickhouse.users.writer` | `telemetry_writer` | Every Core pod and the shipper |
+| `clickhouse.users.reader` | `telemetry_reader` | Every Core pod: the Monitoring endpoints read as it |
+| `clickhouse.auth.*Password` | `""` | The in-cluster server's passwords. Empty ones come from the infra chart's `patchworks-clickhouse-auth` |
+| `clickhouse.auth.existingSecret.*` | see the infra chart | A Secret with the in-cluster server's passwords |
+| `clickhouse.external.host` | `""` | External server |
+| `clickhouse.external.port` | `8123` | HTTP port |
+| `clickhouse.external.scheme` | `http` | `https` wherever the traffic leaves a private network: the credentials travel in request headers |
+| `clickhouse.external.migratorPassword` | `""` | Inline password |
+| `clickhouse.external.writerPassword` | `""` | Inline password |
+| `clickhouse.external.readerPassword` | `""` | Inline password |
+| `clickhouse.external.existingSecret.name` | `""` | Secret with the external server's passwords |
+| `clickhouse.external.existingSecret.migratorPasswordKey` | `migrator-password` | Key of the migrator password |
+| `clickhouse.external.existingSecret.writerPasswordKey` | `writer-password` | Key of the writer password |
+| `clickhouse.external.existingSecret.readerPasswordKey` | `reader-password` | Key of the reader password |
+
+An external server needs the database, settings profiles, users and grants of
+Core's reference script (`scripts/clickhouse/01-create-telemetry.sh` in Core),
+and the migrator user must never be dropped or recreated.
+
+---
+
+## Platform telemetry
+
+Core records requests, flow runs, usage and limits as small events in capped
+Redis streams, and `telemetry:ship` inserts them into ClickHouse. The
+Dashboard's Monitoring page (Process flows → Monitoring) reads them back
+through Core. Off by default; it needs a Core image with platform telemetry
+and Redis 7.2 or later (the bundled Valkey 8 qualifies).
+
+```yaml
+clickhouse:
+  enabled: true      # in both charts' values: the infra chart deploys it
+telemetry:
+  enabled: true
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `telemetry.enabled` | `false` | Sets `TELEMETRY_*` for every Core pod and runs the shipper and setup Job |
+| `telemetry.cluster` | `selfhosted` | `TELEMETRY_CLUSTER`, in every row Core records. Never change it: rows recorded under another name drop out of every report. Give each installation its own when several share one ClickHouse |
+| `telemetry.monitoringPage.enabled` | `true` | Turn on the `platform-telemetry` company feature, which shows the Monitoring page, for every company after each install and upgrade. Set `false` to manage it per company from the feature settings |
+| `telemetry.migrate.image` / `resources` / `nodeSelector` / `affinity` / `tolerations` | | For the setup Job |
+| `telemetry.shipper.replicas` | `1` | `telemetry:ship` replicas. At least 1 |
+| `telemetry.shipper.maxTime` | `3600` | `--max-time`: seconds before the process exits and its container restarts |
+| `telemetry.shipper.memory` | `256` | `--memory`: megabytes before the process exits and its container restarts |
+| `telemetry.shipper.terminationGracePeriodSeconds` | `60` | At least 30: connecting can wait about 11s, and an insert up to 10s |
+| `telemetry.shipper.resources` | `requests: {cpu: 50m, memory: 128Mi}` | Shipper resources |
+| `telemetry.shipper.extraEnv` / `extraEnvFrom` / `podAnnotations` / `nodeSelector` / `tolerations` / `affinity` | | Shipper pod settings |
+
+What the chart runs:
+
+- **`patchworks-telemetry-shipper`**, a Deployment running
+  `php artisan telemetry:ship --max-time=3600 --memory=256`. `TELEMETRY_ENABLED`
+  is only set while it exists: without a shipper the streams fill to their cap.
+- **`patchworks-telemetry-setup`**, a post-install and post-upgrade hook Job
+  that runs `telemetry:migrate`, retrying for about two minutes, then turns
+  on the Monitoring page. It always succeeds, as Core's deployment contract
+  requires: the shipper holds back a table that is not migrated yet, and the
+  next upgrade tries again. It is the only pod with the migrator's password.
+- Core's nightly `telemetry:forecast` (long processor) and
+  `telemetry:reconcile-usage` (medium processor) run from the existing
+  schedulers while telemetry is enabled.
+
+When turning telemetry on for an installation with history, run
+`php artisan telemetry:backfill-usage --before=<the day recording started>`
+once in a Core pod, so forecasts have earlier usage to work from.
+
+Core only records what passes through Core. A run Core hands to Monocore
+(`workers.type: mono`) records its start but not its end, so the Flow runs
+and Usage sections show it as unfinished, and triggers Monocore serves itself
+(`workers.mono.inbound`) record nothing.
+
+---
+
 ## S3 / MinIO
 
 When `s3.enabled` is `true`, a MinIO-compatible server ([Silo](https://silo.pgsty.com), a maintained MinIO fork) is deployed by the infra chart and its post-install/upgrade Job creates the configured buckets. Payload, tenant-cache, and file-download buckets default to the main bucket so self-hosted installs do not require a per-tenant bucket creation service.
@@ -1657,7 +1744,11 @@ Every credential has a companion `existingSecret` block with named key fields. W
 #   --from-literal=APP_KEY="base64:..." \
 #   --from-literal=APP_PREVIOUS_KEYS="base64:...,base64:..." \
 #   --from-literal=db-password="s3cr3t" \
-#   --from-literal=minio-password="s3cr3t"
+#   --from-literal=minio-password="s3cr3t" \
+#   --from-literal=clickhouse-admin-password="s3cr3t" \
+#   --from-literal=clickhouse-migrator-password="s3cr3t" \
+#   --from-literal=clickhouse-writer-password="s3cr3t" \
+#   --from-literal=clickhouse-reader-password="s3cr3t"
 
 app:
   existingSecret:
@@ -1676,6 +1767,15 @@ s3:
     existingSecret:
       name: patchworks-secrets
       rootPasswordKey: minio-password
+
+clickhouse:
+  auth:
+    existingSecret:
+      name: patchworks-secrets
+      adminPasswordKey: clickhouse-admin-password
+      migratorPasswordKey: clickhouse-migrator-password
+      writerPasswordKey: clickhouse-writer-password
+      readerPasswordKey: clickhouse-reader-password
 
 pusher:
   existingSecret:

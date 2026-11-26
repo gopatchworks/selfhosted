@@ -1,0 +1,93 @@
+{{- /*
+telemetry:ship moves Core's telemetry events from their Redis streams into
+ClickHouse. TELEMETRY_ENABLED is only set while this Deployment exists: Core
+records into the streams, and without a shipper they fill to their cap.
+*/}}
+{{- if include "patchworks.telemetry.enabled" . }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $shipper := .Values.telemetry.shipper }}
+{{- $svc := merge (deepCopy $shipper) (dict "image" .Values.image) }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}-telemetry-shipper
+  namespace: {{ include "patchworks.workers.namespace" . }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry-shipper
+  {{- with .Values.deploymentAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  replicas: {{ $shipper.replicas }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "patchworks.selectorLabels" (dict "component" "telemetry-shipper" "Release" .Release) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "telemetry-shipper" "Release" .Release) | nindent 8 }}
+      annotations:
+        checksum/config: {{ include "patchworks.appConfigData" . | sha256sum }}
+        {{- with $shipper.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.telemetry $shipper) | nindent 6 }}
+      serviceAccountName: {{ include "patchworks.serviceAccountName" . }}
+      # Lets telemetry:ship finish the batch it is inserting before it is killed.
+      terminationGracePeriodSeconds: {{ $shipper.terminationGracePeriodSeconds }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        {{- include "patchworks.waitForDeps" . | nindent 8 }}
+      containers:
+        - name: telemetry-shipper
+          image: {{ include "patchworks.appImage" (dict "svc" $svc "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" .) }}
+          workingDir: /var/www/html
+          {{- include "patchworks.phpCliCommandArgs" (dict "root" . "svc" $svc "args" (list "artisan" "telemetry:ship" (printf "--max-time=%d" (int $shipper.maxTime)) (printf "--memory=%d" (int $shipper.memory)))) | nindent 10 }}
+          envFrom:
+            - configMapRef:
+                name: {{ $fullname }}-config
+            {{- if include "patchworks.appSecretHasData" . }}
+            - secretRef:
+                name: {{ $fullname }}-secret
+            {{- end }}
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
+            {{- with (concat .Values.app.extraEnvFrom ($shipper.extraEnvFrom | default (list))) }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "patchworks.appSecretEnvRefs" . | nindent 12 }}
+            - name: APP_NAME
+              value: "telemetry-shipper"
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+            {{- with $shipper.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with $shipper.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- with $shipper.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $shipper.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $shipper.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

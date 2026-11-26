@@ -93,6 +93,7 @@ type localConfig struct {
 	WorkerMode        string `yaml:"workerMode"`
 	Profile           string `yaml:"profile"`
 	Samples           *bool  `yaml:"samples"`
+	Telemetry         *bool  `yaml:"telemetry"`
 	MonoInbound       *bool
 	MonoInboundRoutes *bool
 	IngressEnabled    *bool  `yaml:"ingressEnabled"`
@@ -120,6 +121,9 @@ type localConfig struct {
 type localConfigFile struct {
 	// Profile is the chart's installation profile: standard or lightweight.
 	Profile string `yaml:"profile,omitempty"`
+	// Telemetry deploys ClickHouse and records platform telemetry for the
+	// dashboard's Monitoring page (bundled infrastructure only).
+	Telemetry *bool `yaml:"telemetry,omitempty"`
 	// Samples installs the sample flows (mono installations only).
 	Samples        *bool                     `yaml:"samples,omitempty"`
 	Kubernetes     localConfigKubernetes     `yaml:"kubernetes,omitempty"`
@@ -399,6 +403,7 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 	overrideString(&config.WorkerMode, file.Workers.Type)
 	overrideString(&config.Profile, file.Profile)
 	overrideBool(&config.Samples, file.Samples)
+	overrideBool(&config.Telemetry, file.Telemetry)
 	overrideBool(&config.MonoInbound, file.Workers.Inbound.Enabled)
 	overrideBool(&config.MonoInboundRoutes, file.Workers.Inbound.RouteIngress)
 	overrideBool(&config.IngressEnabled, file.Ingress.Enabled)
@@ -422,8 +427,9 @@ func (config *localConfig) UnmarshalYAML(value *yaml.Node) error {
 
 func (config localConfig) MarshalYAML() (any, error) {
 	return localConfigFile{
-		Profile: config.Profile,
-		Samples: config.Samples,
+		Profile:   config.Profile,
+		Samples:   config.Samples,
+		Telemetry: config.Telemetry,
 		Kubernetes: localConfigKubernetes{
 			Kubeconfig:    config.Kubeconfig,
 			Context:       config.Context,
@@ -834,6 +840,7 @@ func runInstaller(opts cliOptions) error {
 		config.Values["samplesUnsupported"], config.Values["samplesShapeFlags"] = samplesSupport(charts.Charts["patchworks-app"], config.Values)
 		config.Values["samplesChecked"] = "true"
 	}
+	checkTelemetry(config.Values, charts.Charts["patchworks-app"], charts.Charts["patchworks-infra"])
 
 	installInfrastructure, err := chooseInfrastructureInstall(access, config.Values["namespace"], config.Values)
 	if err != nil {
@@ -1156,13 +1163,16 @@ func chooseInfrastructureInstall(access kubeAccess, namespace string, values map
 	if !helmReleaseExists(cfg, "patchworks-infra") {
 		return true, nil
 	}
+	if telemetryNeedsInfra(values, clickhouseDeployed(access, namespace)) {
+		return true, nil
+	}
 
 	upgradeInfrastructure := false
 	if err := runFormWithQuitConfirm(huh.NewForm(
 		huh.NewGroup(
 			huh.NewConfirm().
 				Title("Upgrade bundled infrastructure?").
-				Description("patchworks-infra is already installed. Leave it unchanged unless you are deliberately changing MySQL, RabbitMQ, Redis, ElasticSearch, S3, Soketi, or KubeFaaS infrastructure settings.").
+				Description("patchworks-infra is already installed. Leave it unchanged unless you are deliberately changing MySQL, RabbitMQ, Redis, ElasticSearch, S3, Soketi, KubeFaaS, or ClickHouse infrastructure settings.").
 				Affirmative("Upgrade infra").
 				Negative("Leave infra unchanged").
 				Value(&upgradeInfrastructure),
@@ -1922,6 +1932,7 @@ func infraPhaseNames() map[string]string {
 		"rabbitmq-recreate":    "Switching RabbitMQ to the Recreate strategy",
 		"mysql-setup":          "Setting up Fabric database",
 		"s3-setup":             "Setting up object storage",
+		"clickhouse-setup":     "Setting up ClickHouse telemetry users",
 	}
 }
 
@@ -1940,6 +1951,7 @@ func appPhaseNames() map[string]string {
 		"core-migrations":     "Running Core migrations",
 		"core-seeds":          "Running Core seeders",
 		"samples":             "Creating sample flows",
+		"telemetry-setup":     "Migrating telemetry tables",
 	}
 }
 
@@ -2108,6 +2120,7 @@ func componentDisplayNames() map[string]string {
 		"aws":           "AWS",
 		"cert":          "cert",
 		"cert-manager":  "cert-manager",
+		"clickhouse":    "ClickHouse",
 		"core":          "Core",
 		"dashboard":     "Dashboard",
 		"elasticsearch": "ElasticSearch",
@@ -2566,6 +2579,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 	infrastructureMode := stringDefault(defaults.Infrastructure, "bundled")
 	kubefaas := boolDefault(defaults.InfraComponents.KubeFaaS.Enabled, false)
 	kubefaasRegistry := boolDefault(defaults.InfraComponents.KubeFaaSRegistry.Enabled, true)
+	telemetry := boolDefault(defaults.Telemetry, false)
 	if err := runFormWithQuitConfirm(huh.NewForm(
 		huh.NewGroup(
 			huh.NewNote().
@@ -2638,6 +2652,14 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 				Negative("No").
 				Value(&kubefaasRegistry),
 		).WithHideFunc(func() bool { return infrastructureMode != "bundled" || !kubefaas }),
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Monitoring").
+				Description(telemetryDescription).
+				Affirmative("Yes").
+				Negative("No").
+				Value(&telemetry),
+		).WithHideFunc(func() bool { return infrastructureMode != "bundled" || profile == "lightweight" }),
 	).WithTheme(installerTheme()).WithWidth(88)); err != nil {
 		return installConfig{}, err
 	}
@@ -2791,6 +2813,7 @@ func runSettingsForm(info clusterInfo, kubeconfig, contextName string, defaults 
 		"monoInbound":       fmt.Sprintf("%t", workerMode == "mono" && monoInbound),
 		"monoInboundRoutes": fmt.Sprintf("%t", workerMode == "mono" && monoInbound && ingressEnabled && monoInboundRoutes),
 		"samples":           fmt.Sprintf("%t", workerMode == "mono" && samples),
+		"telemetry":         fmt.Sprintf("%t", telemetry),
 		"cookieDomain":      cookieDomain,
 		"pullSecretMode":    pullSecretModeFromSelection(pullSecret, quay),
 		"pullSecret":        pullSecret,
@@ -3106,6 +3129,9 @@ func localConfigFromInstallConfig(config installConfig, install bool) localConfi
 		// inbound triggers, so a later run with a newer release applies them.
 		MonoInbound:       monoSetting(values, "monoInbound"),
 		MonoInboundRoutes: monoSetting(values, "monoInboundRoutes"),
+		// The user's choice, kept when the selected release or answers cannot
+		// record telemetry, so a later run applies it.
+		Telemetry: optionalBool(values, "telemetry"),
 		// The user's choice, kept when the selected release cannot install
 		// samples, so a later run with a newer release applies it.
 		Samples:         monoSetting(values, "samples"),
@@ -3383,6 +3409,7 @@ func installSummary(config installConfig) string {
 	if hasValue(values, "infraKubefaasEnabled") {
 		lines = append(lines, keyValue("KubeFaaS", kubefaasSummary(values)))
 	}
+	lines = append(lines, keyValue("Monitoring", telemetrySummary(values)))
 	if defaultWorkerMode(values["workerMode"]) == "mono" {
 		lines = append(lines, keyValue("Monocore inbound triggers", monoInboundSummary(values)))
 		lines = append(lines, keyValue("Monocore for every company", monoAllCompaniesSummary(values)))
@@ -3634,6 +3661,7 @@ func writeValues(path string, values map[string]string) error {
 	if samplesEnabled(values) {
 		fmt.Fprintf(&b, "samples:\n  enabled: true\n\n")
 	}
+	writeTelemetryValues(&b, values)
 
 	seedEnabled := values["seedInstall"]
 	fmt.Fprintf(&b, "seeds:\n")

@@ -1657,6 +1657,108 @@ elasticsearch:
     requests:
       memory: 1Gi
 
+# ── ClickHouse (platform telemetry) ────────────────────────────────────────────
+# Where Core keeps platform telemetry. Only used while telemetry.enabled is
+# true. enabled: true uses the in-cluster ClickHouse the infra chart deploys;
+# false uses the server in external.*, whose database and users must match
+# Core's reference script (scripts/clickhouse/01-create-telemetry.sh in Core).
+clickhouse:
+  ndots: null  # inherits the enclosing section / top-level ndots
+  namespace: ""  # overrides global namespace for ClickHouse resources
+  enabled: false
+  database: telemetry
+  # One user per role. The migrator runs telemetry:migrate and owns every
+  # materialised view, so it is never dropped or recreated. The writer only
+  # inserts, and the reader only selects.
+  users:
+    migrator: telemetry_migrator
+    writer: telemetry_writer
+    reader: telemetry_reader
+  # The in-cluster server's logins, as in the infra chart. Empty passwords are
+  # read from the Secret its credential generator writes.
+  auth:
+    adminUsername: admin
+    adminPassword: ""
+    migratorPassword: ""
+    writerPassword: ""
+    readerPassword: ""
+    existingSecret:
+      name: ""
+      adminPasswordKey: admin-password
+      migratorPasswordKey: migrator-password
+      writerPasswordKey: writer-password
+      readerPasswordKey: reader-password
+  external:
+    host: ""
+    port: 8123
+    # Use https wherever the traffic leaves a private network: the
+    # credentials travel in request headers.
+    scheme: http
+    migratorPassword: ""
+    writerPassword: ""
+    readerPassword: ""
+    existingSecret:
+      name: ""
+      migratorPasswordKey: migrator-password
+      writerPasswordKey: writer-password
+      readerPasswordKey: reader-password
+
+# ── Platform telemetry ─────────────────────────────────────────────────────────
+# Core records requests, flow runs, usage and limits into Redis streams, and
+# telemetry:ship inserts them into ClickHouse (clickhouse.*). The Dashboard's
+# Monitoring page (Process flows → Monitoring) reads them back through Core.
+# Needs a Core image with platform telemetry, and Redis 7.2 or later (the
+# bundled Valkey 8 qualifies).
+telemetry:
+  ndots: null  # inherits the enclosing section / top-level ndots
+  enabled: false
+  # Names this installation in every row Core records. Set it once and never
+  # change it: rows recorded under another name drop out of every report. Give
+  # each installation its own name when several share one ClickHouse.
+  cluster: selfhosted
+  # Turns on the platform-telemetry company feature, which shows the
+  # Monitoring page, for every company after each install and upgrade. Set
+  # false to manage the feature per company from its feature settings.
+  monitoringPage:
+    enabled: true
+  # telemetry:migrate, after every install and upgrade. A failure never fails
+  # the release: the shipper holds a table back until its migration lands, and
+  # the next upgrade tries again.
+  migrate:
+    frankenphp: {}
+    image:
+      registry: ""
+      tag: ""
+      pullPolicy: ""
+    resources: {}
+    nodeSelector: {}
+    affinity: {}
+    tolerations: []
+  # telemetry:ship, which moves events from Redis into ClickHouse. Each replica
+  # exits after maxTime seconds or memory megabytes and its container restarts.
+  shipper:
+    replicas: 1
+    maxTime: 3600
+    memory: 256
+    # At least 30s: connecting can wait about 11s in the Sentinel retry loop,
+    # and an insert up to 10s.
+    terminationGracePeriodSeconds: 60
+    frankenphp: {}
+    image:
+      registry: ""
+      tag: ""
+      pullPolicy: ""
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+    extraEnv: []
+    extraEnvFrom: []
+    podAnnotations: {}
+    nodeSelector: {}
+    tolerations: []
+    affinity: {}
+
 # ── S3 / MinIO ─────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy a MinIO instance in-cluster. Set to false and
 # populate external.* to use any S3-compatible object storage.
