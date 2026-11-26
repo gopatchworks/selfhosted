@@ -1423,6 +1423,102 @@ elasticsearch:
     requests:
       memory: 1Gi
 
+# ── ClickHouse (platform telemetry) ────────────────────────────────────────────
+# Holds Core's platform telemetry, which the Dashboard's Monitoring page reads.
+# Set enabled: true to deploy ClickHouse in-cluster, or leave it false and
+# populate external.* in the app chart to use an existing server. The app chart
+# only uses it while telemetry.enabled is true.
+clickhouse:
+  ndots: null  # inherits the enclosing section / top-level ndots
+  namespace: ""  # overrides global namespace for ClickHouse resources
+  enabled: false
+  # The database Core keeps telemetry in. The setup Job creates it.
+  database: telemetry
+  # Core connects as one user per role. The migrator runs telemetry:migrate and
+  # owns every materialised view, so it is never dropped or recreated. The
+  # writer only inserts, and the reader only selects.
+  users:
+    migrator: telemetry_migrator
+    writer: telemetry_writer
+    reader: telemetry_reader
+  auth:
+    # The server's administrator, which the setup Job creates the database,
+    # users and grants as. Core never connects as it.
+    adminUsername: admin
+    # Empty passwords are generated (credentials.autoGenerate).
+    adminPassword: ""
+    migratorPassword: ""
+    writerPassword: ""
+    readerPassword: ""
+    existingSecret:
+      name: ""
+      adminPasswordKey: admin-password
+      migratorPasswordKey: migrator-password
+      writerPasswordKey: writer-password
+      readerPasswordKey: reader-password
+  # Read by the app chart when enabled is false. The infra chart deploys
+  # nothing for an external server.
+  external:
+    host: ""
+    port: 8123
+    scheme: http
+    migratorPassword: ""
+    writerPassword: ""
+    readerPassword: ""
+    existingSecret:
+      name: ""
+      migratorPasswordKey: migrator-password
+      writerPasswordKey: writer-password
+      readerPasswordKey: reader-password
+  image:
+    repository: clickhouse/clickhouse-server
+    tag: "26.8"
+    pullPolicy: IfNotPresent
+  persistence:
+    existingClaim: ""
+    accessModes: [ReadWriteOnce]
+    size: 10Gi
+    storageClass: ""
+    spec: {}
+  service:
+    type: ClusterIP
+  # ClickHouse sizes its caches from the container's memory limit when it has
+  # one, and from the node's memory otherwise. config keeps them small.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+  # Mounted as /etc/clickhouse-server/config.d/patchworks.xml. The default
+  # logs to the console only, keeps the caches small and drops the system log
+  # tables Core never reads, which otherwise grow without limit.
+  config: |
+    <clickhouse>
+      <logger>
+        <level>warning</level>
+        <console>1</console>
+        <log remove="1"/>
+        <errorlog remove="1"/>
+      </logger>
+      <mark_cache_size>268435456</mark_cache_size>
+      <index_mark_cache_size>67108864</index_mark_cache_size>
+      <uncompressed_cache_size>67108864</uncompressed_cache_size>
+      <max_concurrent_queries>50</max_concurrent_queries>
+      <query_log>
+        <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+      </query_log>
+      <trace_log remove="1"/>
+      <text_log remove="1"/>
+      <metric_log remove="1"/>
+      <asynchronous_metric_log remove="1"/>
+      <query_thread_log remove="1"/>
+      <query_views_log remove="1"/>
+      <part_log remove="1"/>
+      <processors_profile_log remove="1"/>
+      <latency_log remove="1"/>
+      <error_log remove="1"/>
+      <query_metric_log remove="1"/>
+    </clickhouse>
+
 # ── S3 / MinIO ─────────────────────────────────────────────────────────────────
 # Set enabled: true to deploy a MinIO instance in-cluster. Set to false and
 # populate external.* to use any S3-compatible object storage.

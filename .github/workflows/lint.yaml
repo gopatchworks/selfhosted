@@ -145,3 +145,6 @@ jobs:
 
       - name: KubeFaaS dind MTU render tests
         run: ruby tests/kubefaas_dind_mtu_test.rb
+
+      - name: ClickHouse and platform telemetry render tests
+        run: ruby tests/clickhouse_test.rb

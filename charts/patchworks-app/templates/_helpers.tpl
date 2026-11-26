@@ -912,6 +912,170 @@ http://{{ include "patchworks.elasticsearch.host" . }}:9200
 {{- end -}}
 {{- end }}
 
+{{/* ── ClickHouse / platform telemetry helpers ────────────────────────────────── */}}
+
+{{- define "patchworks.clickhouse.namespace" -}}
+{{- include "patchworks.componentNamespace" (dict "ns" .Values.clickhouse.namespace "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.clickhouse.host" -}}
+{{- if .Values.clickhouse.enabled -}}
+{{- printf "%s-clickhouse.%s.svc.cluster.local" (include "patchworks.fullname" .) (include "patchworks.clickhouse.namespace" .) -}}
+{{- else -}}
+{{- .Values.clickhouse.external.host -}}
+{{- end -}}
+{{- end }}
+
+{{- define "patchworks.clickhouse.port" -}}
+{{- if .Values.clickhouse.enabled -}}8123{{- else -}}{{ .Values.clickhouse.external.port }}{{- end -}}
+{{- end }}
+
+{{- define "patchworks.clickhouse.scheme" -}}
+{{- if .Values.clickhouse.enabled -}}http{{- else -}}{{ .Values.clickhouse.external.scheme | default "http" }}{{- end -}}
+{{- end }}
+
+{{/*
+The Secret holding the telemetry users' passwords, as JSON with the key of each
+role: the in-cluster server's auth.existingSecret, else the infra chart's
+generated <fullname>-clickhouse-auth while any password is empty, else none
+(name ""), when the inline passwords are used. External servers use
+external.existingSecret.
+*/}}
+{{- define "patchworks.clickhouse.secret" -}}
+{{- if .Values.clickhouse.enabled -}}
+{{- $a := .Values.clickhouse.auth -}}
+{{- $es := $a.existingSecret -}}
+{{- $name := $es.name -}}
+{{- if and (not $name) .Values.credentials.autoGenerate (or (not $a.adminPassword) (not $a.migratorPassword) (not $a.writerPassword) (not $a.readerPassword)) -}}
+{{- $name = printf "%s-clickhouse-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- dict "name" $name "migratorPasswordKey" $es.migratorPasswordKey "writerPasswordKey" $es.writerPasswordKey "readerPasswordKey" $es.readerPasswordKey | toJson -}}
+{{- else -}}
+{{- $es := .Values.clickhouse.external.existingSecret -}}
+{{- dict "name" $es.name "migratorPasswordKey" $es.migratorPasswordKey "writerPasswordKey" $es.writerPasswordKey "readerPasswordKey" $es.readerPasswordKey | toJson -}}
+{{- end -}}
+{{- end }}
+
+{{/* A role's inline password: (dict "root" . "role" "writer"). */}}
+{{- define "patchworks.clickhouse.password" -}}
+{{- $source := ternary .root.Values.clickhouse.auth .root.Values.clickhouse.external .root.Values.clickhouse.enabled -}}
+{{- index $source (printf "%sPassword" .role) | default "" -}}
+{{- end }}
+
+{{- define "patchworks.telemetry.enabled" -}}
+{{- if and .Values.telemetry .Values.telemetry.enabled -}}true{{- end -}}
+{{- end }}
+
+{{/*
+The roles each pod connects as. Every Core pod reads (the Monitoring endpoints)
+and writes (forecasts, reconciliation); only the migrate Job gets the migrator.
+*/}}
+{{- define "patchworks.telemetry.roles" -}}
+{{- if .migrator -}}migrator,writer,reader{{- else -}}writer,reader{{- end -}}
+{{- end }}
+
+{{/* Non-sensitive telemetry settings as ConfigMap data. Nothing while off. */}}
+{{- define "patchworks.telemetry.configData" -}}
+{{- if include "patchworks.telemetry.enabled" . }}
+TELEMETRY_ENABLED: "true"
+TELEMETRY_CLUSTER: {{ .Values.telemetry.cluster | quote }}
+TELEMETRY_CLICKHOUSE_HOST: {{ include "patchworks.clickhouse.host" . | quote }}
+TELEMETRY_CLICKHOUSE_PORT: {{ include "patchworks.clickhouse.port" . | quote }}
+TELEMETRY_CLICKHOUSE_SCHEME: {{ include "patchworks.clickhouse.scheme" . | quote }}
+TELEMETRY_CLICKHOUSE_DATABASE: {{ .Values.clickhouse.database | quote }}
+TELEMETRY_CLICKHOUSE_WRITER_USERNAME: {{ .Values.clickhouse.users.writer | quote }}
+TELEMETRY_CLICKHOUSE_READER_USERNAME: {{ .Values.clickhouse.users.reader | quote }}
+{{- end }}
+{{- end }}
+
+{{/* Inline writer and reader passwords for the app Secret, when no Secret holds them. */}}
+{{- define "patchworks.telemetry.secretData" -}}
+{{- if include "patchworks.telemetry.enabled" . }}
+{{- $s := fromJson (include "patchworks.clickhouse.secret" .) }}
+{{- if not $s.name }}
+TELEMETRY_CLICKHOUSE_WRITER_PASSWORD: {{ include "patchworks.clickhouse.password" (dict "root" . "role" "writer") | quote }}
+TELEMETRY_CLICKHOUSE_READER_PASSWORD: {{ include "patchworks.clickhouse.password" (dict "root" . "role" "reader") | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+A role's password as an env list item: (dict "root" . "role" "writer"). A
+Secret reference is optional, so a missing Secret only stops telemetry, never
+a Core pod: the variable is unset and Core's own default fails to log in.
+*/}}
+{{- define "patchworks.telemetry.passwordEnv" -}}
+{{- $s := fromJson (include "patchworks.clickhouse.secret" .root) -}}
+- name: TELEMETRY_CLICKHOUSE_{{ upper .role }}_PASSWORD
+{{- if $s.name }}
+  valueFrom:
+    secretKeyRef:
+      name: {{ $s.name }}
+      key: {{ index $s (printf "%sPasswordKey" .role) }}
+      optional: true
+{{- else }}
+  value: {{ include "patchworks.clickhouse.password" . | quote }}
+{{- end }}
+{{- end }}
+
+{{/* Writer and reader passwords read from a Secret, as env list items. */}}
+{{- define "patchworks.telemetry.secretEnvRefs" -}}
+{{- if include "patchworks.telemetry.enabled" . }}
+{{- $s := fromJson (include "patchworks.clickhouse.secret" .) }}
+{{- if $s.name }}
+{{- range $role := list "writer" "reader" }}
+{{ include "patchworks.telemetry.passwordEnv" (dict "root" $ "role" $role) }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
+Every telemetry setting as env list items, for Jobs that take patchworks.appEnv:
+(dict "root" . "migrator" true) adds the migrator, for telemetry:migrate.
+*/}}
+{{- define "patchworks.telemetry.env" -}}
+{{- $root := .root -}}
+{{- if include "patchworks.telemetry.enabled" $root }}
+{{- range $key, $value := (include "patchworks.telemetry.configData" $root | fromYaml) }}
+- name: {{ $key }}
+  value: {{ $value | quote }}
+{{- end }}
+{{- range $role := splitList "," (include "patchworks.telemetry.roles" .) }}
+{{- if eq $role "migrator" }}
+- name: TELEMETRY_CLICKHOUSE_MIGRATOR_USERNAME
+  value: {{ $root.Values.clickhouse.users.migrator | quote }}
+{{- end }}
+{{ include "patchworks.telemetry.passwordEnv" (dict "root" $root "role" $role) }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{- define "patchworks.telemetry.validate" -}}
+{{- if include "patchworks.telemetry.enabled" . -}}
+{{- if not (include "patchworks.clickhouse.host" .) -}}
+{{- fail "telemetry.enabled needs a ClickHouse: set clickhouse.enabled for the in-cluster server, or clickhouse.external.host." -}}
+{{- end -}}
+{{- if not .Values.telemetry.cluster -}}
+{{- fail "telemetry.cluster must be set, and never changed once telemetry is recorded." -}}
+{{- end -}}
+{{- if lt (int .Values.telemetry.shipper.terminationGracePeriodSeconds) 30 -}}
+{{- fail "telemetry.shipper.terminationGracePeriodSeconds must be at least 30, so telemetry:ship can finish an insert before it is killed." -}}
+{{- end -}}
+{{- if lt (int .Values.telemetry.shipper.replicas) 1 -}}
+{{- fail "telemetry.shipper.replicas must be at least 1: Core records nothing while TELEMETRY_ENABLED is on without a shipper, and its Redis streams fill up." -}}
+{{- end -}}
+{{- $s := fromJson (include "patchworks.clickhouse.secret" .) -}}
+{{- if not $s.name -}}
+{{- range $role := list "migrator" "writer" "reader" -}}
+{{- if not (include "patchworks.clickhouse.password" (dict "root" $ "role" $role)) -}}
+{{- fail (printf "telemetry.enabled needs the ClickHouse %s password: set clickhouse.%s.%sPassword or an existingSecret." $role (ternary "auth" "external" $.Values.clickhouse.enabled) $role) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
 {{- define "patchworks.mapping.elasticsearchAddresses" -}}
 {{- $es := .Values.mapping.elasticsearch -}}
 {{- if $es.addresses -}}
@@ -1842,6 +2006,7 @@ Validate workers.type is a known value and not yet-unavailable.
 Called by validation.yaml so disabled components do not hide active validation.
 */}}
 {{- define "patchworks.validate" -}}
+{{- include "patchworks.telemetry.validate" . -}}
 {{- $consumers := include "patchworks.consumerNamespaces" . | fromJson -}}
 {{- $valid := list "standalone" "mono" "microservice" -}}
 {{- if and .Values.workers.enabled (not (has .Values.workers.type $valid)) -}}
@@ -2062,6 +2227,7 @@ KUBEFAAS_FUNCTIONS_HOST: {{ . | quote }}
 KUBEFAAS_FUNCTION_BUILDER_HOST: {{ . | quote }}
 {{- end }}
 KUBEFAAS_FUNCTION_REGISTRY: {{ .Values.kubefaas.registry.name | quote }}
+{{- include "patchworks.telemetry.configData" . }}
 {{- end }}
 
 {{/* Sensitive app env vars as a YAML list for pod spec env:. */}}
@@ -2461,6 +2627,7 @@ PUSHER_APP_CLUSTER: {{ .Values.pusher.appCluster | quote }}
 KUBEFAAS_FUNCTIONS_USERNAME: {{ .Values.kubefaas.auth.username | quote }}
 KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
 {{- end }}
+{{- include "patchworks.telemetry.secretData" . }}
 {{- end }}
 
 {{- define "patchworks.appSecretHasData" -}}
@@ -2638,6 +2805,7 @@ KUBEFAAS_FUNCTIONS_PASSWORD: {{ .Values.kubefaas.auth.password | quote }}
       name: {{ $authSecretName }}
       key: {{ $authPasswordKey }}
 {{- end }}
+{{- include "patchworks.telemetry.secretEnvRefs" . }}
 {{- end }}
 
 {{/*
@@ -2956,6 +3124,7 @@ patchworks.secretEnv so they can be sourced from an existing Secret.
   value: {{ include "patchworks.s3.tenantCacheBucket" . | quote }}
 - name: TENANT_CACHE_AWS_DEFAULT_REGION
   value: {{ include "patchworks.s3.region" . | quote }}
+{{- include "patchworks.telemetry.env" (dict "root" .) }}
 {{- end }}
 
 {{/*

@@ -226,6 +226,37 @@ Usage: include "patchworks.componentNamespace" (dict "ns" .Values.web.namespace 
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.elasticsearch.namespace "root" .) -}}
 {{- end }}
 
+{{- define "patchworks.clickhouse.namespace" -}}
+{{- include "patchworks.componentNamespace" (dict "ns" .Values.clickhouse.namespace "root" .) -}}
+{{- end }}
+
+{{- define "patchworks.clickhouse.host" -}}
+{{- printf "%s-clickhouse.%s.svc.cluster.local" (include "patchworks.fullname" .) (include "patchworks.clickhouse.namespace" .) -}}
+{{- end }}
+
+{{/*
+The in-cluster ClickHouse's logins: auth.existingSecret when named, else the
+Secret the credential generator writes while any password is left empty, else
+the inline auth.* passwords (name ""). The app chart resolves the same name.
+*/}}
+{{- define "patchworks.clickhouse.existingSecret" -}}
+{{- $a := .Values.clickhouse.auth -}}
+{{- $es := $a.existingSecret -}}
+{{- $name := $es.name -}}
+{{- if and (not $name) .Values.credentials.autoGenerate (or (not $a.adminPassword) (not $a.migratorPassword) (not $a.writerPassword) (not $a.readerPassword)) -}}
+{{- $name = printf "%s-clickhouse-auth" (include "patchworks.fullname" .) -}}
+{{- end -}}
+{{- dict "name" $name "adminPasswordKey" $es.adminPasswordKey "migratorPasswordKey" $es.migratorPasswordKey "writerPasswordKey" $es.writerPasswordKey "readerPasswordKey" $es.readerPasswordKey | toJson -}}
+{{- end }}
+
+{{/* A ClickHouse identifier the setup Job interpolates into SQL. */}}
+{{- define "patchworks.clickhouse.identifier" -}}
+{{- if not (regexMatch "^[A-Za-z_][A-Za-z0-9_]{0,63}$" (toString .)) -}}
+{{- fail (printf "ClickHouse name %q must be 1-64 letters, digits or underscores, not starting with a digit" (toString .)) -}}
+{{- end -}}
+{{- . -}}
+{{- end }}
+
 {{- define "patchworks.s3.namespace" -}}
 {{- include "patchworks.componentNamespace" (dict "ns" .Values.s3.namespace "root" .) -}}
 {{- end }}
@@ -1324,6 +1355,10 @@ Called from web.yaml so the error surfaces at render time for any install.
 {{- end -}}
 {{- if and (include "patchworks.pusher.isConfigured" .) (not .Values.pusher.existingSecret.name) (or (not .Values.pusher.appId) (not .Values.pusher.appKey) (not .Values.pusher.appSecret)) (not (and .Values.pusher.enabled .Values.credentials.autoGenerate)) -}}
 {{- fail "pusher.appId, pusher.appKey, and pusher.appSecret are required unless pusher.existingSecret.name is set, or pusher.enabled=true with credentials.autoGenerate=true." -}}
+{{- end -}}
+{{- $ch := .Values.clickhouse.auth -}}
+{{- if and .Values.clickhouse.enabled (not $ch.existingSecret.name) (not .Values.credentials.autoGenerate) (or (not $ch.adminPassword) (not $ch.migratorPassword) (not $ch.writerPassword) (not $ch.readerPassword)) -}}
+{{- fail "clickhouse.auth.adminPassword, migratorPassword, writerPassword and readerPassword are required unless clickhouse.auth.existingSecret.name is set or credentials.autoGenerate is true." -}}
 {{- end -}}
 {{- include "patchworks.kubefaas.registry.validate" . -}}
 {{- end -}}

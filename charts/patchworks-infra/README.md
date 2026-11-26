@@ -47,6 +47,7 @@ values API so a shared values file can be passed to both releases.
 - [Redis](#redis)
 - [RabbitMQ](#rabbitmq)
 - [Elasticsearch](#elasticsearch)
+- [ClickHouse](#clickhouse)
 - [S3 / MinIO](#s3--minio)
 - [Pusher / Soketi](#pusher--soketi)
 - [KubeFaaS](#kubefaas)
@@ -72,6 +73,7 @@ Generated Secret names are derived from the stable chart fullname:
 | Fabric MySQL | `patchworks-fabric-mysql-auth` |
 | RabbitMQ | `patchworks-rabbitmq-auth` |
 | Elasticsearch | `patchworks-elasticsearch-auth` |
+| ClickHouse | `patchworks-clickhouse-auth` |
 | S3 / MinIO | `patchworks-s3-auth` |
 | Soketi / Pusher | `patchworks-soketi-auth` |
 
@@ -929,6 +931,48 @@ If you can't set it on the nodes, `elasticsearch.sysctlInitContainer.enabled=tru
 
 ---
 
+## ClickHouse
+
+The ClickHouse server Core keeps platform telemetry in, which the Dashboard's
+Monitoring page reads. It is off by default. The app chart only uses it while
+`telemetry.enabled` is true: see Platform telemetry in the app chart's README.
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `clickhouse.enabled` | `false` | Deploy ClickHouse in-cluster. Leave `false` to use the server in the app chart's `clickhouse.external.*` |
+| `clickhouse.database` | `telemetry` | Database the setup Job creates and Core uses |
+| `clickhouse.users.migrator` | `telemetry_migrator` | Runs `telemetry:migrate` and owns every materialised view. Never dropped or recreated |
+| `clickhouse.users.writer` | `telemetry_writer` | Inserts only, with insert deduplication locked on |
+| `clickhouse.users.reader` | `telemetry_reader` | Selects only, read-only, with at most 60s and 1,000,000 rows per query |
+| `clickhouse.auth.adminUsername` | `admin` | The server's administrator, which the setup Job uses. Core never connects as it |
+| `clickhouse.auth.adminPassword` | `""` | Generated when empty |
+| `clickhouse.auth.migratorPassword` | `""` | Generated when empty |
+| `clickhouse.auth.writerPassword` | `""` | Generated when empty |
+| `clickhouse.auth.readerPassword` | `""` | Generated when empty |
+| `clickhouse.auth.existingSecret.name` | `""` | Secret holding all four passwords |
+| `clickhouse.auth.existingSecret.adminPasswordKey` | `admin-password` | Key of the admin password |
+| `clickhouse.auth.existingSecret.migratorPasswordKey` | `migrator-password` | Key of the migrator password |
+| `clickhouse.auth.existingSecret.writerPasswordKey` | `writer-password` | Key of the writer password |
+| `clickhouse.auth.existingSecret.readerPasswordKey` | `reader-password` | Key of the reader password |
+| `clickhouse.image.repository` | `clickhouse/clickhouse-server` | Server image |
+| `clickhouse.image.tag` | `26.8` | The version Core's CI tests against |
+| `clickhouse.persistence.size` | `10Gi` | PVC size |
+| `clickhouse.persistence.existingClaim` | `""` | Use a pre-existing PVC |
+| `clickhouse.resources` | `requests: {cpu: 100m, memory: 512Mi}` | ClickHouse sizes its caches from the container's memory limit when it has one |
+| `clickhouse.config` | console logging, small caches, no unused system logs | Mounted as `/etc/clickhouse-server/config.d/patchworks.xml` |
+
+The Deployment uses `Recreate`: one server per data directory. After every
+install and upgrade, the `patchworks-clickhouse-setup` hook Job creates the
+database, the two settings profiles and the three users, grants each its role,
+and sets each password from its Secret. It mirrors Core's reference script,
+`docker/clickhouse/initdb/01-create-telemetry.sh` in patchworks-local-development,
+and only ever uses `IF NOT EXISTS` and `ALTER USER`: replacing the migrator
+would wipe the grants every materialised view runs with. The default
+`clickhouse.config` drops ClickHouse's own system log tables other than a
+week of `query_log`; without that they grow without limit on a small volume.
+
+---
+
 ## S3 / MinIO
 
 When `s3.enabled` is `true`, a MinIO-compatible server ([Silo](https://silo.pgsty.com), a maintained MinIO fork) is deployed and a post-install/upgrade Job creates the configured buckets. Payload, tenant-cache, and file-download buckets default to the main bucket so self-hosted installs do not require a per-tenant bucket creation service.
@@ -1229,7 +1273,11 @@ Every credential has a companion `existingSecret` block with named key fields. W
 #   --from-literal=APP_KEY="base64:..." \
 #   --from-literal=APP_PREVIOUS_KEYS="base64:...,base64:..." \
 #   --from-literal=db-password="s3cr3t" \
-#   --from-literal=minio-password="s3cr3t"
+#   --from-literal=minio-password="s3cr3t" \
+#   --from-literal=clickhouse-admin-password="s3cr3t" \
+#   --from-literal=clickhouse-migrator-password="s3cr3t" \
+#   --from-literal=clickhouse-writer-password="s3cr3t" \
+#   --from-literal=clickhouse-reader-password="s3cr3t"
 
 app:
   existingSecret:
@@ -1248,6 +1296,15 @@ s3:
     existingSecret:
       name: patchworks-secrets
       rootPasswordKey: minio-password
+
+clickhouse:
+  auth:
+    existingSecret:
+      name: patchworks-secrets
+      adminPasswordKey: clickhouse-admin-password
+      migratorPasswordKey: clickhouse-migrator-password
+      writerPasswordKey: clickhouse-writer-password
+      readerPasswordKey: clickhouse-reader-password
 
 pusher:
   existingSecret:

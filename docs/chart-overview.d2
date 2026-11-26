@@ -32,6 +32,7 @@ application: "Application (components independently selectable)" {
 
   migrations: "Migrations Job\npre-install / pre-upgrade" { shape: rectangle }
   samples: "Samples Job (samples.enabled)\npost-install / post-upgrade\nsample flows for every shape" { shape: rectangle }
+  telemetry: "Telemetry (telemetry.enabled)\ntelemetry:ship Deployment\ntelemetry:migrate post-install / post-upgrade" { shape: rectangle }
 }
 
 infra: "Infrastructure (in-cluster or external)" {
@@ -82,9 +83,16 @@ optional: "Optional Integrations" {
   }
 
   soketi: "Soketi\n(PUSHER_*)" { shape: rectangle }
+
+  clickhouse: "ClickHouse 26.8 (clickhouse.enabled)\nplatform telemetry for the Monitoring page\nsetup Job: database, users, grants" { shape: cylinder }
 }
 
 application.web -> optional.soketi: PUSHER_*
+application.web -> infra.redis: "telemetry events (Redis streams)"
+application.telemetry -> infra.redis: "reads telemetry:* streams"
+application.telemetry -> optional.clickhouse: "TELEMETRY_CLICKHOUSE_*\n(writer; migrator for migrate)"
+application.web -> optional.clickhouse: "Monitoring reports (reader)"
+infra.credentials -> optional.clickhouse: creates Secret
 application.workers -> optional.soketi: PUSHER_*
 application.processors -> infra.rabbitmq: RABBITMQ_QUEUE
 application.scheduler -> infra.rabbitmq: RABBITMQ_QUEUE

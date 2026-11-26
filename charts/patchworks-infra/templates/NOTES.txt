@@ -78,6 +78,9 @@ To enable ingress, set:
 {{- else }}
   Elasticsearch: external    ({{ .Values.elasticsearch.external.host }}:{{ .Values.elasticsearch.external.port }})
 {{- end }}
+{{- if .Values.clickhouse.enabled }}
+  ClickHouse:    in-cluster  ({{ include "patchworks.fullname" . }}-clickhouse:8123)
+{{- end }}
 {{- if .Values.s3.enabled }}
   S3 (MinIO):    in-cluster  ({{ include "patchworks.fullname" . }}-s3:9000)
 

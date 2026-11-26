@@ -1,0 +1,126 @@
+{{- /*
+After every install and upgrade: telemetry:migrate creates or updates Core's
+ClickHouse tables, then the platform-telemetry feature is turned on so the
+Monitoring page shows. Neither can fail the release, as Core's deployment
+contract requires: the shipper holds back a table that is not migrated yet,
+and the next upgrade runs the migration again.
+*/}}
+{{- if include "patchworks.telemetry.enabled" . }}
+{{- $fullname := include "patchworks.fullname" . }}
+{{- $ns := include "patchworks.seeds.namespace" . }}
+{{- $migrate := .Values.telemetry.migrate }}
+{{- $svc := merge (deepCopy $migrate) (dict "image" .Values.image) }}
+{{- $php := ternary "/usr/local/bin/frankenphp php-cli" "/usr/local/bin/php" (eq (include "patchworks.usesFrankenphp" (dict "root" . "svc" $svc)) "true") }}
+{{- $monitoringPage := dig "monitoringPage" "enabled" true .Values.telemetry }}
+{{- if $monitoringPage }}
+---
+# ConfigMap — turns on the Monitoring page, mounted into the setup Job.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $fullname }}-telemetry-setup
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry-setup
+data:
+  enable-monitoring.php: |-
+    {{- .Files.Get "files/telemetry/enable-monitoring.php" | nindent 4 }}
+{{- end }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ $fullname }}-telemetry-setup
+  namespace: {{ $ns }}
+  labels:
+    {{- include "patchworks.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry-setup
+  annotations:
+    helm.sh/hook: post-install,post-upgrade
+    helm.sh/hook-weight: "5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "patchworks.selectorLabels" (dict "component" "telemetry-setup" "Release" .Release) | nindent 8 }}
+    spec:
+      {{- include "patchworks.podDnsConfig" (list .Values .Values.telemetry $migrate) | nindent 6 }}
+      restartPolicy: Never
+      {{- with .Values.migrations.serviceAccountName }}
+      serviceAccountName: {{ . | quote }}
+      {{- end }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: telemetry-setup
+          image: {{ include "patchworks.appImage" (dict "svc" $svc "root" .) | quote }}
+          imagePullPolicy: {{ include "patchworks.appPullPolicy" (dict "svc" $svc "root" .) }}
+          workingDir: /var/www/html
+          command:
+            - sh
+            - -c
+            - |
+              attempt=1
+              until {{ $php }} artisan telemetry:migrate --no-interaction; do
+                if [ "$attempt" -ge 10 ]; then
+                  echo "[telemetry] telemetry:migrate failed. Telemetry for tables that are not migrated waits in Redis; the next upgrade tries again."
+                  break
+                fi
+                attempt=$((attempt + 1))
+                echo "[telemetry] telemetry:migrate failed; retrying in 15s (attempt ${attempt} of 10)."
+                sleep 15
+              done
+              {{- if $monitoringPage }}
+              {{ $php }} /opt/patchworks-telemetry/enable-monitoring.php || echo "[telemetry] Could not turn on the Monitoring page; turn on platform-telemetry from the company's feature settings."
+              {{- end }}
+              exit 0
+          envFrom:
+            - secretRef:
+                name: {{ include "patchworks.passportSecretName" . }}
+            {{- with .Values.app.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          env:
+            {{- include "patchworks.appEnv" . | nindent 12 }}
+            - name: TELEMETRY_CLICKHOUSE_MIGRATOR_USERNAME
+              value: {{ .Values.clickhouse.users.migrator | quote }}
+            {{- include "patchworks.telemetry.passwordEnv" (dict "root" . "role" "migrator") | nindent 12 }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- if $monitoringPage }}
+          volumeMounts:
+            - name: telemetry-setup
+              mountPath: /opt/patchworks-telemetry
+              readOnly: true
+          {{- end }}
+          {{- with $migrate.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      {{- if $monitoringPage }}
+      volumes:
+        - name: telemetry-setup
+          configMap:
+            name: {{ $fullname }}-telemetry-setup
+      {{- end }}
+      {{- with $migrate.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $migrate.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $migrate.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

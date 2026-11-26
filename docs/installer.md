@@ -270,6 +270,8 @@ The TUI asks for:
 - With mono workers, whether to install the sample flows (**Samples**)
 - With bundled infrastructure, whether to install **KubeFaaS**, which runs
   Script steps, and with it the **Bundled image registry**
+- With bundled infrastructure and the standard size, whether to record
+  platform telemetry for the dashboard's Monitoring page (**Monitoring**)
 - Image pull secret mode: existing secret, create from Quay credentials, or none
 - Initial company and admin details, including an optional admin password
 - Output values file path
@@ -325,6 +327,20 @@ mixed architectures keep `linux/amd64`, and the install summary says so.
 `--save-config` keeps the answers as `infrastructure.kubefaas` and
 `infrastructure.kubefaasRegistry`. With your own infrastructure, KubeFaaS stays as `config.yaml`
 has it, without the bundled registry.
+
+**Monitoring**, offered with bundled infrastructure and the standard size and
+off by default, writes `clickhouse.enabled: true` and `telemetry.enabled: true`:
+the infra chart runs ClickHouse and creates the users Core connects as, and the
+app chart runs Core's telemetry shipper and migrations and turns on the
+Monitoring page for every company (see
+[Platform telemetry](../charts/patchworks-app/README.md#platform-telemetry)).
+`--save-config` keeps the choice as `telemetry`. The installer leaves it off, and
+says why in the install summary, when the selected release has no platform
+telemetry or bundled ClickHouse, its Core image is `v0.2.20` or older, the
+infrastructure is your own, or the profile is lightweight. Turning it on for a
+running installation upgrades the infra chart without asking, since every Core
+pod then reads the ClickHouse logins it generates. The progress screen shows the
+Jobs as "Setting up ClickHouse telemetry users" and "Migrating telemetry tables".
 
 With KubeFaaS on, the installer applies the infra chart's KubeFaaS CRDs before
 every infra install or upgrade, since Helm applies `crds/` only on a first

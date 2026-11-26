@@ -230,6 +230,7 @@ Use `patchworks.usesFrankenphp`, `patchworks.artisanShellCommand`, and `patchwor
 - `ELASTICSEARCH_HOST/PORT`
 - Pusher vars (when configured)
 - KubeFaaS vars (when configured)
+- `TELEMETRY_*` (while `telemetry.enabled`; see Platform telemetry)
 - `extraEnv` / `extraEnvFrom` pass-through
 
 If a new service needs its credentials in app pods, add helpers here rather than duplicating in each template.
@@ -372,6 +373,19 @@ Follows the standard infrastructure pattern. Key details:
   - **Deleted or evicted pods:** `Recreate` doesn't cover these. The ReplicaSet starts the replacement while the old pod is still stopping, and on one node both mount the volume; on kind it happened on every delete. The container therefore runs `sh -c` with a `flock` on `/var/lib/rabbitmq/.broker.lock`, then `exec docker-entrypoint.sh rabbitmq-server`. The broker inherits the lock fd, so the lock is held until the old container exits. Keep the entrypoint and command in step with the official image.
   - **Tests:** `tests/rabbitmq_node_name_test.rb` checks the hostname, the strategy and the lock.
 - Moving a live Deployment to `Recreate` needs a transition under server-side apply, which is Helm 4's default and the installer's. Kubernetes defaulted that Deployment's `rollingUpdate`, and no field manager owns it, so the apply keeps it and fails with `spec.strategy.rollingUpdate: Forbidden`. `rollingUpdate: null` in the template doesn't help. `rabbitmq-recreate.yaml` is a `pre-upgrade` hook that merge-patches the type and drops the block. `lookup` skips it once the Deployment uses `Recreate`. Do the same for any other Deployment that moves to `Recreate`.
+
+---
+
+## Platform telemetry (ClickHouse)
+
+Core records requests, flow runs, usage and limits into capped Redis streams, `telemetry:ship` inserts them into ClickHouse, and the Dashboard's Monitoring page reads them through Core. Core's deployment contract is in its `docs/architecture/platform-telemetry/README.md`; the charts follow it. Both `clickhouse.enabled` and `telemetry.enabled` default to `false`, and with both off neither chart's render changes.
+
+- **Infra (`clickhouse.yaml`, `clickhouse-setup.yaml`):** one `Recreate` Deployment with an `admin` user and SQL access management, and a post-install/post-upgrade Job that creates the database, two settings profiles and three users (`migrator`, `writer`, `reader`) from Core's reference script, `docker/clickhouse/initdb/01-create-telemetry.sh` in patchworks-local-development. Keep the Job in step with it. Never use `OR REPLACE`: views run as the migrator (`SQL SECURITY DEFINER`), and recreating it wipes their grants. Passwords are synced with `ALTER USER ... IDENTIFIED BY`. The generator writes `<fullname>-clickhouse-auth` with all four passwords, and both charts resolve that name the same way.
+- **App:** `TELEMETRY_*` goes into the Core ConfigMap, app Secret and `appSecretEnvRefs`, and into `appEnv` through `patchworks.telemetry.env`. Every Core pod gets the writer and reader, through `optional` Secret references so a missing Secret stops telemetry rather than the pod; only `telemetry-setup` gets the migrator. The installer upgrades the infra chart without asking when Monitoring is turned on with no ClickHouse deployed, and offers it only for releases later than `lastCoreWithoutTelemetry`. `telemetry-setup.yaml` runs `telemetry:migrate` with retries and always exits 0, because a failed migration must not block a deploy, then turns on the `platform-telemetry` company feature (`files/telemetry/enable-monitoring.php`, the samples installer's boot pattern) unless `telemetry.monitoringPage.enabled` is false. `telemetry-shipper.yaml` runs `telemetry:ship --max-time --memory` with a grace period of at least 30s.
+- `TELEMETRY_ENABLED` is only set where the shipper runs, and `telemetry.cluster` (`TELEMETRY_CLUSTER`) must never change once rows exist. Validation enforces a ClickHouse host, a cluster name, one or more replicas and the grace period.
+- Core's forecast and reconciliation schedules gate on the long and medium processor domains, which the processor schedulers and the lightweight worker already run.
+- Monocore records no telemetry. A run Core hands to Monocore records its start and never its end, and triggers Monocore serves itself record nothing.
+- `tests/clickhouse_test.rb` checks the charts against the contract, and `cmd/patchworks-installer/telemetry_test.go` checks the installer's **Monitoring** question.
 
 ---
 
