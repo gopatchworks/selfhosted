@@ -3,6 +3,10 @@ Creates the telemetry database, settings profiles and users Core connects as,
 after every install and upgrade. It mirrors Core's reference script,
 docker/clickhouse/initdb/01-create-telemetry.sh in patchworks-local-development
 (scripts/clickhouse/01-create-telemetry.sh in Core): keep the two in step.
+It differs in two ways. Profile settings are set with ALTER SETTINGS PROFILE
+on every run, so an upgrade reaches profiles an earlier release made. And the
+reader may raise max_execution_time to 65 seconds rather than 60, because
+Grafana's ClickHouse plugin asks for its query timeout plus 5 seconds.
 
 Never use OR REPLACE on these users or profiles. Replacing the migrator wipes
 the grants every materialised view runs with, and replacing a profile detaches
@@ -65,13 +69,21 @@ spec:
               until run_sql --query "SELECT 1" >/dev/null 2>&1; do sleep 2; done
 
               run_sql <<EOSQL
-              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_writer_profile SETTINGS
+              -- CREATE only makes the profiles; ALTER sets their settings on every run, so a changed
+              -- setting reaches a profile an earlier release made. ALTER keeps it attached to its user.
+              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_writer_profile;
+              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_reader_profile;
+
+              ALTER SETTINGS PROFILE telemetry_writer_profile SETTINGS
                   deduplicate_insert = 'enable' CONST,
                   deduplicate_blocks_in_dependent_materialized_views = 1 CONST;
 
-              CREATE SETTINGS PROFILE IF NOT EXISTS telemetry_reader_profile SETTINGS
+              -- MAX 65, not the reference's 60: Grafana's ClickHouse plugin (v4.24.0, clickhouse-go v2.51.0)
+              -- sends max_execution_time as its query timeout plus 5 seconds, 65 with the default 60.
+              -- clickhouse-go stops doing that after v2.51.0 (ClickHouse/clickhouse-go#2101).
+              ALTER SETTINGS PROFILE telemetry_reader_profile SETTINGS
                   readonly = 2,
-                  max_execution_time = 30 MIN 1 MAX 60,
+                  max_execution_time = 30 MIN 1 MAX 65,
                   max_result_rows = 100000 MIN 1 MAX 1000000;
 
               CREATE USER IF NOT EXISTS {{ $migrator }} IDENTIFIED BY $(sql_string "$TELEMETRY_MIGRATOR_PASSWORD") DEFAULT DATABASE {{ $db }};
