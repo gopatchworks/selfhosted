@@ -1112,7 +1112,7 @@ The chart renders both copies itself from one login, not the credential generato
 | Key | Default | Description |
 |-----|---------|-------------|
 | `kubefaas.enabled` | `false` | Deploy KubeFaaS in-cluster |
-| `kubefaas.namespace` | `kubefaas` | Namespace for KubeFaaS components (separate from app namespace) |
+| `kubefaas.namespace` | `kubefaas` | Namespace for KubeFaaS components (separate from app namespace). The chart creates it unless it is the release namespace |
 | `kubefaas.functions.namespaceCount` | `5` | Number of function execution namespaces created |
 | `kubefaas.builder.tls.mode` | `helm` | TLS mode: `helm`, `certManager`, or `existingSecret` |
 | `kubefaas.builder.tls.certManager.caDuration` | `87600h` | Lifetime of the chart-managed cert-manager CA (10 years) |

@@ -98,6 +98,8 @@ Every component has a dedicated helper (`patchworks.web.namespace`, `patchworks.
 
 **Exception:** KubeFaaS lives in its own dedicated namespace (`patchworks.kubefaas.namespace` defaults to `"kubefaas"`, not the release namespace). Use this pattern for any component that must be cluster-scoped or lives outside the app namespace.
 
+`kubefaas-controller.yaml` renders the KubeFaaS Namespace, except when `kubefaas.namespace` is the release namespace. Never render the release namespace: it exists before Helm installs anything, and a release that owns it under Argo CD can prune it with the app, and its applies drop labels other tools set there (Kargo's `kargo.akuity.io/project` went that way). `tests/kubefaas_namespace_test.rb` checks this.
+
 ---
 
 ## Infrastructure component pattern
