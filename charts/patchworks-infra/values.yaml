@@ -886,6 +886,8 @@ kubefaas:
   enabled: false
   # Namespace for the KubeFaaS control plane (controller, builder, Redis).
   # Defaults to "kubefaas" regardless of global/release namespace.
+  # The chart creates it unless it is the release namespace, which it never
+  # creates or owns.
   namespace: kubefaas
 
   controller:

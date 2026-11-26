@@ -5,6 +5,9 @@
 {{- $kf := .Values.kubefaas }}
 {{- /* profile=lightweight: smaller requests from lightweight.kubefaas (patchworks.kubefaas.sizing). */}}
 {{- $sizing := include "patchworks.kubefaas.sizing" . | fromYaml }}
+{{- /* Never the release namespace: it exists before Helm installs anything, and
+       the release owning it lets Argo CD prune it, or drop labels others set. */}}
+{{- if ne $ns .Release.Namespace }}
 ---
 apiVersion: v1
 kind: Namespace
@@ -12,6 +15,7 @@ metadata:
   name: {{ $ns }}
   labels:
     {{- include "patchworks.labels" . | nindent 4 }}
+{{- end }}
 {{- $redisHost := include "patchworks.kubefaas.redisHost" . }}
 {{- $redisPort := include "patchworks.kubefaas.redisPort" . }}
 {{- $authSecretName := include "patchworks.kubefaas.authSecretName" . }}
