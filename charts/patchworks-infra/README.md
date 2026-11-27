@@ -943,7 +943,7 @@ Monitoring page reads. It is off by default. The app chart only uses it while
 | `clickhouse.database` | `telemetry` | Database the setup Job creates and Core uses |
 | `clickhouse.users.migrator` | `telemetry_migrator` | Runs `telemetry:migrate` and owns every materialised view. Never dropped or recreated |
 | `clickhouse.users.writer` | `telemetry_writer` | Inserts only, with insert deduplication locked on |
-| `clickhouse.users.reader` | `telemetry_reader` | Selects only, read-only, with at most 60s and 1,000,000 rows per query |
+| `clickhouse.users.reader` | `telemetry_reader` | Selects only, read-only, with 30s per query (up to 65s if the client asks, as Grafana's ClickHouse plugin does) and at most 1,000,000 rows |
 | `clickhouse.auth.adminUsername` | `admin` | The server's administrator, which the setup Job uses. Core never connects as it |
 | `clickhouse.auth.adminPassword` | `""` | Generated when empty |
 | `clickhouse.auth.migratorPassword` | `""` | Generated when empty |

@@ -100,11 +100,14 @@ assert(setup, 'ClickHouse setup Job missing')
 check('post-install,post-upgrade', setup.dig('metadata', 'annotations', 'helm.sh/hook'), 'setup Job hook')
 sql = container(setup)['command'][2]
 assert(!sql.include?('OR REPLACE'), 'setup SQL replaces a user or profile, which wipes the migrator grants every view runs with')
+# CREATE ... IF NOT EXISTS never changes an existing profile, so its settings must come from ALTER.
+assert(sql !~ /CREATE SETTINGS PROFILE[^;]*SETTINGS/, 'a profile setting is only in CREATE, so upgrades never apply it')
 [
-  "deduplicate_insert = 'enable' CONST",
+  "ALTER SETTINGS PROFILE telemetry_writer_profile SETTINGS\n    deduplicate_insert = 'enable' CONST",
   'deduplicate_blocks_in_dependent_materialized_views = 1 CONST',
-  'readonly = 2',
-  'max_execution_time = 30 MIN 1 MAX 60',
+  "ALTER SETTINGS PROFILE telemetry_reader_profile SETTINGS\n    readonly = 2",
+  # 65, not the reference's 60: Grafana's ClickHouse plugin asks for its 60s query timeout plus 5.
+  'max_execution_time = 30 MIN 1 MAX 65',
   'max_result_rows = 100000 MIN 1 MAX 1000000',
   'CREATE USER IF NOT EXISTS telemetry_migrator IDENTIFIED BY $(sql_string "$TELEMETRY_MIGRATOR_PASSWORD") DEFAULT DATABASE telemetry;',
   'ALTER USER telemetry_writer IDENTIFIED BY $(sql_string "$TELEMETRY_WRITER_PASSWORD");',
