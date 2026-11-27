@@ -1908,6 +1908,33 @@ Usage: {{ include "patchworks.mono.enableEnv" (dict "root" $root "skip" $extraEn
 {{- end -}}
 
 {{/*
+Env of a Monocore worker recording platform telemetry, as a YAML list (empty
+while telemetry.enabled is false or every name is skipped). Monocore records
+the ends of the flow runs it executes, the starts of the runs it creates and
+its connectors' limit waits into Core's Redis streams, under the same
+REDIS_PREFIX, where Core's telemetry:ship ships them. It reads Core's
+variables with Core's defaults, so only the two the Core ConfigMap sets are
+needed. It never connects to ClickHouse, so it gets no ClickHouse settings or
+passwords. A name in $skip (the worker's own extraEnv) is left to it. An image
+without platform telemetry ignores both.
+Usage: {{ include "patchworks.mono.telemetryEnv" (dict "root" $root "skip" $extraEnvNames) }}
+*/}}
+{{- define "patchworks.mono.telemetryEnv" -}}
+{{- $root := .root -}}
+{{- if include "patchworks.telemetry.enabled" $root -}}
+{{- $env := list -}}
+{{- range list
+  (list "TELEMETRY_ENABLED" "true")
+  (list "TELEMETRY_CLUSTER" (toString $root.Values.telemetry.cluster)) -}}
+{{- if not (has (index . 0) $.skip) -}}
+{{- $env = append $env (dict "name" (index . 0) "value" (index . 1)) -}}
+{{- end -}}
+{{- end -}}
+{{- with $env -}}{{- toYaml . -}}{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
 Render the RabbitMQ topology.yaml content (unindented).
 Usage: {{ include "patchworks.mono.topologyYaml" (dict "root" . "queueName" $queueName) | indent 4 }}
 */}}

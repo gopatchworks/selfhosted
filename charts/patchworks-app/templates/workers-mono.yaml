@@ -625,6 +625,11 @@ spec:
             # runner, a run reaching one of these steps fails.
             {{- . | nindent 12 }}
             {{- end }}
+            {{- with include "patchworks.mono.telemetryEnv" (dict "root" $root "skip" $extraEnvNames) }}
+            # Platform telemetry (telemetry.enabled): Monocore records the runs
+            # it executes into Core's streams, which Core's shipper ships.
+            {{- . | nindent 12 }}
+            {{- end }}
             {{- if $inbound }}
             # The public listener serving Core's webhook, callback and start API
             # endpoints, configured as Core's start pods are.
