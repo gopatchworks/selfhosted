@@ -1,7 +1,7 @@
 {{- /*
 telemetry:ship moves Core's telemetry events from their Redis streams into
-ClickHouse. TELEMETRY_ENABLED is only set while this Deployment exists: Core
-records into the streams, and without a shipper they fill to their cap.
+ClickHouse. TELEMETRY_ENABLED is only set while this Deployment exists: Core and
+Monocore record into the streams, and without a shipper they fill to their cap.
 */}}
 {{- if include "patchworks.telemetry.enabled" . }}
 {{- $fullname := include "patchworks.fullname" . }}

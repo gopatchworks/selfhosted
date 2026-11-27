@@ -1508,8 +1508,8 @@ telemetry:
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `telemetry.enabled` | `false` | Sets `TELEMETRY_*` for every Core pod and runs the shipper and setup Job |
-| `telemetry.cluster` | `selfhosted` | `TELEMETRY_CLUSTER`, in every row Core records. Never change it: rows recorded under another name drop out of every report. Give each installation its own when several share one ClickHouse |
+| `telemetry.enabled` | `false` | Sets `TELEMETRY_*` for every Core pod, `TELEMETRY_ENABLED` and `TELEMETRY_CLUSTER` for every Monocore worker, and runs the shipper and setup Job |
+| `telemetry.cluster` | `selfhosted` | `TELEMETRY_CLUSTER`, in every row Core and Monocore record. Never change it: rows recorded under another name drop out of every report. Give each installation its own when several share one ClickHouse |
 | `telemetry.monitoringPage.enabled` | `true` | Turn on the `platform-telemetry` company feature, which shows the Monitoring page, for every company after each install and upgrade. Set `false` to manage it per company from the feature settings |
 | `telemetry.migrate.image` / `resources` / `nodeSelector` / `affinity` / `tolerations` | | For the setup Job |
 | `telemetry.shipper.replicas` | `1` | `telemetry:ship` replicas. At least 1 |
@@ -1537,10 +1537,22 @@ When turning telemetry on for an installation with history, run
 `php artisan telemetry:backfill-usage --before=<the day recording started>`
 once in a Core pod, so forecasts have earlier usage to work from.
 
-Core only records what passes through Core. A run Core hands to Monocore
-(`workers.type: mono`) records its start but not its end, so the Flow runs
-and Usage sections show it as unfinished, and triggers Monocore serves itself
-(`workers.mono.inbound`) record nothing.
+With `workers.type: mono`, every Monocore worker, the hub and each company,
+gets `TELEMETRY_ENABLED` and `TELEMETRY_CLUSTER` as well, and records into
+Core's streams, which the shipper ships with Core's: the end of every run it
+executes, a run Core handed it included, the start of every run it creates
+(scheduled runs, retries, Run Process Flow children, the runs of triggers it
+serves itself through `workers.mono.inbound`), and its connectors' rate limit
+and connection pool waits. That needs a Monocore image with platform
+telemetry: an older one ignores both variables, and the Flow runs and Usage
+sections show the runs Core hands it as unfinished. Monocore records no
+requests, so the triggers it serves itself have no Requests rows.
+
+Monocore reads the other `TELEMETRY_*` variables with Core's defaults. A value
+set for Core through `extraEnv`, such as `TELEMETRY_FLOW_RUNS_ENABLED`,
+`TELEMETRY_LIMITS_ENABLED` or `TELEMETRY_STREAM_MAX_LENGTH`, needs setting in
+`workers.mono.extraEnv` too, where an entry also takes the place of the
+chart's own `TELEMETRY_ENABLED` or `TELEMETRY_CLUSTER`.
 
 ---
 
